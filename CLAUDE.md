@@ -11,6 +11,11 @@
 - バックエンド: Express + PostgreSQL（Prisma推奨）
 - 認証: セッション方式（JWTではない。理由は`docs/schema.md`参照）
 - リアルタイム通知: Socket.io（Phase2で採用検討）
+- DBホスティング: **Neon**（本番）／**Docker Compose**（ローカル開発）
+  - Supabase（Auth/Storage/Realtimeがバンドル）ではなくNeon（素のPostgres）を選んだ理由：
+    1. セッション管理・API設計を自前のExpressで実装する学習方針と合わせるため。バンドル機能に頼ると学習目的からズレる
+    2. Supabaseの無料プロジェクトは1週間アクセスが無いと自動停止し手動再開が必要。断続的に触る個人学習プロジェクトだと地味にストレスになる。Neonは接続時に自動復帰するため放置に強い
+  - Phase4で画像ストレージが必要になったら、Neon（DB）とは別にCloudflare R2等を組み合わせる想定（Supabase Storageだけ部分利用してもよい）
 
 ## リポジトリ構成（モノレポ）
 
