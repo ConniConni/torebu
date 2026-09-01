@@ -11,3 +11,130 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// MVPスキーマ（docs/schema.md参照）
+
+enum Gender {
+  male
+  female
+  other
+  no_answer
+}
+
+enum MuscleGroup {
+  chest // 胸
+  back // 背中
+  legs // 脚
+  shoulders // 肩
+  arms // 腕
+  glutes // お尻
+  abs // 腹筋
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  passwordHash           String    @map("password_hash")
+  displayName            String    @map("display_name")
+  avatarUrl              String?   @map("avatar_url")
+  birthDate              DateTime? @map("birth_date") @db.Date
+  gender                 Gender?
+  occupation             String?
+  passwordResetToken     String?   @map("password_reset_token")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at") @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions         Session[]
+  workouts         Workout[]
+  routines         Routine[]
+  createdExercises Exercise[] @relation("ExerciseCreatedBy")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Exercise {
+  id               String      @id @default(uuid())
+  name             String
+  muscleGroup      MuscleGroup @map("muscle_group")
+  muscleDetail     String?     @map("muscle_detail") // 将来の細分類用
+  equipment        String?
+  createdBy        String?     @map("created_by") // null=公式、値ありならカスタム種目
+  defaultSortOrder Int?        @map("default_sort_order") // 運営が定番種目に設定。使用履歴が無い時のフォールバック順
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  // 公式種目名(created_by IS NULL)の重複防止は、DB制約ではなくアプリ側の重複サジェスト表示のみで運用する
+  // （経緯はdocs/schema.mdの「設計方針メモ」参照。運営操作が複数人・同時実行になるタイミングで再検討）
+
+  creator          User?             @relation("ExerciseCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  workoutSets      WorkoutSet[]
+  routineExercises RoutineExercise[]
+
+  @@map("exercises")
+}
+
+model Workout {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  performedAt DateTime  @map("performed_at") @db.Date
+  memo        String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。reactions/commentsを残すため
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sets WorkoutSet[]
+
+  @@map("workouts")
+}
+
+model WorkoutSet {
+  id         String   @id @default(uuid())
+  workoutId  String   @map("workout_id")
+  exerciseId String   @map("exercise_id")
+  setOrder   Int      @map("set_order")
+  weightKg   Decimal? @map("weight_kg") // 自重種目はnull
+  reps       Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@map("workout_sets")
+}
+
+model Routine {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises RoutineExercise[]
+
+  @@map("routines")
+}
+
+model RoutineExercise {
+  id         String @id @default(uuid())
+  routineId  String @map("routine_id")
+  exerciseId String @map("exercise_id")
+  sortOrder  Int    @map("sort_order")
+
+  routine  Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@map("routine_exercises")
+}
