@@ -35,7 +35,7 @@ exercises                   -- 種目マスタ
   created_by         uuid  null FK -> users  -- null=公式、値ありならカスタム種目（作成者と同グループの人に見える）
   default_sort_order int null       -- 運営が定番種目に設定。使用履歴が無い時のフォールバック順
   updated_at         timestamptz
-                      UNIQUE (name) WHERE created_by IS NULL  -- 公式種目の名前重複だけ防ぐ
+                      -- 公式種目名の重複防止は、DB制約ではなくアプリ側の重複サジェスト表示のみで運用（詳細は下記メモ）
 
 workouts                    -- 1回のセッション
   id            uuid PK
@@ -179,7 +179,7 @@ user_theme_purchases
 - **部位分類は大分類（7分類）から開始**。`exercises.muscle_detail`をnullableで先に持たせ、後から細分化してもマイグレーション不要にする
 - **カスタム種目**は`created_by`を持たせ、作成者と過去含めて同じグループにいたことがあるメンバーに見える。追加は専用画面（部位を選択式・種目名を自由記入）で行う
 - **カスタム種目の公式マスタへの昇格**は`created_by`をNULLに書き換えるだけ。`exercise_id`は変わらないため過去記録の付け替えは不要
-- **重複・表記ゆれ対策**：追加時に既存種目名との部分一致サジェストを表示。公式種目名にはUNIQUE制約（`created_by IS NULL`の範囲のみ）
+- **重複・表記ゆれ対策**：追加時に既存種目名との部分一致サジェストを表示。公式種目名の重複防止は当初「`UNIQUE (name) WHERE created_by IS NULL`」のDB部分UNIQUE制約を検討したが、Prismaのスキーマ言語では表現できずマイグレーションSQLの手動編集が必要になる上、公式種目の追加は当面1人（運営本人）が順番に行う運用のためレースコンディションが実質発生しない。制約維持のメンテコストに見合わないと判断し、MVPではDB制約を見送りアプリ側のサジェスト表示のみで対応する（運営操作が複数人・同時実行になるタイミングで再検討）
 - **ランキング集計の対象は公式種目のみ**。カスタム種目は記録・ルーティンには使えるが、ランキング比較の対象からは外す
 - **`reactions`/`comments`は`target_type`+`target_id`を持つ汎用テーブル**。workoutsは反応・コメント両方、workout_setsは反応のみ、topic_postsは反応・コメント両方
 - **`workouts`の削除はソフトデリート**（`deleted_at`）。編集・削除しても`reactions`/`comments`は残る
