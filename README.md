@@ -23,3 +23,25 @@ npm run dev
 - 型チェック: `npm run typecheck`
 - Lint: `npm run lint`
 - フォーマット: `npm run format`（整形） / `npm run format:check`（チェックのみ）
+
+### backend（Express）
+
+前提: Docker（ローカルPostgreSQL用）
+
+```bash
+cd backend
+nvm use
+npm install
+cp .env.example .env
+docker compose up -d   # ローカルPostgreSQLを起動
+npm run dev
+```
+
+- スキーマ（`prisma/schema.prisma`）にモデルを追加したら `npx prisma migrate dev` でマイグレーションを作成・適用する
+
+- `http://localhost:3001/health` で起動確認
+- 型チェック: `npm run typecheck`
+- Lint: `npm run lint`
+- フォーマット: `npm run format`（整形） / `npm run format:check`（チェックのみ）
+- テスト: `npm run test`
+- ビルド: `npm run build`（`dist/`に出力） / 起動: `npm run start`

@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: torebu
+      POSTGRES_PASSWORD: torebu
+      POSTGRES_DB: torebu_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      # PostgreSQL 18+の公式イメージは /var/lib/postgresql 配下にメジャーバージョン別の
+      # サブディレクトリを作る構成が推奨されている(/var/lib/postgresql/data直下ではない)
+      - torebu_db_data:/var/lib/postgresql
+
+volumes:
+  torebu_db_data:
