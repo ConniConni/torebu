@@ -48,6 +48,70 @@
 
 ---
 
+### 2026-09-01 15:00
+
+**やったこと**
+
+- Issue2「バックエンド（Express）の初期セットアップ」を実施：Express 5 + TypeScript初期化、ESLint/Prettier導入、Prisma導入、Docker ComposeでローカルPostgreSQL構築、Vitest+supertestで最小テスト、README追記、PR作成〜main取り込み
+
+**学んだこと・気づいたこと**
+
+- `npm`の`latest`タグが必ずしも「安定版」を指すとは限らないと知った。今回`prisma`の`latest`は8だったか、7が安定版だった。
+- Prisma 7から`schema.prisma`と接続設定の役割がどう分かれたか（`prisma7.config.ts`が担うようになったものはマイグレのファイルの出力先とDBにアクセスするための情報の場所）
+- `tsconfig.json`の`include`に入っていないファイルは「そのtsconfigのプロジェクトの一部として扱われない」。エディタ（VS Code）は簡易的に型チェックを行った。
+- `@types/node`とはNode.js固有のAPIの型定義をまとめたパッケージでprocessなどを使えるようにしているパッケージである。
+- `rootDir`はtsconfig.jsonで明示的に指定した"rootDir": "src"という設定値を基準に計算しているため`prisma7.config.ts`を`include`に入れることでカレントの外にあるファイルとして競合が発生した
+- `tsconfig.json`と`tsconfig.build.json`、前者は型チェックだけして、出力(.js)は作らない（noEmit: true。エディタ・npm run typecheck用）ために、後者はtsconfig.build.json → 実際に.jsへコンパイルしてdist/に出力する（npm run build用）
+- `extends`はtsconfig.json`の内容を読み込み、残りは差分だけを書けばいいことになる。
+- Vitestの`describe`/`it`/`expect`、はそれぞれテスト区分、（１つの）テストケース、実行（判定）を担う
+- `supertest`はExpressアプリに対して「実際にHTTPリクエストを送ったふりをする」ためのライブラリ。`app.listen()`を`NODE_ENV !== 'test'`で分岐させていたのはapp.listen() は、Expressで指定したホストとポートで接続を待ち受ける（HTTPサーバーを起動する）ためのメソッドであるが、supertestはappさえ渡せばサーバーを立ち上げてくれ、不要であるから。
+
+**わからなかったこと・詰まったこと**
+
+- `npm install`で`Cannot read properties of null (reading 'edgesOut')`エラーが再発したが、前回（frontend）と原因は同じで`nvm use`でnodeのv22を使用することで解決した。
+- `docker exec -it backend-db-1 /bin/bash`が失敗した。原因は1つで、コンテナが立ち上がっていなかったから。立ち上がっていない理由はデータバインドの設定がv18以前とv18で異なっていたため
+
+**見積もりの振り返り**
+
+- 見積もり：60分 / 実績：80分
+- わからないことをClaude Codeに聴きながら作業を勧められた/振り返りで結構時間がかかってしまった。
+
+**次回やること**
+
+- Issue2「バックエンド（Express）の初期セットアップ」に着手 → 完了
+- （次のIssueをここに）
+
+---
+
+### 2026-08-31 21:30
+
+**やったこと**
+
+- Nuxt.js＋TypeScriptでfrontend/ディレクトリ作成
+- ESLint,Prettierを導入(コマンドで実行できるようにする `npm run lint`, npm run format:check[write]`)
+- node.jsのバージョンが悪さをしたのでLTSv22への切り替えと切り替えを`nvm use`コマンドで行えるようにすること
+
+**学んだこと・気づいたこと**
+
+- package.jsonに書き込むことでスクリプトとして機能することを思い出した（忘れていた）
+- ~~eslint.config.mjsのおかげでVue/Nuxtで利用できる便利な機能が使えること(理解あっている？)~~
+- eslint.config.mjsのおかげでVue/Nuxtで利用できる useFetchとかrefとかNuxtが自動importする関数を、ESLintが『未定義変数』と誤検知しないよう、Nuxt公式が用意した設定をwithNuxtで取り込んでいる
+
+**わからなかったこと・詰まったこと**
+
+- 特になし
+
+**見積もりの振り返り**
+
+- 見積もり：30分 / 実績：60分
+- ズレた場合、原因は何か：nodeのバージョンやTypeScriptのバージョン違いでエラーが起きたこと/ESLint,Prettierの理解の時間を考慮していなかったこと
+
+**次回やること**
+
+- バックエンド（Express）の初期セットアップのIssueを起票
+
+---
+
 ### 2026-08-31 17:00
 
 **やったこと**
@@ -83,35 +147,6 @@
 **次回やること**
 
 - Issue1「Nuxtプロジェクトの初期セットアップ」に着手 → 完了
-- バックエンド（Express）の初期セットアップのIssueを起票
-
----
-
-### 2026-08-31 21:30
-
-**やったこと**
-
-- Nuxt.js＋TypeScriptでfrontend/ディレクトリ作成
-- ESLint,Prettierを導入(コマンドで実行できるようにする `npm run lint`, npm run format:check[write]`)
-- node.jsのバージョンが悪さをしたのでLTSv22への切り替えと切り替えを`nvm use`コマンドで行えるようにすること
-
-**学んだこと・気づいたこと**
-
-- package.jsonに書き込むことでスクリプトとして機能することを思い出した（忘れていた）
-- ~~eslint.config.mjsのおかげでVue/Nuxtで利用できる便利な機能が使えること(理解あっている？)~~
-- eslint.config.mjsのおかげでVue/Nuxtで利用できる useFetchとかrefとかNuxtが自動importする関数を、ESLintが『未定義変数』と誤検知しないよう、Nuxt公式が用意した設定をwithNuxtで取り込んでいる
-
-**わからなかったこと・詰まったこと**
-
-- 特になし
-
-**見積もりの振り返り**
-
-- 見積もり：30分 / 実績：60分
-- ズレた場合、原因は何か：nodeのバージョンやTypeScriptのバージョン違いでエラーが起きたこと/ESLint,Prettierの理解の時間を考慮していなかったこと
-
-**次回やること**
-
 - バックエンド（Express）の初期セットアップのIssueを起票
 
 ---
