@@ -48,6 +48,53 @@
 
 ---
 
+### 2026-09-01 18:00
+
+**やったこと**
+
+- Issue3「DBスキーマの実装（Prismaモデル定義・マイグレーション）」を実施：`docs/schema.md`のMVP7テーブルをPrismaモデルとして定義、ローカルDBにマイグレーション適用、PR作成
+
+**学んだこと・気づいたこと**
+
+- `schema.prisma`を書き換えてから`prisma migrate dev`を実行するまでの間で、Prismaは何をしているか（差分の検出→SQL生成→DB適用）を自分の言葉で説明できるか
+  - 1. 現在のschema.prismaと、過去に適用済みのマイグレーション履歴を比較して差分を検出
+  - 2. 差分からSQLを生成（migration.sqlとして書き出す）
+  - 3. そのSQLをDBに適用
+  - 4. 最後にPrisma Client（TypeScriptコード）を再生成（これがprisma generate相当の処理。手動でprisma generateコマンドを別途打つのではなく、migrate devが内部で自動的にやってくれる部分）
+  - prismaを使うことで差分をおいやすくgitでの管理も可能になる。
+- `prisma migrate dev --create-only`と、オプション無しの`prisma migrate dev`は何が違うか。今回どちらを、どんな場面で使い分けたか
+  - 前者はSQLを生成するだけ、後者はDB適用で実施する。DB適用前に生成したSQlを確認したい時に前者を使う
+- 生成された`migration.sql`を読むために最低限必要な知識は何だったか（`CREATE TABLE`/`CREATE TYPE`/`ALTER TABLE ... ADD CONSTRAINT`/`FOREIGN KEY ... ON DELETE ...`など、出てきたSQL構文を自分の言葉で説明できるか）
+  - `CREATE TABLE` デーブル生成
+  - `CREATE TYPE` 独自の型を新しく定義
+  - `ALTER TABLE ... ADD CONSTRAINT` 制約を追加
+  - `FOREIGN KEY ... ON DELETE ...` 参照先の行が削除されたとき、この外部きーを持つ行をどう扱うかの設定
+
+- `TIMESTAMP`と`TIMESTAMPTZ`は何が違うか。今回`docs/schema.md`の設計と実際に生成されたSQLがズレていたのはなぜ起きたか（Prismaの`DateTime`型のデフォルトマッピングはどうなっているか）
+  - タイムゾーンの指定なしの時間かありの時間か 考慮漏れのため
+- Prisma 7で「ドライバアダプター」が必須になったとは、具体的に何がどう変わったということか。以前のPrisma（6以前）とどう違うか
+  - PrismaがDB(PostgreSQL)と通信するために`@prisma/adapter-pg`が必要となったこと
+- `exercises`の公式種目名の部分UNIQUE制約について、DB制約を見送るという判断をした理由は何だったか（レースコンディションとは何か、なぜ「1人運用」だとリスクが下がると考えたか）
+  - 運用側が複数人で`exercises`登録するケースが考えらないので過剰な設計となる恐れがあるため
+- `prisma migrate reset`はどんな時に使うコマンドで、なぜ実行前にPrisma自体から確認を求められたか
+  - DBの実データが消える操作のため　今回はまだリリースもしていないし、テーブルを作っただけで影響が限定的だったため実行
+
+**わからなかったこと・詰まったこと**
+
+- （自分の言葉で書いてみる）
+
+**見積もりの振り返り**
+
+- 見積もり：60分 / 実績：80分
+- 振り返りの時間がどうしても時間がかかる 生成自体は逆にClaude Codeがほぼ行ったため20分程度　あとはわからないことを聞いたりで時間を使った。
+
+**次回やること**
+
+- Issue3「DBスキーマの実装」に着手 → 完了
+- Issue4「ユーザー登録・ログイン（セッション認証）API」を起票
+
+---
+
 ### 2026-09-01 15:00
 
 **やったこと**
