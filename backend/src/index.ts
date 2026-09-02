@@ -1,7 +1,10 @@
 import 'dotenv/config'
 import express from 'express'
+import { sessionMiddleware } from './session.js'
 
 export const app = express()
+
+app.use(sessionMiddleware)
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
