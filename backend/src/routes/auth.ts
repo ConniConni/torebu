@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import { rateLimit } from 'express-rate-limit'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
+import { requireAuth } from '../middleware/requireAuth.js'
 
 export const authRouter = Router()
 
@@ -99,5 +100,32 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+  })
+})
+
+authRouter.get('/me', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.session.userId } })
+  if (!user) {
+    // 退会等でユーザーが既に存在しない場合。念のためセッションも破棄しておく
+    req.session.destroy(() => {})
+    res.status(401).json({ error: 'unauthenticated' })
+    return
+  }
+
+  res.status(200).json({
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+  })
+})
+
+authRouter.post('/logout', requireAuth, (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      res.status(500).json({ error: 'logout_failed' })
+      return
+    }
+    res.clearCookie('connect.sid')
+    res.status(204).end()
   })
 })
