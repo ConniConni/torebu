@@ -20,6 +20,12 @@
 - [ ] Issue11: フロント：ルーティン一覧・編集（⑤）
 - [ ] Issue12: フロント：記録詳細（⑥）
 
+## 先送りにした学習項目
+
+- セッションストアの自前実装（`sessions`テーブルへの読み書き）＋期限切れセッションを掃除する定期実行ジョブ
+  Issue4で一度検討したが、`connect-pg-simple`に乗る判断をしたため見送り（経緯は`docs/schema.md`の設計方針メモ参照）。
+  定期実行ジョブの学習を兼ねて、いずれ別Issueとして着手する
+
 ## 既知の対応保留事項
 
 - `prisma`（CLI, devDependencies）が依存する`@prisma/config`経由で`deepmerge-ts`にhigh脆弱性あり

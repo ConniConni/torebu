@@ -21,10 +21,11 @@ users
   updated_at                timestamptz
 
 sessions                    -- 認証はセッション方式。退会・権限変更を即失効させやすいため
-  id             uuid PK
-  user_id        uuid FK -> users
-  expires_at     timestamptz
-  created_at     timestamptz
+                             -- テーブルの実体はPrismaではなく`connect-pg-simple`が管理する
+                             -- （Issue4で、当初Prismaで正規化していた構成から変更。経緯は下記メモ参照）
+  sid            text PK
+  sess           jsonb            -- セッションの中身（userIdや有効期限など）をまるごと格納
+  expire         timestamp
 
 exercises                   -- 種目マスタ
   id                 uuid PK
@@ -196,6 +197,7 @@ user_theme_purchases
 - **種目一覧の表示順**は「自分の使用回数 DESC → default_sort_order ASC → 名前順」
 - **アカウント削除は完全削除せず匿名化する**。display_nameを「退会済みユーザー」に置き換え、投稿・コメント・いいねは残す
 - **`birth_date`は登録時は任意のまま**。Phase3の「年代別分析・シェア」機能を使おうとしたタイミングで入力を促す
+- **セッションストアはIssue4で自前実装から`connect-pg-simple`に変更**。当初`sessions`テーブルをPrismaで正規化（`user_id`/`expires_at`等）して設計したが、セッションの有効期限切れ判定・期限切れ行の定期削除を自前で実装するコストに対し、認証は枯れたライブラリに乗る方が実務的にも妥当と判断し変更。自前実装で得られたはずの「定期実行ジョブ」の学習は見送り、`docs/roadmap.md`に別Issueとして積む
 
 ## セキュリティ実装の優先度
 
