@@ -2,6 +2,12 @@ import session from 'express-session'
 import connectPgSimple from 'connect-pg-simple'
 import pg from 'pg'
 
+declare module 'express-session' {
+  interface SessionData {
+    userId: string
+  }
+}
+
 // セッションの実体（sid/sess/expire）はこのプールで直接管理する。
 // Prismaのマイグレーション管理外（経緯はdocs/schema.mdの「設計方針メモ」参照）
 const sessionPool = new pg.Pool({
