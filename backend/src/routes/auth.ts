@@ -12,7 +12,10 @@ const BCRYPT_SALT_ROUNDS = 12
 
 // ユーザーが存在しない場合でも応答時間を揃えるための、ログイン専用のダミーハッシュ
 // （実在しないパスワードに対するハッシュ値。bcrypt.compareの処理時間を発生させるためだけに使う）
-const DUMMY_PASSWORD_HASH = await bcrypt.hash('dummy-password-for-timing-safety', BCRYPT_SALT_ROUNDS)
+const DUMMY_PASSWORD_HASH = await bcrypt.hash(
+  'dummy-password-for-timing-safety',
+  BCRYPT_SALT_ROUNDS,
+)
 
 const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
