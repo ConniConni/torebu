@@ -25,20 +25,11 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     usageCounts.map((row) => [row.exerciseId, row._count._all]),
   )
 
-  const exercisesWithUseCount = exercises.map((exercise) => ({
-    id: exercise.id,
-    name: exercise.name,
-    muscleGroup: exercise.muscleGroup,
-    muscleDetail: exercise.muscleDetail,
-    equipment: exercise.equipment,
-    createdBy: exercise.createdBy,
-    useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
-    defaultSortOrder: exercise.defaultSortOrder,
-  }))
-
-  // 表示順：自分の使用回数DESC → default_sort_order ASC(nullは最後) → 名前順
-  exercisesWithUseCount.sort((a, b) => {
-    if (a.useCount !== b.useCount) return b.useCount - a.useCount
+  // 表示順の算出に使うだけなので、default_sort_order自体はレスポンスに含めない(内部実装の詳細)
+  const sorted = [...exercises].sort((a, b) => {
+    const useCountA = usageCountByExerciseId.get(a.id) ?? 0
+    const useCountB = usageCountByExerciseId.get(b.id) ?? 0
+    if (useCountA !== useCountB) return useCountB - useCountA
 
     if (a.defaultSortOrder !== b.defaultSortOrder) {
       if (a.defaultSortOrder === null) return 1
@@ -49,7 +40,17 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     return a.name.localeCompare(b.name, 'ja')
   })
 
-  res.status(200).json(exercisesWithUseCount)
+  res.status(200).json(
+    sorted.map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      muscleDetail: exercise.muscleDetail,
+      equipment: exercise.equipment,
+      createdBy: exercise.createdBy,
+      useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
+    })),
+  )
 })
 
 const createExerciseSchema = z.object({
