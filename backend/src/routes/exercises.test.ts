@@ -68,7 +68,7 @@ describe('GET /exercises', () => {
     const ownCustom = await createExercise({
       data: { name: '自作種目', muscleGroup: 'arms', createdBy: ownerId },
     })
-    await createExercise({
+    const othersCustom = await createExercise({
       data: { name: '他人の自作種目', muscleGroup: 'legs', createdBy: otherId },
     })
 
@@ -76,10 +76,11 @@ describe('GET /exercises', () => {
     const res = await agent.get('/exercises')
 
     expect(res.status).toBe(200)
+    // DB全体の件数は他のテストファイルが並行して作る公式種目の影響を受けうるため検証しない。
+    // 「見えるべきものが見えるか／見えるべきでないものが見えないか」だけをIDで検証する
     const ids = (res.body as Array<{ id: string }>).map((e) => e.id)
     expect(ids).toEqual(expect.arrayContaining([official.id, ownCustom.id]))
-    expect(ids).not.toContain('他人の自作種目')
-    expect(res.body).toHaveLength(2)
+    expect(ids).not.toContain(othersCustom.id)
   })
 
   it('自分の使用回数が多い種目ほど先に並ぶ', async () => {
@@ -112,6 +113,20 @@ describe('GET /exercises', () => {
     const order = (res.body as Array<{ id: string; useCount: number }>).map((e) => e.id)
     expect(order.indexOf(usedTwice.id)).toBeLessThan(order.indexOf(usedOnce.id))
     expect(order.indexOf(usedOnce.id)).toBeLessThan(order.indexOf(unused.id))
+  })
+
+  it('使用回数が同点の場合は名前順(あいうえお順)に並ぶ', async () => {
+    // 使用回数はどちらも0(未使用)のまま。名前だけを五十音順が崩れる並びで作る
+    const wa = await createExercise({ data: { name: 'わ種目', muscleGroup: 'chest' } })
+    const a = await createExercise({ data: { name: 'あ種目', muscleGroup: 'chest' } })
+    const i = await createExercise({ data: { name: 'い種目', muscleGroup: 'chest' } })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const order = (res.body as Array<{ id: string }>).map((e) => e.id)
+    expect(order.indexOf(a.id)).toBeLessThan(order.indexOf(i.id))
+    expect(order.indexOf(i.id)).toBeLessThan(order.indexOf(wa.id))
   })
 })
 
