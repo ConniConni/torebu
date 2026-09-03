@@ -118,7 +118,12 @@ describe('GET /routines/:id', () => {
 
   it('自分のroutineとexercisesをsortOrder順で返す', async () => {
     const routine = await createRoutine(ownerId)
-    await prisma.routineExercise.create({
+    // sortOrderの昇順とは逆の順番でINSERTし、DB挿入順ではなくsortOrderで並んでいることを検証する
+    // (種目は重複追加を弾いていないため、同じexerciseIdを2行使って良い。docs/roadmap.md参照)
+    const second = await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 2 },
+    })
+    const first = await prisma.routineExercise.create({
       data: { routineId: routine.id, exerciseId, sortOrder: 1 },
     })
 
@@ -127,9 +132,8 @@ describe('GET /routines/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.id).toBe(routine.id)
-    expect(res.body.exercises).toEqual([
-      expect.objectContaining({ exerciseId, sortOrder: 1 }),
-    ])
+    const ids = (res.body.exercises as Array<{ id: string }>).map((e) => e.id)
+    expect(ids).toEqual([first.id, second.id])
   })
 })
 
@@ -205,6 +209,26 @@ describe('POST /routines/:id/exercises', () => {
     expect(res.status).toBe(404)
   })
 
+  it('バリデーションエラー(exerciseIdが無い)なら400を返す', async () => {
+    const routine = await createRoutine(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/routines/${routine.id}/exercises`).send({ sortOrder: 1 })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('バリデーションエラー(sortOrderが0以下)なら400を返す', async () => {
+    const routine = await createRoutine(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/routines/${routine.id}/exercises`)
+      .send({ exerciseId, sortOrder: 0 })
+
+    expect(res.status).toBe(400)
+  })
+
   it('他人専用のカスタム種目は追加できない(400)', async () => {
     const routine = await createRoutine(ownerId)
 
@@ -250,6 +274,36 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
     expect(res.status).toBe(404)
   })
 
+  it('自分の別routineに属するroutineExerciseIdを指定すると404を返す', async () => {
+    const routine = await createRoutine(ownerId, { name: '胸の日' })
+    const otherOwnRoutine = await createRoutine(ownerId, { name: '脚の日' })
+    // otherOwnRoutine(自分の別routine)に属するroutineExerciseIdを、routine(URL上のid)に対して指定する
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: otherOwnRoutine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+      .send({ sortOrder: 2 })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('バリデーションエラー(sortOrderが無い)なら400を返す', async () => {
+    const routine = await createRoutine(ownerId)
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
   it('sortOrderを変更できる(並び替え)', async () => {
     const routine = await createRoutine(ownerId)
     const routineExercise = await prisma.routineExercise.create({
@@ -277,6 +331,22 @@ describe('DELETE /routines/:id/exercises/:routineExerciseId', () => {
     const res = await agent.delete(`/routines/${routine.id}/exercises/${routineExercise.id}`)
 
     expect(res.status).toBe(404)
+  })
+
+  it('自分の別routineに属するroutineExerciseIdを指定すると404を返す', async () => {
+    const routine = await createRoutine(ownerId, { name: '胸の日' })
+    const otherOwnRoutine = await createRoutine(ownerId, { name: '脚の日' })
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: otherOwnRoutine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+
+    expect(res.status).toBe(404)
+    // 404で弾かれ、削除処理自体が実行されていないことも確認する
+    const stored = await prisma.routineExercise.findUnique({ where: { id: routineExercise.id } })
+    expect(stored).not.toBeNull()
   })
 
   it('自分のroutineから種目を削除できる', async () => {
