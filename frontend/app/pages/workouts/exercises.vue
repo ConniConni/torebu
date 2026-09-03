@@ -1,6 +1,13 @@
 <script setup lang="ts">
 // ④ 種目選択。部位ごとにセクション分けし、各セクション上位5件＋開閉トグルで全件表示
+// ③記録作成・⑤ルーティン編集の両方から遷移してくる共通画面。選択後にどこへ戻るかは
+// クエリパラメータreturnTo(未指定なら③記録作成)で決める
 definePageMeta({ middleware: 'auth' })
+
+const route = useRoute()
+const returnTo = computed(() =>
+  typeof route.query.returnTo === 'string' ? route.query.returnTo : '/workouts/new',
+)
 
 const { exercises, pending, error, fetchExercises } = useExercises()
 if (!exercises.value) {
@@ -36,14 +43,14 @@ function toggleExpanded(group: MuscleGroup) {
 
 async function selectExercise(exerciseId: string) {
   usePickedExerciseId().value = exerciseId
-  await navigateTo('/workouts/new')
+  await navigateTo(returnTo.value)
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink to="/workouts/new" class="text-sm text-gray-500">← 記録作成に戻る</NuxtLink>
+      <NuxtLink :to="returnTo" class="text-sm text-gray-500">← 戻る</NuxtLink>
       <h1 class="text-base font-semibold text-gray-900">種目を選択</h1>
 
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
@@ -56,7 +63,7 @@ async function selectExercise(exerciseId: string) {
           <div class="mb-2 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-900">{{ section.label }}</h2>
             <NuxtLink
-              :to="{ path: '/workouts/exercises-new', query: { muscleGroup: section.group } }"
+              :to="{ path: '/workouts/exercises-new', query: { muscleGroup: section.group, returnTo } }"
               class="text-xs text-blue-600"
             >
               ＋種目を追加
