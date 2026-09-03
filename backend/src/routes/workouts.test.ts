@@ -299,7 +299,7 @@ describe('POST /workouts/:id/sets', () => {
     expect(res.body).toMatchObject({ setOrder: 3 })
   })
 
-  it('weightKgが上限(999.9kg)を超えると400を返す', async () => {
+  it('weightKgが上限(999.5kg)を超えると400を返す', async () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
@@ -308,15 +308,27 @@ describe('POST /workouts/:id/sets', () => {
     expect(res.status).toBe(400)
   })
 
-  it('weightKgが小数第2位以下だと400を返す', async () => {
+  it('weightKgが0.5kg刻みでないと400を返す', async () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
     const res = await agent
       .post(`/workouts/${workout.id}/sets`)
-      .send({ exerciseId, reps: 10, weightKg: 60.25 })
+      .send({ exerciseId, reps: 10, weightKg: 60.3 })
 
     expect(res.status).toBe(400)
+  })
+
+  it('weightKgが0.5kg刻みなら登録できる', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId, reps: 10, weightKg: 62.5 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ weightKg: 62.5 })
   })
 })
 

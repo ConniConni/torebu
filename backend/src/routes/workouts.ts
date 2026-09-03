@@ -133,13 +133,13 @@ workoutsRouter.delete('/:id', requireAuth, async (req, res) => {
   res.status(204).send()
 })
 
-// 重量入力は小数第1位まで(プレート・ダンベルの刻み幅を想定)、上限は現実的な範囲で緩めに999.9kg
+// 重量入力は0.5kg刻み(プレート・ダンベルの一般的な最小刻み幅)、上限は現実的な範囲で緩めに999.5kg
 const weightKgSchema = z
   .number()
   .positive()
-  .max(999.9, { message: '重量は999.9kg以下で入力してください' })
-  .refine((value) => Math.round(value * 10) === value * 10, {
-    message: '重量は小数第1位までで入力してください',
+  .max(999.5, { message: '重量は999.5kg以下で入力してください' })
+  .refine((value) => Math.round(value * 2) === value * 2, {
+    message: '重量は0.5kg刻みで入力してください',
   })
 const repsSchema = z.number().int().positive().max(999)
 
