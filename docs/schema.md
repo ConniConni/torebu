@@ -35,6 +35,8 @@ exercises                   -- 種目マスタ
   equipment          text  null
   created_by         uuid  null FK -> users  -- null=公式、値ありならカスタム種目（作成者と同グループの人に見える）
   default_sort_order int null       -- 運営が定番種目に設定。使用履歴が無い時のフォールバック順
+                                     -- MVPでは当面null運用・編集手段なし(削除候補)。詳細はroadmap.mdの
+                                     -- 「既知の対応保留事項」参照
   updated_at         timestamptz
                       -- 公式種目名の重複防止は、DB制約ではなくアプリ側の重複サジェスト表示のみで運用（詳細は下記メモ）
 

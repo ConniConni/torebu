@@ -26,7 +26,7 @@ const registerSchema = z.object({
 authRouter.post('/register', async (req, res) => {
   const parsed = registerSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() })
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
     return
   }
   const { email, password, displayName } = parsed.data
@@ -72,7 +72,7 @@ const loginSchema = z.object({
 authRouter.post('/login', loginRateLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() })
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
     return
   }
   const { email, password } = parsed.data

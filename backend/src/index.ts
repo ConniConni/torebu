@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { sessionMiddleware } from './session.js'
 import { authRouter } from './routes/auth.js'
+import { exercisesRouter } from './routes/exercises.js'
 
 export const app = express()
 
@@ -13,6 +14,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/auth', authRouter)
+app.use('/exercises', exercisesRouter)
 
 const port = process.env.PORT ?? 3001
 
