@@ -11,7 +11,7 @@
 - [x] Issue3: DBスキーマの実装（Prismaモデル定義・マイグレーション）
       `users` / `sessions` / `exercises` / `workouts` / `workout_sets` / `routines` / `routine_exercises`
 - [x] Issue4: ユーザー登録・ログイン（セッション認証）API　→ 画面①
-- [ ] Issue5: 種目マスタAPI（一覧取得・カスタム種目追加）　→ 画面④⑦
+- [x] Issue5: 種目マスタAPI（一覧取得・カスタム種目追加）　→ 画面④⑦
 - [ ] Issue6: トレーニング記録（workout/workout_sets）CRUD API　→ 画面③⑥
 - [ ] Issue7: ルーティンCRUD API　→ 画面⑤
 - [ ] Issue8: フロント：ログイン／新規登録画面（①）
