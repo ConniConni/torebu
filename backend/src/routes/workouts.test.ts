@@ -258,9 +258,7 @@ describe('POST /workouts/:id/sets', () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
-    const res = await agent
-      .post(`/workouts/${workout.id}/sets`)
-      .send({ exerciseId, setOrder: 1, reps: 12 })
+    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 12 })
 
     expect(res.status).toBe(201)
     expect(res.body).toEqual({
@@ -271,6 +269,64 @@ describe('POST /workouts/:id/sets', () => {
       weightKg: null,
       reps: 12,
     })
+  })
+
+  it('同じ種目の2set目はsetOrderが自動的に2になる(クライアント指定は不要)', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 12 })
+    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ setOrder: 2 })
+  })
+
+  it('setOrderが欠番になっても次のsetOrderは既存の最大値+1になる', async () => {
+    const workout = await createWorkout(ownerId)
+    const first = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+    await prisma.workoutSet.create({ data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 10 } })
+    await prisma.workoutSet.delete({ where: { id: first.id } })
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ setOrder: 3 })
+  })
+
+  it('weightKgが上限(999.5kg)を超えると400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10, weightKg: 1000 })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('weightKgが0.5kg刻みでないと400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId, reps: 10, weightKg: 60.3 })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('weightKgが0.5kg刻みなら登録できる', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId, reps: 10, weightKg: 62.5 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ weightKg: 62.5 })
   })
 })
 
@@ -314,7 +370,7 @@ describe('PATCH /workouts/:id/sets/:setId', () => {
     expect(res.status).toBe(400)
   })
 
-  it('setOrder・weightKg・repsのいずれも指定しなければ400を返す', async () => {
+  it('weightKg・repsのいずれも指定しなければ400を返す', async () => {
     const workout = await createWorkout(ownerId)
     const set = await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
