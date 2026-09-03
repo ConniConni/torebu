@@ -4,6 +4,7 @@ import { sessionMiddleware } from './session.js'
 import { authRouter } from './routes/auth.js'
 import { exercisesRouter } from './routes/exercises.js'
 import { workoutsRouter } from './routes/workouts.js'
+import { routinesRouter } from './routes/routines.js'
 
 export const app = express()
 
@@ -17,6 +18,7 @@ app.get('/health', (_req, res) => {
 app.use('/auth', authRouter)
 app.use('/exercises', exercisesRouter)
 app.use('/workouts', workoutsRouter)
+app.use('/routines', routinesRouter)
 
 const port = process.env.PORT ?? 3001
 
