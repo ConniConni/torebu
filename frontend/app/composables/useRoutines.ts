@@ -5,6 +5,18 @@ interface Routine {
   updatedAt: string
 }
 
+interface RoutineExerciseItem {
+  id: string
+  routineId: string
+  exerciseId: string
+  sortOrder: number
+  exercise: { id: string; name: string; muscleGroup: MuscleGroup }
+}
+
+interface RoutineDetail extends Routine {
+  exercises: RoutineExerciseItem[]
+}
+
 // ⑤ルーティン一覧。一覧取得・新規作成・名前編集・削除
 export function useRoutines() {
   const routines = useState<Routine[] | null>('routines', () => null)
@@ -44,7 +56,21 @@ export function useRoutines() {
     routines.value = (routines.value ?? []).filter((r) => r.id !== id)
   }
 
-  return { routines, pending, error, fetchRoutines, createRoutine, renameRoutine, deleteRoutine }
+  // ③記録作成でルーティンを適用する際、種目一式（名前・部位込み）を取得するために使う
+  async function fetchRoutineDetail(id: string) {
+    return await $fetch<RoutineDetail>(`/api/routines/${id}`)
+  }
+
+  return {
+    routines,
+    pending,
+    error,
+    fetchRoutines,
+    createRoutine,
+    renameRoutine,
+    deleteRoutine,
+    fetchRoutineDetail,
+  }
 }
 
-export type { Routine }
+export type { Routine, RoutineDetail, RoutineExerciseItem }
