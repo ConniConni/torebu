@@ -6,14 +6,6 @@ import { MuscleGroup } from '../generated/prisma/enums.js'
 
 export const exercisesRouter = Router()
 
-// 数値の昇順比較。nullは最後に送る(defaultSortOrderが未設定の種目を後ろに回すため)
-function compareNullsLast(a: number | null, b: number | null): number {
-  if (a === b) return 0
-  if (a === null) return 1
-  if (b === null) return -1
-  return a - b
-}
-
 exercisesRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId
 
@@ -39,13 +31,10 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
   }))
 
-  // 表示順：自分の使用回数DESC → default_sort_order ASC(nullは最後) → 名前順
-  // (default_sort_order自体はソート専用の内部値のため、レスポンスには含めない)
+  // 表示順：自分の使用回数DESC → 名前順
+  // (default_sort_orderは当面すべてnull運用のため、ソート条件には含めない。詳細はroadmap.md参照)
   exercisesWithUseCount.sort(
-    (a, b) =>
-      b.useCount - a.useCount ||
-      compareNullsLast(a.defaultSortOrder, b.defaultSortOrder) ||
-      a.name.localeCompare(b.name, 'ja'),
+    (a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name, 'ja'),
   )
 
   res.status(200).json(
