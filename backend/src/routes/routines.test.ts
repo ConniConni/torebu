@@ -135,6 +135,25 @@ describe('GET /routines/:id', () => {
     const ids = (res.body.exercises as Array<{ id: string }>).map((e) => e.id)
     expect(ids).toEqual([first.id, second.id])
   })
+
+  it('exercisesの各要素に種目名・部位が埋め込まれる', async () => {
+    const routine = await createRoutine(ownerId)
+    await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/routines/${routine.id}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.exercises[0]).toEqual({
+      id: expect.any(String),
+      routineId: routine.id,
+      exerciseId,
+      sortOrder: 1,
+      exercise: { id: exerciseId, name: 'ベンチプレス', muscleGroup: 'chest' },
+    })
+  })
 })
 
 describe('PATCH /routines/:id', () => {

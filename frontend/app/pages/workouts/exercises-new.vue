@@ -1,8 +1,12 @@
 <script setup lang="ts">
 // ⑦ 種目追加。④種目選択の「＋種目を追加」から遷移する共通画面（部位は遷移元のセクションを引き継ぐ）
+// 選択後にどこへ戻るかは④と同じくクエリパラメータreturnTo(未指定なら③記録作成)で決める
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
+const returnTo = computed(() =>
+  typeof route.query.returnTo === 'string' ? route.query.returnTo : '/workouts/new',
+)
 const { createExercise } = useExercises()
 
 const defaultMuscleGroup = MUSCLE_GROUPS.includes(route.query.muscleGroup as MuscleGroup)
@@ -20,9 +24,9 @@ async function onSubmit() {
   errorMessage.value = ''
   try {
     const exercise = await createExercise({ name: name.value.trim(), muscleGroup: muscleGroup.value })
-    // 追加した種目をそのまま選択済みにして③へ戻る(④を経由し直させない)
+    // 追加した種目をそのまま選択済みにしてreturnTo(③記録作成・⑤ルーティン編集など)へ戻る(④を経由し直させない)
     usePickedExerciseId().value = exercise.id
-    await navigateTo('/workouts/new')
+    await navigateTo(returnTo.value)
   } catch {
     errorMessage.value = '種目の追加に失敗しました。時間をおいて再度お試しください'
   } finally {
@@ -34,7 +38,12 @@ async function onSubmit() {
 <template>
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink to="/workouts/exercises" class="text-sm text-gray-500">← 種目選択に戻る</NuxtLink>
+      <NuxtLink
+        :to="{ path: '/workouts/exercises', query: { returnTo } }"
+        class="text-sm text-gray-500"
+      >
+        ← 種目選択に戻る
+      </NuxtLink>
       <h1 class="text-base font-semibold text-gray-900">種目を追加</h1>
 
       <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
