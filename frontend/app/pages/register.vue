@@ -5,12 +5,19 @@ const { register } = useAuth()
 
 const email = ref('')
 const password = ref('')
+const passwordConfirmation = ref('')
 const displayName = ref('')
 const errorMessage = ref('')
 const isSubmitting = ref(false)
 
 async function onSubmit() {
   errorMessage.value = ''
+
+  if (password.value !== passwordConfirmation.value) {
+    errorMessage.value = 'パスワードが一致しません'
+    return
+  }
+
   isSubmitting.value = true
   try {
     await register({ email: email.value, password: password.value, displayName: displayName.value })
@@ -73,6 +80,20 @@ async function onSubmit() {
             class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           />
           <p class="mt-1 text-xs text-gray-500">8文字以上で入力してください</p>
+        </div>
+
+        <div>
+          <label for="passwordConfirmation" class="mb-1 block text-sm font-medium text-gray-700">
+            パスワード（確認）
+          </label>
+          <input
+            id="passwordConfirmation"
+            v-model="passwordConfirmation"
+            type="password"
+            required
+            autocomplete="new-password"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
         </div>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
