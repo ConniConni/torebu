@@ -45,6 +45,13 @@ async function onLogout() {
         ＋今日の記録を始める
       </button>
 
+      <NuxtLink
+        to="/routines"
+        class="w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
+      >
+        ルーティン一覧
+      </NuxtLink>
+
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
       <p v-else-if="error" class="text-center text-sm text-red-600">
         記録の取得に失敗しました。時間をおいて再度お試しください
