@@ -245,6 +245,15 @@ describe('POST /workouts/:id/sets', () => {
     expect(res.body).toEqual({ error: 'invalid_exercise' })
   })
 
+  it('バリデーションエラー(exerciseIdが無い)なら400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ setOrder: 1, reps: 10 })
+
+    expect(res.status).toBe(400)
+  })
+
   it('setを追加できる(自重種目はweightKgがnull)', async () => {
     const workout = await createWorkout(ownerId)
 
@@ -278,6 +287,33 @@ describe('PATCH /workouts/:id/sets/:setId', () => {
     expect(res.status).toBe(404)
   })
 
+  it('自分の別workoutに属するsetIdを指定すると404を返す', async () => {
+    const ownWorkout = await createWorkout(ownerId)
+    const anotherOwnWorkout = await createWorkout(ownerId)
+    const setOfAnotherWorkout = await prisma.workoutSet.create({
+      data: { workoutId: anotherOwnWorkout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/workouts/${ownWorkout.id}/sets/${setOfAnotherWorkout.id}`)
+      .send({ reps: 8 })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('バリデーションエラー(repsが0以下)なら400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const set = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}/sets/${set.id}`).send({ reps: 0 })
+
+    expect(res.status).toBe(400)
+  })
+
   it('自分のsetを編集できる', async () => {
     const workout = await createWorkout(ownerId)
     const set = await prisma.workoutSet.create({
@@ -305,6 +341,22 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
     const res = await agent.delete(`/workouts/${workout.id}/sets/${set.id}`)
 
     expect(res.status).toBe(404)
+  })
+
+  it('自分の別workoutに属するsetIdを指定すると404を返す', async () => {
+    const ownWorkout = await createWorkout(ownerId)
+    const anotherOwnWorkout = await createWorkout(ownerId)
+    const setOfAnotherWorkout = await prisma.workoutSet.create({
+      data: { workoutId: anotherOwnWorkout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/workouts/${ownWorkout.id}/sets/${setOfAnotherWorkout.id}`)
+
+    expect(res.status).toBe(404)
+
+    const stored = await prisma.workoutSet.findUnique({ where: { id: setOfAnotherWorkout.id } })
+    expect(stored).not.toBeNull()
   })
 
   it('自分のsetを削除できる', async () => {
