@@ -79,10 +79,26 @@ async function selectExercise(exerciseId: string) {
           <button
             v-if="section.exercises.length > SECTION_PREVIEW_COUNT"
             type="button"
-            class="mt-1 text-xs text-gray-500"
+            class="mt-1 flex w-full items-center justify-center gap-1 rounded py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
             @click="toggleExpanded(section.group)"
           >
-            {{ expandedGroups.has(section.group) ? '閉じる ▲' : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件） ▼` }}
+            {{
+              expandedGroups.has(section.group)
+                ? '閉じる'
+                : `他${section.exercises.length - SECTION_PREVIEW_COUNT}件を表示`
+            }}
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              class="h-4 w-4 transition-transform duration-200"
+              :class="{ 'rotate-180': expandedGroups.has(section.group) }"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.293l3.71-4.06a.75.75 0 111.08 1.04l-4.25 4.65a.75.75 0 01-1.08 0l-4.25-4.65a.75.75 0 01.02-1.06z"
+                clip-rule="evenodd"
+              />
+            </svg>
           </button>
         </section>
       </template>
