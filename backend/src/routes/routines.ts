@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import type { RoutineModel, RoutineExerciseModel } from '../generated/prisma/models.js'
+import type { RoutineModel, RoutineExerciseModel, ExerciseModel } from '../generated/prisma/models.js'
 
 export const routinesRouter = Router()
 
@@ -21,6 +21,22 @@ function serializeRoutineExercise(routineExercise: RoutineExerciseModel) {
     routineId: routineExercise.routineId,
     exerciseId: routineExercise.exerciseId,
     sortOrder: routineExercise.sortOrder,
+  }
+}
+
+// ルーティン詳細では、種目マスタを未取得のまま開かれても種目名・部位が表示できるよう埋め込んで返す
+// (IDのみ返すとGET /exercisesとの突き合わせが必要になる。docs/roadmap.mdの既知の対応保留事項を参照)
+function serializeRoutineExerciseWithExercise(
+  routineExercise: RoutineExerciseModel,
+  exercise: ExerciseModel,
+) {
+  return {
+    ...serializeRoutineExercise(routineExercise),
+    exercise: {
+      id: exercise.id,
+      name: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+    },
   }
 }
 
@@ -79,9 +95,13 @@ routinesRouter.get('/:id', requireAuth, async (req, res) => {
   const exercises = await prisma.routineExercise.findMany({
     where: { routineId: routine.id },
     orderBy: { sortOrder: 'asc' },
+    include: { exercise: true },
   })
 
-  res.status(200).json({ ...serializeRoutine(routine), exercises: exercises.map(serializeRoutineExercise) })
+  res.status(200).json({
+    ...serializeRoutine(routine),
+    exercises: exercises.map((e) => serializeRoutineExerciseWithExercise(e, e.exercise)),
+  })
 })
 
 const updateRoutineSchema = z.object({
