@@ -81,19 +81,33 @@ function onDoneWithExercise() {
   repsInput.value = ''
 }
 
-const canFinish = computed(() => groupedSets.value.length > 0)
+// セット・メモのどちらかがあれば完了できる(メモだけの休養日記録なども許容する)
+const canFinish = computed(
+  () => groupedSets.value.length > 0 || !!session.value.memo?.trim(),
+)
 const finishing = ref(false)
+// 完了ボタンの確認はwindow.confirm()を使わない。ブラウザが「このページに追加のダイアログを
+// 表示させない」設定を自動で有効にすると、以後confirm()は常にfalseを返し、ボタンが完全に
+// 無反応に見えてしまうため(実機検証で再現)。画面内の2段階確認に置き換える
+const confirmingFinish = ref(false)
 
-async function onFinish() {
+function onFinishClick() {
   if (!canFinish.value) return
-  if (!confirm(`${today}の記録を完了しますか？`)) return
+  confirmingFinish.value = true
+}
 
+function onCancelFinish() {
+  confirmingFinish.value = false
+}
+
+async function onConfirmFinish() {
   finishing.value = true
   try {
     await finishWorkout()
     await navigateTo('/')
   } finally {
     finishing.value = false
+    confirmingFinish.value = false
   }
 }
 </script>
@@ -150,7 +164,8 @@ async function onFinish() {
       </p>
 
       <section v-if="activeExerciseId" class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">{{ activeExerciseName }}</p>
+        <NuxtLink to="/workouts/exercises" class="text-xs text-gray-500">← 種目選択に戻る</NuxtLink>
+        <p class="mb-2 mt-1 text-sm font-semibold text-gray-900">{{ activeExerciseName }}</p>
         <div class="flex items-end gap-2">
           <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
             重量(kg・自重は空欄)
@@ -197,14 +212,35 @@ async function onFinish() {
 
       <hr class="border-gray-200" />
 
+      <div v-if="confirmingFinish" class="rounded-lg border border-green-600 bg-green-50 p-4">
+        <p class="mb-3 text-sm text-gray-800">{{ today }}の記録を完了しますか？</p>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded border border-gray-300 bg-white py-2 text-sm font-semibold text-gray-700"
+            @click="onCancelFinish"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            :disabled="finishing"
+            class="flex-1 rounded bg-green-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            @click="onConfirmFinish"
+          >
+            {{ finishing ? '完了処理中...' : '完了する' }}
+          </button>
+        </div>
+      </div>
       <button
+        v-else
         type="button"
-        :disabled="!canFinish || finishing"
-        :title="canFinish ? undefined : '種目を1つ以上追加してから完了してください'"
+        :disabled="!canFinish"
+        :title="canFinish ? undefined : '種目を1つ以上追加するか、メモを保存してから完了してください'"
         class="w-full rounded bg-green-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        @click="onFinish"
+        @click="onFinishClick"
       >
-        {{ finishing ? '完了処理中...' : '今日の記録を完了' }}
+        今日の記録を完了
       </button>
     </div>
   </div>
