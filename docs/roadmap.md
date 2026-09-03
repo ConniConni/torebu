@@ -12,7 +12,7 @@
       `users` / `sessions` / `exercises` / `workouts` / `workout_sets` / `routines` / `routine_exercises`
 - [x] Issue4: ユーザー登録・ログイン（セッション認証）API　→ 画面①
 - [x] Issue5: 種目マスタAPI（一覧取得・カスタム種目追加）　→ 画面④⑦
-- [ ] Issue6: トレーニング記録（workout/workout_sets）CRUD API　→ 画面③⑥
+- [x] Issue6: トレーニング記録（workout/workout_sets）CRUD API　→ 画面③⑥
 - [ ] Issue7: ルーティンCRUD API　→ 画面⑤
 - [ ] Issue8: フロント：ログイン／新規登録画面（①）
 - [ ] Issue9: フロント：ホーム画面（②、カレンダー表示）
@@ -43,6 +43,11 @@
   （2026-09時点）。`@prisma/client`（実行時に使う方）はこの依存を持たず、`prisma`CLIも開発時にしか
   使わないため実害は低いと判断し対応保留。修正には`prisma@6.12.0`への破壊的ダウングレードが必要な
   ため、Prisma側のアップデートで解消されるのを待つ（`npm audit`で定期的に状況確認）
+- `POST/PATCH /workouts/:id/sets`の`weightKg`・`setOrder`バリデーションは「正の数であること」程度の
+  最低限のみ（Issue6実装時点）。フロント側の入力方式（数字入力のUI、＋セット追加のインタラクション、
+  自重トグル等。`docs/screens.md`の「未着手の画面」参照）が固まった段階で、上限値・小数桁数・
+  `setOrder`の採番方法（クライアント指定のままでよいか、サーバー側で自動採番すべきか）を見直す
+  - **再検討のタイミング**：Issue10（フロント：記録作成・種目選択・種目追加）着手時
 
 ## 並び順の考え方
 
