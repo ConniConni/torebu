@@ -171,6 +171,25 @@ describe('PATCH /workouts/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.memo).toBe('書き換え後')
   })
+
+  it('自分のworkoutのperformedAtを編集できる(記録日の入力ミス修正)', async () => {
+    const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({ performedAt: '2026-08-31' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.performedAt).toBe('2026-08-31')
+  })
+
+  it('performedAt・memoのどちらも指定しなければ400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({})
+
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('DELETE /workouts/:id', () => {

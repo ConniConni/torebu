@@ -87,9 +87,16 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
   res.status(200).json({ ...serializeWorkout(workout), sets: sets.map(serializeSet) })
 })
 
-const updateWorkoutSchema = z.object({
-  memo: z.string().trim().min(1).max(500),
-})
+const updateWorkoutSchema = z
+  .object({
+    performedAt: z.coerce.date().optional(),
+    memo: z.string().trim().min(1).max(500).optional(),
+  })
+  // 記録日を間違えた場合の修正・メモの編集、どちらか一方でも呼べるようにするため、
+  // 両方省略(空のPATCH)だけを弾く
+  .refine((data) => data.performedAt !== undefined || data.memo !== undefined, {
+    message: 'performedAtかmemoのいずれかを指定してください',
+  })
 
 workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
   const parsed = updateWorkoutSchema.safeParse(req.body)
@@ -106,7 +113,7 @@ workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
 
   const updated = await prisma.workout.update({
     where: { id: workout.id },
-    data: { memo: parsed.data.memo },
+    data: { performedAt: parsed.data.performedAt, memo: parsed.data.memo },
   })
 
   res.status(200).json(serializeWorkout(updated))
