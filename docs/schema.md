@@ -187,6 +187,7 @@ user_theme_purchases
 - **`reactions`/`comments`は`target_type`+`target_id`を持つ汎用テーブル**。workoutsは反応・コメント両方、workout_setsは反応のみ、topic_postsは反応・コメント両方
 - **`workouts`の削除はソフトデリート**（`deleted_at`）。編集・削除しても`reactions`/`comments`は残る
 - **`groups`の削除もソフトデリート**、実行はownerのみ。Phase2で実装
+- **ソフトデリート/物理削除の使い分け基準**：削除後も他のレコードから参照され続ける（`reactions`/`comments`の対象になる、退会後も履歴として残す等）テーブルのみソフトデリートにし、参照する側が存在しないテーブルは物理削除でよい。全テーブル一律ソフトデリートにはしない（クエリに`deleted_at IS NULL`条件が常に必要になる、UNIQUE制約が複雑化する等のコストが見合わないため）。例：`routines`/`routine_exercises`は`reactions`/`comments`等の`target_type`一覧に含まれず参照されないため物理削除（Issue7）
 - **認証はセッション方式**（JWTではなく）。退会・グループ削除・招待コード失効など「権限をすぐ失効させたい」場面が多いため
 - **`weight_kg`はnullable**。自重種目（懸垂・腕立て伏せ等）に対応
 - **`topic_posts`は1人1投稿の制約を設けない**。同じお題への連投を許可
