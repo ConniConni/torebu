@@ -63,7 +63,7 @@ const createExerciseSchema = z.object({
 exercisesRouter.post('/', requireAuth, async (req, res) => {
   const parsed = createExerciseSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() })
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
     return
   }
   const { name, muscleGroup, muscleDetail, equipment } = parsed.data
