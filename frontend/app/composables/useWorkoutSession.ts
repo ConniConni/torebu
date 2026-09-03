@@ -56,12 +56,10 @@ export function useWorkoutSession() {
     session.value.memo = workout.memo
   }
 
-  // PATCH /workouts/:idのmemoは1文字以上必須(空でのクリアは未対応。backend/src/routes/workouts.ts参照)。
-  // 空欄への変更はここでは何もしない(既存メモが残る)
+  // 空文字列を送るとメモをクリア(null)できる(backend/src/routes/workouts.ts参照)
   async function updateMemo(memo: string) {
     if (!session.value.workoutId) return
     const trimmed = memo.trim()
-    if (!trimmed) return
     const updated = await $fetch<{ memo: string | null }>(`/api/workouts/${session.value.workoutId}`, {
       method: 'PATCH',
       body: { memo: trimmed },

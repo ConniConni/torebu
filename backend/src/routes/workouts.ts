@@ -90,7 +90,8 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
 const updateWorkoutSchema = z
   .object({
     performedAt: z.coerce.date().optional(),
-    memo: z.string().trim().min(1).max(500).optional(),
+    // 空文字列・nullはメモのクリア(null化)として扱う。省略時のみ「変更しない」
+    memo: z.string().trim().max(500).nullable().optional(),
   })
   // 記録日を間違えた場合の修正・メモの編集、どちらか一方でも呼べるようにするため、
   // 両方省略(空のPATCH)だけを弾く
@@ -113,7 +114,11 @@ workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
 
   const updated = await prisma.workout.update({
     where: { id: workout.id },
-    data: { performedAt: parsed.data.performedAt, memo: parsed.data.memo },
+    // 空文字列はnull(メモ無し)に正規化して保存する
+    data: {
+      performedAt: parsed.data.performedAt,
+      memo: parsed.data.memo === undefined ? undefined : parsed.data.memo || null,
+    },
   })
 
   res.status(200).json(serializeWorkout(updated))

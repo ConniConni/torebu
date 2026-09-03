@@ -172,6 +172,26 @@ describe('PATCH /workouts/:id', () => {
     expect(res.body.memo).toBe('書き換え後')
   })
 
+  it('memoを空文字列で送るとnull(メモ無し)にクリアできる', async () => {
+    const workout = await createWorkout(ownerId, { memo: '元のメモ' })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({ memo: '' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.memo).toBeNull()
+  })
+
+  it('memoをnullで送ってもクリアできる', async () => {
+    const workout = await createWorkout(ownerId, { memo: '元のメモ' })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({ memo: null })
+
+    expect(res.status).toBe(200)
+    expect(res.body.memo).toBeNull()
+  })
+
   it('自分のworkoutのperformedAtを編集できる(記録日の入力ミス修正)', async () => {
     const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
 

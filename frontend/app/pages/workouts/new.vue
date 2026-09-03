@@ -14,9 +14,9 @@ await startWorkout(today)
 const memoInput = ref(session.value.memo ?? '')
 const memoSaving = ref(false)
 async function onSaveMemo() {
-  if (!memoInput.value.trim()) return
   memoSaving.value = true
   try {
+    // 空欄で保存するとメモをクリアする(useWorkoutSession.updateMemo参照)
     await updateMemo(memoInput.value)
   } finally {
     memoSaving.value = false
@@ -133,11 +133,11 @@ async function onConfirmFinish() {
         </label>
         <button
           type="button"
-          :disabled="!memoInput.trim() || memoSaving"
+          :disabled="memoSaving"
           class="mt-2 rounded border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-50"
           @click="onSaveMemo"
         >
-          {{ memoSaving ? '保存中...' : 'メモを保存' }}
+          {{ memoSaving ? '保存中...' : 'メモを保存(空欄で保存するとクリア)' }}
         </button>
       </section>
 
