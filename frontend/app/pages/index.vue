@@ -68,8 +68,13 @@ async function onLogout() {
           <p class="mb-2 text-sm font-semibold text-gray-900">{{ selectedDate }}の記録</p>
           <p v-if="selectedWorkouts.length === 0" class="text-sm text-gray-500">記録がありません</p>
           <ul v-else class="space-y-2">
-            <li v-for="workout in selectedWorkouts" :key="workout.id" class="text-sm text-gray-700">
-              {{ workout.memo || 'メモ無し' }}
+            <li v-for="workout in selectedWorkouts" :key="workout.id">
+              <NuxtLink
+                :to="`/workouts/${workout.id}`"
+                class="block text-sm text-gray-700 hover:text-blue-600"
+              >
+                {{ workout.memo || 'メモ無し' }}
+              </NuxtLink>
             </li>
           </ul>
         </div>
