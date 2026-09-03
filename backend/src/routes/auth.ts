@@ -62,6 +62,9 @@ const loginRateLimiter = rateLimit({
   limit: 10, // 同一IPから15分間に10回まで
   standardHeaders: true,
   legacyHeaders: false,
+  // テストはプロセス内でカウンタを共有するため、複数のテストファイルを合わせて実行すると
+  // ログイン回数が実際の攻撃と無関係にすぐ閾値に達してしまう。テスト時のみ無効化する
+  skip: () => process.env.NODE_ENV === 'test',
 })
 
 const loginSchema = z.object({
