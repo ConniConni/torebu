@@ -39,11 +39,10 @@ async function onLogout() {
 
       <button
         type="button"
-        disabled
-        title="準備中です（記録作成画面は近日公開）"
-        class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white"
+        @click="navigateTo('/workouts/new')"
       >
-        ＋今日の記録を始める（準備中）
+        ＋今日の記録を始める
       </button>
 
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
