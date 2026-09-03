@@ -8,9 +8,9 @@
 
 - [x] Issue1: Nuxtプロジェクトの初期セットアップ
 - [x] Issue2: バックエンド（Express）の初期セットアップ
-- [ ] Issue3: DBスキーマの実装（Prismaモデル定義・マイグレーション）
+- [x] Issue3: DBスキーマの実装（Prismaモデル定義・マイグレーション）
       `users` / `sessions` / `exercises` / `workouts` / `workout_sets` / `routines` / `routine_exercises`
-- [ ] Issue4: ユーザー登録・ログイン（セッション認証）API　→ 画面①
+- [x] Issue4: ユーザー登録・ログイン（セッション認証）API　→ 画面①
 - [ ] Issue5: 種目マスタAPI（一覧取得・カスタム種目追加）　→ 画面④⑦
 - [ ] Issue6: トレーニング記録（workout/workout_sets）CRUD API　→ 画面③⑥
 - [ ] Issue7: ルーティンCRUD API　→ 画面⑤
