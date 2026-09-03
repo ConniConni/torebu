@@ -40,12 +40,18 @@ async function fetchRoutine() {
 }
 await fetchRoutine()
 
+const exerciseError = ref('')
+
 // ④種目選択・⑦種目追加(returnTo=このページ)から選ばれた種目を、戻ってきたタイミングで追加する
 const pickedExerciseId = usePickedExerciseId()
 if (pickedExerciseId.value) {
   const exerciseId = pickedExerciseId.value
   pickedExerciseId.value = null
-  await addExercise(exerciseId)
+  try {
+    await addExercise(exerciseId)
+  } catch {
+    exerciseError.value = '種目の追加に失敗しました。時間をおいて再度お試しください'
+  }
 }
 
 const nameInput = ref(routine.value?.name ?? '')
@@ -107,8 +113,6 @@ async function addExercise(exerciseId: string) {
     { ...created, exercise: exercise ?? { id: exerciseId, name: '(不明な種目)', muscleGroup: 'chest' } },
   ]
 }
-
-const exerciseError = ref('')
 
 async function removeExercise(routineExerciseId: string) {
   if (!routine.value) return
