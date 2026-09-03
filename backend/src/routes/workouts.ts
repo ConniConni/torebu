@@ -133,12 +133,31 @@ workoutsRouter.delete('/:id', requireAuth, async (req, res) => {
   res.status(204).send()
 })
 
+// 重量入力は0.5kg刻み(プレート・ダンベルの一般的な最小刻み幅)、上限は現実的な範囲で緩めに999.5kg
+const weightKgSchema = z
+  .number()
+  .positive()
+  .max(999.5, { message: '重量は999.5kg以下で入力してください' })
+  .refine((value) => Math.round(value * 2) === value * 2, {
+    message: '重量は0.5kg刻みで入力してください',
+  })
+const repsSchema = z.number().int().positive().max(999)
+
 const createSetSchema = z.object({
   exerciseId: z.string().uuid(),
-  setOrder: z.number().int().positive(),
-  weightKg: z.number().positive().optional(),
-  reps: z.number().int().positive(),
+  weightKg: weightKgSchema.optional(),
+  reps: repsSchema,
 })
+
+// 同じworkout内で同じ種目のsetが並ぶ順番。クライアント指定だと同時追加時にずれる懸念があるため、
+// サーバー側で「その種目の既存setの最大setOrder + 1」を採番する(削除で欠番が出ても採番はズレない)
+async function nextSetOrder(workoutId: string, exerciseId: string) {
+  const aggregate = await prisma.workoutSet.aggregate({
+    where: { workoutId, exerciseId },
+    _max: { setOrder: true },
+  })
+  return (aggregate._max.setOrder ?? 0) + 1
+}
 
 workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   const parsed = createSetSchema.safeParse(req.body)
@@ -159,11 +178,12 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     return
   }
 
+  const setOrder = await nextSetOrder(workout.id, parsed.data.exerciseId)
   const set = await prisma.workoutSet.create({
     data: {
       workoutId: workout.id,
       exerciseId: parsed.data.exerciseId,
-      setOrder: parsed.data.setOrder,
+      setOrder,
       weightKg: parsed.data.weightKg,
       reps: parsed.data.reps,
     },
@@ -174,15 +194,13 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
 
 const updateSetSchema = z
   .object({
-    setOrder: z.number().int().positive().optional(),
-    weightKg: z.number().positive().nullable().optional(),
-    reps: z.number().int().positive().optional(),
+    weightKg: weightKgSchema.nullable().optional(),
+    reps: repsSchema.optional(),
   })
   // 空のPATCH({})は意味の無い更新なので、PATCH /workouts/:idと同様に最低1項目を要求する
-  .refine(
-    (data) => data.setOrder !== undefined || data.weightKg !== undefined || data.reps !== undefined,
-    { message: 'setOrder・weightKg・repsのいずれかを指定してください' },
-  )
+  .refine((data) => data.weightKg !== undefined || data.reps !== undefined, {
+    message: 'weightKg・repsのいずれかを指定してください',
+  })
 
 async function findOwnSet(userId: string, workoutId: string, setId: string) {
   const workout = await findOwnWorkout(userId, workoutId)

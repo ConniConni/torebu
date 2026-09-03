@@ -43,11 +43,10 @@
   （2026-09時点）。`@prisma/client`（実行時に使う方）はこの依存を持たず、`prisma`CLIも開発時にしか
   使わないため実害は低いと判断し対応保留。修正には`prisma@6.12.0`への破壊的ダウングレードが必要な
   ため、Prisma側のアップデートで解消されるのを待つ（`npm audit`で定期的に状況確認）
-- `POST/PATCH /workouts/:id/sets`の`weightKg`・`setOrder`バリデーションは「正の数であること」程度の
-  最低限のみ（Issue6実装時点）。フロント側の入力方式（数字入力のUI、＋セット追加のインタラクション、
-  自重トグル等。`docs/screens.md`の「未着手の画面」参照）が固まった段階で、上限値・小数桁数・
-  `setOrder`の採番方法（クライアント指定のままでよいか、サーバー側で自動採番すべきか）を見直す
-  - **再検討のタイミング**：Issue10（フロント：記録作成・種目選択・種目追加）着手時
+- ~~`POST/PATCH /workouts/:id/sets`の`weightKg`・`setOrder`バリデーションは「正の数であること」程度の
+  最低限のみ~~ → Issue10で対応済み。`setOrder`はクライアント指定を廃止しサーバー側で自動採番
+  （同一workout・同一種目内の既存setの最大`setOrder`+1）、`weightKg`は上限999.5kg・0.5kg刻みに
+  制限（`backend/src/routes/workouts.ts`参照）
 - `GET /routines/:id`の`exercises`は`exerciseId`のみを返し、種目名・部位（`muscleGroup`）は含めない
   （Issue7実装時点。`GET /workouts/:id`の`sets`と同じ「IDのみ返し、クライアントが`GET /exercises`と
   突き合わせる」設計に揃えたもの）。ルーティン一覧・編集画面では種目マスタを未取得のまま開く可能性が
