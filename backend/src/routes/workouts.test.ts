@@ -213,6 +213,10 @@ describe('DELETE /workouts/:id', () => {
     expect(getRes.status).toBe(404)
 
     const stored = await prisma.workout.findUnique({ where: { id: workout.id } })
+    // 物理削除(行自体が消える)ではなくソフトデリート(行は残りdeletedAtが入る)であることを検証する。
+    // stored?.deletedAtだけだと、行が物理削除されてstoredがnullの場合もundefined !== nullで
+    // 誤って成立してしまうため、まず行自体が残っていることを確認する
+    expect(stored).not.toBeNull()
     expect(stored?.deletedAt).not.toBeNull()
   })
 })
