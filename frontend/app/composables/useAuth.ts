@@ -31,11 +31,14 @@ export function authErrorMessage(error: unknown): string {
 // ログイン中のユーザー情報。ページ・コンポーネント間で共有するためuseStateで保持する
 export function useAuth() {
   const user = useState<AuthUser | null>('auth-user', () => null)
+  // SSR時、素の$fetchだとブラウザから来たCookieが転送されずログイン状態を正しく判定できない。
+  // useRequestFetch()はサーバー実行時のみリクエストヘッダー（Cookie含む）を自動転送してくれる
+  const requestFetch = useRequestFetch()
 
   // 現在のログイン状態をサーバーに問い合わせて反映する
   async function fetchMe() {
     try {
-      user.value = await $fetch<AuthUser>('/api/auth/me')
+      user.value = await requestFetch<AuthUser>('/api/auth/me')
     } catch {
       user.value = null
     }
