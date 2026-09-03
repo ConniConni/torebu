@@ -314,6 +314,18 @@ describe('PATCH /workouts/:id/sets/:setId', () => {
     expect(res.status).toBe(400)
   })
 
+  it('setOrder・weightKg・repsのいずれも指定しなければ400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const set = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}/sets/${set.id}`).send({})
+
+    expect(res.status).toBe(400)
+  })
+
   it('自分のsetを編集できる', async () => {
     const workout = await createWorkout(ownerId)
     const set = await prisma.workoutSet.create({

@@ -172,11 +172,17 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   res.status(201).json(serializeSet(set))
 })
 
-const updateSetSchema = z.object({
-  setOrder: z.number().int().positive().optional(),
-  weightKg: z.number().positive().nullable().optional(),
-  reps: z.number().int().positive().optional(),
-})
+const updateSetSchema = z
+  .object({
+    setOrder: z.number().int().positive().optional(),
+    weightKg: z.number().positive().nullable().optional(),
+    reps: z.number().int().positive().optional(),
+  })
+  // 空のPATCH({})は意味の無い更新なので、PATCH /workouts/:idと同様に最低1項目を要求する
+  .refine(
+    (data) => data.setOrder !== undefined || data.weightKg !== undefined || data.reps !== undefined,
+    { message: 'setOrder・weightKg・repsのいずれかを指定してください' },
+  )
 
 async function findOwnSet(userId: string, workoutId: string, setId: string) {
   const workout = await findOwnWorkout(userId, workoutId)
