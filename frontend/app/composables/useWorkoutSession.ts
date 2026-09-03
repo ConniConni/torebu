@@ -24,6 +24,9 @@ export function useWorkoutSession() {
   async function startWorkout(performedAt: string) {
     if (session.value.workoutId) return session.value.workoutId
 
+    if (!workouts.value) {
+      await fetchWorkouts()
+    }
     const existing = (workouts.value ?? []).find((w) => w.performedAt === performedAt)
     if (existing) {
       session.value.workoutId = existing.id
