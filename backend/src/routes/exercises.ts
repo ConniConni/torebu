@@ -6,6 +6,14 @@ import { MuscleGroup } from '../generated/prisma/enums.js'
 
 export const exercisesRouter = Router()
 
+// 数値の昇順比較。nullは最後に送る(defaultSortOrderが未設定の種目を後ろに回すため)
+function compareNullsLast(a: number | null, b: number | null): number {
+  if (a === b) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  return a - b
+}
+
 exercisesRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId
 
@@ -25,30 +33,30 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     usageCounts.map((row) => [row.exerciseId, row._count._all]),
   )
 
-  // 表示順の算出に使うだけなので、default_sort_order自体はレスポンスに含めない(内部実装の詳細)
-  const sorted = [...exercises].sort((a, b) => {
-    const useCountA = usageCountByExerciseId.get(a.id) ?? 0
-    const useCountB = usageCountByExerciseId.get(b.id) ?? 0
-    if (useCountA !== useCountB) return useCountB - useCountA
+  // useCountは複数箇所(ソート・レスポンス)で使うため、先に一度だけ計算して種目データにくっつけておく
+  const exercisesWithUseCount = exercises.map((exercise) => ({
+    ...exercise,
+    useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
+  }))
 
-    if (a.defaultSortOrder !== b.defaultSortOrder) {
-      if (a.defaultSortOrder === null) return 1
-      if (b.defaultSortOrder === null) return -1
-      return a.defaultSortOrder - b.defaultSortOrder
-    }
-
-    return a.name.localeCompare(b.name, 'ja')
-  })
+  // 表示順：自分の使用回数DESC → default_sort_order ASC(nullは最後) → 名前順
+  // (default_sort_order自体はソート専用の内部値のため、レスポンスには含めない)
+  exercisesWithUseCount.sort(
+    (a, b) =>
+      b.useCount - a.useCount ||
+      compareNullsLast(a.defaultSortOrder, b.defaultSortOrder) ||
+      a.name.localeCompare(b.name, 'ja'),
+  )
 
   res.status(200).json(
-    sorted.map((exercise) => ({
+    exercisesWithUseCount.map((exercise) => ({
       id: exercise.id,
       name: exercise.name,
       muscleGroup: exercise.muscleGroup,
       muscleDetail: exercise.muscleDetail,
       equipment: exercise.equipment,
       createdBy: exercise.createdBy,
-      useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
+      useCount: exercise.useCount,
     })),
   )
 })
