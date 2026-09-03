@@ -45,7 +45,6 @@ model User {
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions         Session[]
   workouts         Workout[]
   routines         Routine[]
   createdExercises Exercise[] @relation("ExerciseCreatedBy")
@@ -53,16 +52,8 @@ model User {
   @@map("users")
 }
 
-model Session {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sessions")
-}
+// セッションの実体は connect-pg-simple が管理する（Prismaのマイグレーション管理外。
+// 経緯はdocs/schema.mdの「設計方針メモ」参照）
 
 model Exercise {
   id               String      @id @default(uuid())
