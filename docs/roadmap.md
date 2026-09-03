@@ -45,8 +45,9 @@
   ため、Prisma側のアップデートで解消されるのを待つ（`npm audit`で定期的に状況確認）
 - ~~`POST/PATCH /workouts/:id/sets`の`weightKg`・`setOrder`バリデーションは「正の数であること」程度の
   最低限のみ~~ → Issue10で対応済み。`setOrder`はクライアント指定を廃止しサーバー側で自動採番
-  （同一workout・同一種目内の既存setの最大`setOrder`+1）、`weightKg`は上限999.9kg・小数第1位までに
-  制限（`backend/src/routes/workouts.ts`参照）
+  （同一workout・同一種目内の既存setの最大`setOrder`+1）、`weightKg`は上限999.5kg・0.5kg刻みに
+  制限（`backend/src/routes/workouts.ts`参照。当初0.1kg刻みで実装したが、レビューでプレート・
+  ダンベルの実際の刻み幅に合わせて0.5kg刻みに変更）
 - `GET /routines/:id`の`exercises`は`exerciseId`のみを返し、種目名・部位（`muscleGroup`）は含めない
   （Issue7実装時点。`GET /workouts/:id`の`sets`と同じ「IDのみ返し、クライアントが`GET /exercises`と
   突き合わせる」設計に揃えたもの）。ルーティン一覧・編集画面では種目マスタを未取得のまま開く可能性が
