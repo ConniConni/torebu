@@ -11,9 +11,6 @@
 
 MVP完成後の棚卸しで見つかった、「決めたはずなのに入っていない」もの。判断がブレる原因になる。
 
-- **種目の表示順**：docsでは「使用回数 → `default_sort_order` → 名前順」の3段階だが、実装は
-  **2段階**（使用回数 → 名前順）。`default_sort_order`を全件null運用にしたための意図的な省略だが、
-  docs側が更新されていない
 - **パスワードリセット**：`users`に`password_reset_token` / `password_reset_expires_at`カラムは
   あるが、APIは未実装
 
