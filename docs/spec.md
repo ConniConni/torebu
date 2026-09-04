@@ -155,7 +155,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `POST /auth/logout` | `auth` |
-| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
@@ -207,6 +207,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
    ├─ セット入力（重量・回数）→「記録」を押すたびに1件ずつ保存される
    │      ・重量欄は次のセットのためにあえてクリアしない（同じ重量が続くことが多いため）
    │      ・「この種目の入力を終える」で入力欄を閉じる
+   │
+   ├─ メモ入力（任意）→「メモを保存」で `PATCH /workouts/:id` に保存される
+   │      ・空欄で保存するとメモをクリアできる
    │
    └─「今日の記録を完了」──> ② ホームへ戻る
 ```
@@ -319,6 +322,7 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
+| `PATCH /workouts/:id` の `memo` | 空文字列・`null`を送るとメモを**クリア**（`null`化）できる。省略時のみ「変更しない」 |
 | `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 
