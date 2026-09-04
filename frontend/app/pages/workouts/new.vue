@@ -23,15 +23,37 @@ await startWorkout(targetDate)
 // 前の日のworkoutに紐づくものなので持ち越さない
 const switchedWorkout = previousWorkoutId !== null && previousWorkoutId !== session.value.workoutId
 
+// メモは他のセット操作と同じく即APIへ反映する設計に合わせ、明示的な保存ボタンは持たず
+// blur（フォーカスが外れたタイミング）で自動保存する。値が変わっていなければAPIは呼ばない。
+// 「ホームへ戻る」への遷移はページ離脱を伴うため、保存中のPromiseを待たずに遷移すると
+// 直前の入力が失われうる。そのため進行中の保存をpendingMemoSaveで追跡し、
+// 遷移前に必ず待ち合わせる（onLeaveWorkout参照）
 const memoInput = ref(session.value.memo ?? '')
 const memoSaving = ref(false)
-async function onSaveMemo() {
+const memoError = ref('')
+let pendingMemoSave: Promise<void> | null = null
+
+function saveMemoIfChanged() {
+  const trimmed = memoInput.value.trim()
+  const current = (session.value.memo ?? '').trim()
+  if (trimmed === current) return Promise.resolve()
+
   memoSaving.value = true
-  try {
-    await updateMemo(memoInput.value)
-  } finally {
-    memoSaving.value = false
-  }
+  memoError.value = ''
+  const promise = updateMemo(memoInput.value)
+    .catch(() => {
+      memoError.value = 'メモの保存に失敗しました。時間をおいて再度お試しください'
+    })
+    .finally(() => {
+      memoSaving.value = false
+      pendingMemoSave = null
+    })
+  pendingMemoSave = promise
+  return promise
+}
+
+function onMemoBlur() {
+  saveMemoIfChanged()
 }
 
 // ④種目選択・⑦種目追加から戻ってきた直後は、選ばれた種目のセット入力欄を開いた状態にする
@@ -162,11 +184,12 @@ function onStartEditSet(set: (typeof session.value.sets)[number]) {
   setEditError.value = ''
 }
 
-function onCancelEditSet() {
-  editingSetId.value = null
-}
-
-async function onSaveSet() {
+// 「保存」ボタンは持たず、重量・回数の入力欄からblurするたびに自動保存する
+// （メモと同じ方針）。値が不正な間（回数が空・0以下等）は保存をスキップし、編集モードのまま
+// 待つ。保存が終わればeditingSetIdは維持したまま値だけ更新されるので、そのまま
+// 「閉じる」で表示モードへ戻る。閉じるタイミングでは保存中のPromiseを待つ必要はない
+// （ページ遷移を伴わないため、保存が完了すれば表示側のsession.value.setsが自然に更新される）
+async function onEditFieldBlur() {
   if (!editingSetId.value) return
   const reps = Number(editRepsInput.value)
   if (!Number.isInteger(reps) || reps <= 0) return
@@ -177,7 +200,6 @@ async function onSaveSet() {
   setEditError.value = ''
   try {
     await updateSet(editingSetId.value, weightKg, reps)
-    editingSetId.value = null
   } catch {
     setEditError.value = 'セットの更新に失敗しました。時間をおいて再度お試しください'
   } finally {
@@ -185,9 +207,20 @@ async function onSaveSet() {
   }
 }
 
-async function onFinish() {
+function onCloseEditSet() {
+  editingSetId.value = null
+}
+
+// ③記録作成を離れる操作（旧「今日の記録を完了」「ホームへ戻る」）。セット記録・削除は
+// 既に即APIへ反映されているため、finishWorkout自体は「②ホームのキャッシュを再取得してから
+// セッション状態をリセットする」だけの処理（workoutが未作成なら再取得もしない）。
+// 「今日の記録を完了」だけがこの再取得をしていて、「ホームへ戻る」は素のリンクだったため
+// 遷移直後の②ホームに今回の変更が反映されないことがあった。実質同じ操作なので1つに統合する。
+// メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる
+async function onLeaveWorkout() {
+  await (pendingMemoSave ?? saveMemoIfChanged())
   await finishWorkout()
-  // 入力待ちの種目もworkout単位の状態のため、記録完了と合わせてリセットする
+  // 入力待ちの種目もworkout単位の状態のため、離脱と合わせてリセットする
   // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）
   pendingExercises.value = []
   await navigateTo('/')
@@ -219,7 +252,9 @@ async function onDeleteWorkout() {
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
         <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
-        <NuxtLink to="/" class="text-sm text-gray-500">ホームへ戻る</NuxtLink>
+        <button type="button" class="text-sm text-gray-500" @click="onLeaveWorkout">
+          ホームへ戻る
+        </button>
       </div>
 
       <section class="rounded-lg bg-white p-4 shadow">
@@ -231,16 +266,11 @@ async function onDeleteWorkout() {
             maxlength="500"
             placeholder="今日の体調・気づいたことなど"
             class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            @blur="onMemoBlur"
           />
         </label>
-        <button
-          type="button"
-          :disabled="memoSaving"
-          class="mt-2 rounded border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-50"
-          @click="onSaveMemo"
-        >
-          {{ memoSaving ? '保存中...' : 'メモを保存' }}
-        </button>
+        <p class="mt-1 text-xs text-gray-400">{{ memoSaving ? '保存中...' : '' }}</p>
+        <p v-if="memoError" class="mt-1 text-xs text-red-600">{{ memoError }}</p>
       </section>
 
       <section
@@ -261,6 +291,7 @@ async function onDeleteWorkout() {
                     step="0.5"
                     min="0"
                     class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    @blur="onEditFieldBlur"
                   />
                 </label>
                 <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
@@ -270,21 +301,15 @@ async function onDeleteWorkout() {
                     type="number"
                     min="1"
                     class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    @blur="onEditFieldBlur"
                   />
                 </label>
               </div>
-              <div class="mt-1 flex gap-2">
-                <button
-                  type="button"
-                  :disabled="!editRepsInput || setEditSaving"
-                  class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                  @click="onSaveSet"
-                >
-                  保存
+              <div class="mt-1 flex items-center gap-2">
+                <button type="button" class="text-xs text-gray-500" @click="onCloseEditSet">
+                  閉じる
                 </button>
-                <button type="button" class="text-xs text-gray-500" @click="onCancelEditSet">
-                  キャンセル
-                </button>
+                <span v-if="setEditSaving" class="text-xs text-gray-400">保存中...</span>
               </div>
             </template>
             <div v-else class="flex items-center justify-between">
@@ -415,15 +440,6 @@ async function onDeleteWorkout() {
           ＋ルーティンから選ぶ
         </button>
       </div>
-
-      <button
-        v-if="session.workoutId"
-        type="button"
-        class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white"
-        @click="onFinish"
-      >
-        今日の記録を完了
-      </button>
 
       <section v-if="session.workoutId" class="rounded-lg bg-white p-4 shadow">
         <template v-if="confirmingDelete">
