@@ -163,9 +163,10 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
     「入力待ちの種目を積むだけ、値は毎回手入力」前提）を「即登録＋手直し」方式に作り直す部分が
     本体のコストになる
   - **規模の見立て**：1 Issueには収まらなそうなため、着手時は以下の2段階に分けることを推奨
-    - Issue A：スキーマ（jsonbカラム追加）＋バックエンドAPI＋⑤編集画面への目安セット入力UI
+    - [x] Issue A：スキーマ（jsonbカラム追加）＋バックエンドAPI＋⑤編集画面への目安セット入力UI
+          （[Issue #74](https://github.com/ConniConni/torebu/issues/74)、2026-09-05対応済み）
     - Issue B：③のルーティン適用フローを「即登録＋手直し」方式に作り直す
-  - **再検討のタイミング**：上記2項目は着手予定として`roadmap.md`「次のIssue候補」にも記載
+  - **再検討のタイミング**：Issue Bは`roadmap.md`「次のIssue候補」に記載
 - **過去日からの記録作成**：③のページ自体は[Issue #52](https://github.com/ConniConni/torebu/issues/52)で
   `?date=`クエリに対応済み（`docs/spec.md`§3-4参照）。②ホーム側の「選択した過去日にまだ記録が無い
   場合、その日の記録作成を始める」導線も[Issue #61](https://github.com/ConniConni/torebu/issues/61)で
