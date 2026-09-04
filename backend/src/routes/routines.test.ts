@@ -119,7 +119,7 @@ describe('GET /routines/:id', () => {
   it('自分のroutineとexercisesをsortOrder順で返す', async () => {
     const routine = await createRoutine(ownerId)
     // sortOrderの昇順とは逆の順番でINSERTし、DB挿入順ではなくsortOrderで並んでいることを検証する
-    // (種目は重複追加を弾いていないため、同じexerciseIdを2行使って良い。docs/roadmap.md参照)
+    // (種目は重複追加を弾いていないため、同じexerciseIdを2行使って良い。docs/backlog.md参照)
     const second = await prisma.routineExercise.create({
       data: { routineId: routine.id, exerciseId, sortOrder: 2 },
     })

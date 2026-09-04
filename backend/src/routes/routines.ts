@@ -25,7 +25,7 @@ function serializeRoutineExercise(routineExercise: RoutineExerciseModel) {
 }
 
 // ルーティン詳細では、種目マスタを未取得のまま開かれても種目名・部位が表示できるよう埋め込んで返す
-// (IDのみ返すとGET /exercisesとの突き合わせが必要になる。docs/roadmap.mdの既知の対応保留事項を参照)
+// (IDのみ返すとGET /exercisesとの突き合わせが必要になる)
 function serializeRoutineExerciseWithExercise(
   routineExercise: RoutineExerciseModel,
   exercise: ExerciseModel,
