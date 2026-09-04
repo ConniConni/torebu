@@ -31,8 +31,13 @@ export function useWorkoutSession() {
   // performedAtも比較しているのは、②ホームの記録カードから別の日のworkoutへ直接遷移できる
   // ようになった(③⑥統合ステップ4)ため。workoutIdだけを見ると、既に別の日のworkoutを開いた
   // 状態のセッションが残っていた場合にそれを誤って使い回してしまう
+  //
+  // 該当日のworkoutがまだ無い場合、ここではPOSTしない（workoutId: nullのまま返す）。
+  // 開いただけ・種目を選んだだけで何も保存せずに離れると空のworkout行が②ホームに残ってしまう
+  // 問題があったため、実際に何か保存するタイミング(ensureWorkout)まで作成を遅らせる
+  // （docs/backlog.md「UI改善アイデア」参照）
   async function startWorkout(performedAt: string) {
-    if (session.value.workoutId && session.value.performedAt === performedAt) {
+    if (session.value.performedAt === performedAt) {
       return session.value.workoutId
     }
 
@@ -46,14 +51,25 @@ export function useWorkoutSession() {
       return existing.id
     }
 
+    session.value = { workoutId: null, performedAt, sets: [], memo: null }
+    return null
+  }
+
+  // その日のworkoutがまだ無ければここで初めて作成する。addSet/updateMemoなど、
+  // 実際に何かを保存する操作の直前でだけ呼ぶ
+  async function ensureWorkout() {
+    if (session.value.workoutId) return session.value.workoutId
+    if (!session.value.performedAt) throw new Error('記録日が未設定です')
+
     // SSR時、素の$fetchだとブラウザから来たCookieが転送されずログイン判定を誤る
-    // （useAuth.tsのfetchMeと同じ理由）。過去日を指定して初めてこのページを開く（＝その日の
-    // workoutがまだ無い）ケースはSSRで直接POSTが走るため、ここは必ずrequestFetchを使う
+    // （useAuth.tsのfetchMeと同じ理由）。過去日を指定して初めてこのページで保存する
+    // （＝その日のworkoutがまだ無い）ケースはSSRで直接POSTが走りうるため、必ずrequestFetchを使う
     const workout = await requestFetch<{ id: string; memo: string | null }>('/api/workouts', {
       method: 'POST',
-      body: { performedAt },
+      body: { performedAt: session.value.performedAt },
     })
-    session.value = { workoutId: workout.id, performedAt, sets: [], memo: workout.memo }
+    session.value.workoutId = workout.id
+    session.value.memo = workout.memo
     return workout.id
   }
 
@@ -66,11 +82,15 @@ export function useWorkoutSession() {
     session.value.memo = workout.memo
   }
 
-  // 空文字列を送るとメモをクリア(null)できる(backend/src/routes/workouts.ts参照)
+  // 空文字列を送るとメモをクリア(null)できる(backend/src/routes/workouts.ts参照)。
+  // ただしworkoutがまだ無い状態で空メモを保存しても意味が無い（空のworkoutを作るだけになる）ため、
+  // その場合は何もしない
   async function updateMemo(memo: string) {
-    if (!session.value.workoutId) return
     const trimmed = memo.trim()
-    const updated = await $fetch<{ memo: string | null }>(`/api/workouts/${session.value.workoutId}`, {
+    if (!session.value.workoutId && !trimmed) return
+
+    const workoutId = await ensureWorkout()
+    const updated = await $fetch<{ memo: string | null }>(`/api/workouts/${workoutId}`, {
       method: 'PATCH',
       body: { memo: trimmed },
     })
@@ -78,8 +98,8 @@ export function useWorkoutSession() {
   }
 
   async function addSet(exerciseId: string, reps: number, weightKg?: number) {
-    if (!session.value.workoutId) throw new Error('workoutが開始されていません')
-    const set = await $fetch<WorkoutSetItem>(`/api/workouts/${session.value.workoutId}/sets`, {
+    const workoutId = await ensureWorkout()
+    const set = await $fetch<WorkoutSetItem>(`/api/workouts/${workoutId}/sets`, {
       method: 'POST',
       body: { exerciseId, reps, weightKg },
     })
@@ -104,9 +124,12 @@ export function useWorkoutSession() {
   }
 
   // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してから
-  // セッション状態をリセットする
+  // セッション状態をリセットする。何も保存していなければ(workoutId未作成)、反映すべきものが
+  // 無いのでAPIは呼ばずリセットだけする
   async function finishWorkout() {
-    await fetchWorkouts()
+    if (session.value.workoutId) {
+      await fetchWorkouts()
+    }
     session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
   }
 
