@@ -87,13 +87,16 @@ const groupedSets = computed(() => {
   }))
 })
 
-// ⑤ルーティンから種目一式を展開する機能（Issue13）。
-// ルーティンはexerciseId・並び順のみを持ち重量・回数の目安値は持たないため（docs/backlog.md参照）、
-// ここでは「セット入力がまだの種目」を積んでおくだけの一時的なキュー（このページのローカル状態）として持つ。
-// 選ばれた種目は既存の1種目ずつのセット入力フロー（activeExerciseId）にそのまま乗せる
+// ⑤ルーティンから種目一式を展開する機能（Issue13→Issue #76で「即登録＋手直し」方式に変更）。
+// 目安セット（targetSets）が設定されている種目は、その場でworkout_setsとして即登録する
+// （修正が必要な分だけ既存のセット編集UIで手直ししてもらう想定。docs/backlog.md参照）。
+// targetSetsが無い（未設定）種目は、従来どおり「セット入力がまだの種目」として積んでおくだけの
+// 一時的なキュー（このページのローカル状態）に入れ、既存の1種目ずつのセット入力フロー
+// （activeExerciseId）にそのまま乗せる
 const { routines, fetchRoutines, fetchRoutineDetail } = useRoutines()
 const showRoutinePicker = ref(false)
 const routinePickerPending = ref(false)
+const routineApplying = ref(false)
 const routineApplyError = ref('')
 
 // 既にこのworkoutに乗っている（セット入力済み or 入力待ち or 入力中の）種目ID。
@@ -120,15 +123,30 @@ async function onOpenRoutinePicker() {
 
 async function onApplyRoutine(routineId: string) {
   routineApplyError.value = ''
+  routineApplying.value = true
   try {
     const detail = await fetchRoutineDetail(routineId)
-    const newItems = detail.exercises
-      .filter((e) => !takenExerciseIds.value.has(e.exerciseId))
-      .map((e) => ({ exerciseId: e.exerciseId, name: e.exercise.name }))
-    pendingExercises.value = [...pendingExercises.value, ...newItems]
+    const newExercises = detail.exercises.filter((e) => !takenExerciseIds.value.has(e.exerciseId))
+
+    // 目安セットが1つでもある種目は即登録、無い種目は従来どおり入力待ちに積む。
+    // 同じ種目内の複数セットはsetOrderをサーバーが「既存の最大+1」で採番するため、
+    // Promise.allではなく1件ずつawaitして順番どおりに登録する
+    const newPendingItems: PendingExercise[] = []
+    for (const e of newExercises) {
+      if (e.targetSets.length === 0) {
+        newPendingItems.push({ exerciseId: e.exerciseId, name: e.exercise.name })
+        continue
+      }
+      for (const target of e.targetSets) {
+        await addSet(e.exerciseId, target.reps, target.weightKg ?? undefined)
+      }
+    }
+    pendingExercises.value = [...pendingExercises.value, ...newPendingItems]
     showRoutinePicker.value = false
   } catch {
-    routineApplyError.value = 'ルーティンの取得に失敗しました。時間をおいて再度お試しください'
+    routineApplyError.value = 'ルーティンの適用に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    routineApplying.value = false
   }
 }
 
@@ -379,17 +397,24 @@ async function onDeleteWorkout() {
       <section v-if="showRoutinePicker" class="rounded-lg bg-white p-4 shadow">
         <div class="mb-2 flex items-center justify-between">
           <p class="text-sm font-semibold text-gray-900">ルーティンを選ぶ</p>
-          <button type="button" class="text-xs text-gray-500" @click="showRoutinePicker = false">
+          <button
+            type="button"
+            :disabled="routineApplying"
+            class="text-xs text-gray-500 disabled:opacity-50"
+            @click="showRoutinePicker = false"
+          >
             閉じる
           </button>
         </div>
         <p v-if="routinePickerPending" class="text-sm text-gray-500">読み込み中...</p>
+        <p v-else-if="routineApplying" class="text-sm text-gray-500">適用中...</p>
         <template v-else-if="routines && routines.length > 0">
           <ul class="space-y-1">
             <li v-for="r in routines" :key="r.id">
               <button
                 type="button"
-                class="w-full rounded border border-gray-300 px-2 py-1.5 text-left text-sm text-gray-700"
+                :disabled="routineApplying"
+                class="w-full rounded border border-gray-300 px-2 py-1.5 text-left text-sm text-gray-700 disabled:opacity-50"
                 @click="onApplyRoutine(r.id)"
               >
                 {{ r.name }}
