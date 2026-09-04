@@ -417,6 +417,7 @@ async function onDeleteWorkout() {
       </div>
 
       <button
+        v-if="session.workoutId"
         type="button"
         class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white"
         @click="onFinish"
@@ -424,7 +425,7 @@ async function onDeleteWorkout() {
         今日の記録を完了
       </button>
 
-      <section class="rounded-lg bg-white p-4 shadow">
+      <section v-if="session.workoutId" class="rounded-lg bg-white p-4 shadow">
         <template v-if="confirmingDelete">
           <p class="text-sm text-gray-700">この記録を削除しますか？元に戻せません。</p>
           <div class="mt-2 flex gap-2">
