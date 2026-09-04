@@ -403,7 +403,7 @@ async function onDeleteWorkout() {
         <button
           type="button"
           class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
-          @click="navigateTo('/workouts/exercises')"
+          @click="navigateTo({ path: '/workouts/exercises', query: { returnTo: `/workouts/new?date=${targetDate}` } })"
         >
           ＋種目を追加
         </button>
