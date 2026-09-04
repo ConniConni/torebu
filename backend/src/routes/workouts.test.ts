@@ -192,17 +192,22 @@ describe('PATCH /workouts/:id', () => {
     expect(res.body.memo).toBeNull()
   })
 
-  it('自分のworkoutのperformedAtを編集できる(記録日の入力ミス修正)', async () => {
+  // performedAtは編集不可(意図的、backend/src/routes/workouts.tsのupdateWorkoutSchema参照)。
+  // PATCHにperformedAtを含めても無視され、memoだけが更新される
+  it('PATCHにperformedAtを含めても無視される', async () => {
     const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
 
     const agent = await loginAsOwner()
-    const res = await agent.patch(`/workouts/${workout.id}`).send({ performedAt: '2026-08-31' })
+    const res = await agent
+      .patch(`/workouts/${workout.id}`)
+      .send({ performedAt: '2026-08-31', memo: '書き換え後' })
 
     expect(res.status).toBe(200)
-    expect(res.body.performedAt).toBe('2026-08-31')
+    expect(res.body.performedAt).toBe('2026-09-01')
+    expect(res.body.memo).toBe('書き換え後')
   })
 
-  it('performedAt・memoのどちらも指定しなければ400を返す', async () => {
+  it('memoを指定しなければ400を返す', async () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
