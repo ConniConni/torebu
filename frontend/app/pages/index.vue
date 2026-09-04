@@ -31,10 +31,14 @@ function exerciseName(exerciseId: string) {
 
 const markedDates = computed(() => new Set((workouts.value ?? []).map((w) => w.performedAt)))
 
-const selectedDate = ref(todayLocalDateString())
+const today = todayLocalDateString()
+const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
 )
+// 過去日にまだ記録が無いときだけ、その日で③記録作成を始める導線を出す。
+// 未来日は③側で今日にクランプされてしまい紛らわしいため対象外
+const isPastDate = computed(() => selectedDate.value < today)
 
 function onSelectDate(date: string) {
   selectedDate.value = date
@@ -124,7 +128,16 @@ async function onLogout() {
 
         <div class="rounded-lg bg-white p-4 shadow">
           <p class="mb-2 text-sm font-semibold text-gray-900">{{ selectedDate }}の記録</p>
-          <p v-if="selectedWorkouts.length === 0" class="text-sm text-gray-500">記録がありません</p>
+          <template v-if="selectedWorkouts.length === 0">
+            <p class="text-sm text-gray-500">記録がありません</p>
+            <NuxtLink
+              v-if="isPastDate"
+              :to="`/workouts/new?date=${selectedDate}`"
+              class="mt-2 block w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
+            >
+              ＋この日の記録を始める
+            </NuxtLink>
+          </template>
           <ul v-else class="space-y-3">
             <li
               v-for="workout in selectedWorkouts"
