@@ -59,10 +59,12 @@ watch(routine, (r) => {
   if (r) nameInput.value = r.name
 })
 
+// 種目の追加/削除/並び替えと同じく、名前欄も明示的な保存ボタンは持たず
+// blur（フォーカスが外れたタイミング）で自動保存する。値が変わっていなければAPIは呼ばない
 const savingName = ref(false)
 const nameError = ref('')
 
-async function onSaveName() {
+async function onNameBlur() {
   const name = nameInput.value.trim()
   if (!routine.value || !name || name === routine.value.name) return
   savingName.value = true
@@ -164,25 +166,17 @@ async function onDragEnd() {
       </p>
 
       <template v-else>
-        <div class="flex items-end gap-2">
-          <label class="flex flex-1 flex-col gap-1 text-sm text-gray-700">
-            ルーティン名
-            <input
-              v-model="nameInput"
-              type="text"
-              maxlength="50"
-              class="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </label>
-          <button
-            type="button"
-            :disabled="!nameInput.trim() || nameInput.trim() === routine.name || savingName"
-            class="shrink-0 rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            @click="onSaveName"
-          >
-            保存
-          </button>
-        </div>
+        <label class="flex flex-col gap-1 text-sm text-gray-700">
+          ルーティン名
+          <input
+            v-model="nameInput"
+            type="text"
+            maxlength="50"
+            class="rounded border border-gray-300 px-3 py-2 text-sm"
+            @blur="onNameBlur"
+          />
+        </label>
+        <p v-if="savingName" class="text-xs text-gray-400">保存中...</p>
         <p v-if="nameError" class="text-sm text-red-600">{{ nameError }}</p>
 
         <div class="rounded-lg bg-white p-4 shadow">
