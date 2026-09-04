@@ -8,7 +8,8 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, addSet, removeSet, updateMemo, finishWorkout } = useWorkoutSession()
+const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
+  useWorkoutSession()
 
 // ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
 // startWorkout側は既に「同じ日付のworkoutがあれば再利用する」ロジックを持っているため、
@@ -139,6 +140,43 @@ function onDoneWithExercise() {
   repsInput.value = ''
 }
 
+// --- 記録済みセットの値編集（⑥記録詳細のonStartEditSet/onSaveSet相当を移植） ---
+const editingSetId = ref<string | null>(null)
+const editWeightInput = ref('')
+const editRepsInput = ref('')
+const setEditSaving = ref(false)
+const setEditError = ref('')
+
+function onStartEditSet(set: (typeof session.value.sets)[number]) {
+  editingSetId.value = set.id
+  editWeightInput.value = set.weightKg === null ? '' : String(set.weightKg)
+  editRepsInput.value = String(set.reps)
+  setEditError.value = ''
+}
+
+function onCancelEditSet() {
+  editingSetId.value = null
+}
+
+async function onSaveSet() {
+  if (!editingSetId.value) return
+  const reps = Number(editRepsInput.value)
+  if (!Number.isInteger(reps) || reps <= 0) return
+  const weightRaw = String(editWeightInput.value).trim()
+  const weightKg = weightRaw ? Number(weightRaw) : null
+
+  setEditSaving.value = true
+  setEditError.value = ''
+  try {
+    await updateSet(editingSetId.value, weightKg, reps)
+    editingSetId.value = null
+  } catch {
+    setEditError.value = 'セットの更新に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    setEditSaving.value = false
+  }
+}
+
 async function onFinish() {
   await finishWorkout()
   // 入力待ちの種目もworkout単位の状態のため、記録完了と合わせてリセットする
@@ -183,25 +221,68 @@ async function onFinish() {
         class="rounded-lg bg-white p-4 shadow"
       >
         <p class="mb-2 text-sm font-semibold text-gray-900">{{ group.name }}</p>
-        <ul class="space-y-1">
-          <li
-            v-for="set in group.sets"
-            :key="set.id"
-            class="flex items-center justify-between text-sm text-gray-700"
-          >
-            <span class="flex items-baseline gap-1 tabular-nums">
-              <span><span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目：</span>
-              <span>
-                <span class="inline-block w-14 text-right">{{ set.weightKg ?? '自重' }}</span
-                >{{ set.weightKg ? 'kg' : '' }}
+        <ul class="space-y-2">
+          <li v-for="set in group.sets" :key="set.id" class="text-sm text-gray-700">
+            <template v-if="editingSetId === set.id">
+              <div class="flex items-end gap-2">
+                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+                  重量(kg・自重は空欄)
+                  <input
+                    v-model="editWeightInput"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+                  回数
+                  <input
+                    v-model="editRepsInput"
+                    type="number"
+                    min="1"
+                    class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <div class="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  :disabled="!editRepsInput || setEditSaving"
+                  class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                  @click="onSaveSet"
+                >
+                  保存
+                </button>
+                <button type="button" class="text-xs text-gray-500" @click="onCancelEditSet">
+                  キャンセル
+                </button>
+              </div>
+            </template>
+            <div v-else class="flex items-center justify-between">
+              <span class="flex items-baseline gap-1 tabular-nums">
+                <span><span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目：</span>
+                <span>
+                  <span class="inline-block w-14 text-right">{{ set.weightKg ?? '自重' }}</span
+                  >{{ set.weightKg ? 'kg' : '' }}
+                </span>
+                <span>×</span>
+                <span><span class="inline-block w-6 text-right">{{ set.reps }}</span>回</span>
               </span>
-              <span>×</span>
-              <span><span class="inline-block w-6 text-right">{{ set.reps }}</span>回</span>
-            </span>
-            <button type="button" class="text-xs text-red-600" @click="removeSet(set.id)">削除</button>
+              <span class="flex shrink-0 gap-2">
+                <button type="button" class="text-xs text-gray-500" @click="onStartEditSet(set)">
+                  編集
+                </button>
+                <button type="button" class="text-xs text-red-600" @click="removeSet(set.id)">
+                  削除
+                </button>
+              </span>
+            </div>
           </li>
         </ul>
       </section>
+
+      <p v-if="setEditError" class="text-center text-sm text-red-600">{{ setEditError }}</p>
 
       <p
         v-if="groupedSets.length === 0 && !activeExerciseId && pendingExercises.length === 0"
