@@ -4,6 +4,14 @@
 **ブランチ → コミット → プルリク → マージ**の流れで進める。
 Issue・PRの作成はClaudeが`gh`コマンドで行い、マージはユーザーが行う。
 
+> ⚠️ **`gh`コマンドが`HTTP 401: Bad credentials`で失敗する場合**：環境変数`GITHUB_TOKEN`が
+> 設定されていて`gh`本来の認証を上書きしてしまっているのが原因のことが多い。次のコマンドで
+> `GITHUB_TOKEN`を一時的に外してログインし直す：
+>
+> ```bash
+> env -u GITHUB_TOKEN gh auth login
+> ```
+
 ## 全体の流れ
 
 1. Issueを立てる（やることを言語化する）
