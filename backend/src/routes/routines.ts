@@ -2,9 +2,19 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { weightKgSchema, repsSchema } from './workouts.js'
 import type { RoutineModel, RoutineExerciseModel, ExerciseModel } from '../generated/prisma/models.js'
 
 export const routinesRouter = Router()
+
+// 目安セット1件(重量・回数)。workout_setsと同じ基準で検証する(workouts.tsのweightKgSchema/repsSchemaを流用)
+const targetSetSchema = z.object({
+  weightKg: weightKgSchema.nullable().optional(), // null/省略 = 自重
+  reps: repsSchema,
+})
+// 1種目あたりの目安セット数の上限。無制限にする理由が無いため実用上十分な数で区切る
+const targetSetsSchema = z.array(targetSetSchema).max(20)
+type TargetSet = z.infer<typeof targetSetSchema>
 
 function serializeRoutine(routine: RoutineModel) {
   return {
@@ -21,6 +31,8 @@ function serializeRoutineExercise(routineExercise: RoutineExerciseModel) {
     routineId: routineExercise.routineId,
     exerciseId: routineExercise.exerciseId,
     sortOrder: routineExercise.sortOrder,
+    // 未設定はnullで保存しているが、レスポンスは常に配列にして呼び出し側の分岐を減らす
+    targetSets: (routineExercise.targetSets as TargetSet[] | null) ?? [],
   }
 }
 
@@ -147,6 +159,7 @@ routinesRouter.delete('/:id', requireAuth, async (req, res) => {
 const addExerciseSchema = z.object({
   exerciseId: z.string().uuid(),
   sortOrder: z.number().int().positive(),
+  targetSets: targetSetsSchema.optional(), // 省略時は目安セット無し(null)
 })
 
 routinesRouter.post('/:id/exercises', requireAuth, async (req, res) => {
@@ -173,15 +186,24 @@ routinesRouter.post('/:id/exercises', requireAuth, async (req, res) => {
       routineId: routine.id,
       exerciseId: parsed.data.exerciseId,
       sortOrder: parsed.data.sortOrder,
+      targetSets: parsed.data.targetSets,
     },
   })
 
   res.status(201).json(serializeRoutineExercise(routineExercise))
 })
 
-const updateRoutineExerciseSchema = z.object({
-  sortOrder: z.number().int().positive(),
-})
+const updateRoutineExerciseSchema = z
+  .object({
+    sortOrder: z.number().int().positive().optional(),
+    // クリア(目安セット無しに戻す)は空配列[]で表現する(PATCH /workouts/:id/sets/:setIdと違い、
+    // nullでのクリアは扱わない。jsonbカラムのnull/[]を呼び出し側で使い分ける利点が無いため)
+    targetSets: targetSetsSchema.optional(),
+  })
+  // 空のPATCH({})は意味の無い更新なので、他のPATCHエンドポイントと同様に最低1項目を要求する
+  .refine((data) => data.sortOrder !== undefined || data.targetSets !== undefined, {
+    message: 'sortOrder・targetSetsのいずれかを指定してください',
+  })
 
 async function findOwnRoutineExercise(userId: string, routineId: string, routineExerciseId: string) {
   const routine = await findOwnRoutine(userId, routineId)
@@ -206,9 +228,13 @@ routinesRouter.patch('/:id/exercises/:routineExerciseId', requireAuth, async (re
     return
   }
 
+  const data: { sortOrder?: number; targetSets?: TargetSet[] } = {}
+  if (parsed.data.sortOrder !== undefined) data.sortOrder = parsed.data.sortOrder
+  if (parsed.data.targetSets !== undefined) data.targetSets = parsed.data.targetSets
+
   const updated = await prisma.routineExercise.update({
     where: { id: routineExercise.id },
-    data: { sortOrder: parsed.data.sortOrder },
+    data,
   })
 
   res.status(200).json(serializeRoutineExercise(updated))

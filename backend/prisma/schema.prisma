@@ -123,6 +123,7 @@ model RoutineExercise {
   routineId  String @map("routine_id")
   exerciseId String @map("exercise_id")
   sortOrder  Int    @map("sort_order")
+  targetSets Json?  @map("target_sets") // 目安セット([{weightKg, reps}, ...])。未設定はnull
 
   routine  Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)

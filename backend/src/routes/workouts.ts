@@ -134,14 +134,15 @@ workoutsRouter.delete('/:id', requireAuth, async (req, res) => {
 })
 
 // 重量入力は0.5kg刻み(プレート・ダンベルの一般的な最小刻み幅)、上限は現実的な範囲で緩めに999.5kg
-const weightKgSchema = z
+// ルーティンの目安セット(routines.ts)でも同じ基準を使うためexportする
+export const weightKgSchema = z
   .number()
   .positive()
   .max(999.5, { message: '重量は999.5kg以下で入力してください' })
   .refine((value) => Math.round(value * 2) === value * 2, {
     message: '重量は0.5kg刻みで入力してください',
   })
-const repsSchema = z.number().int().positive().max(999)
+export const repsSchema = z.number().int().positive().max(999)
 
 const createSetSchema = z.object({
   exerciseId: z.string().uuid(),

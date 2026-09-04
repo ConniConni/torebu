@@ -151,6 +151,7 @@ describe('GET /routines/:id', () => {
       routineId: routine.id,
       exerciseId,
       sortOrder: 1,
+      targetSets: [],
       exercise: { id: exerciseId, name: 'ベンチプレス', muscleGroup: 'chest' },
     })
   })
@@ -274,7 +275,39 @@ describe('POST /routines/:id/exercises', () => {
       routineId: routine.id,
       exerciseId,
       sortOrder: 1,
+      targetSets: [],
     })
+  })
+
+  it('目安セット(targetSets)を指定して追加できる', async () => {
+    const routine = await createRoutine(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/routines/${routine.id}/exercises`).send({
+      exerciseId,
+      sortOrder: 1,
+      targetSets: [
+        { weightKg: 60, reps: 10 },
+        { weightKg: null, reps: 8 }, // 自重扱い
+      ],
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.targetSets).toEqual([
+      { weightKg: 60, reps: 10 },
+      { weightKg: null, reps: 8 },
+    ])
+  })
+
+  it('目安セットの重量が0.5kg刻みでなければ400を返す', async () => {
+    const routine = await createRoutine(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/routines/${routine.id}/exercises`)
+      .send({ exerciseId, sortOrder: 1, targetSets: [{ weightKg: 60.3, reps: 10 }] })
+
+    expect(res.status).toBe(400)
   })
 })
 
@@ -309,19 +342,6 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
     expect(res.status).toBe(404)
   })
 
-  it('バリデーションエラー(sortOrderが無い)なら400を返す', async () => {
-    const routine = await createRoutine(ownerId)
-    const routineExercise = await prisma.routineExercise.create({
-      data: { routineId: routine.id, exerciseId, sortOrder: 1 },
-    })
-
-    const agent = await loginAsOwner()
-    const res = await agent
-      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
-      .send({})
-
-    expect(res.status).toBe(400)
-  })
 
   it('sortOrderを変更できる(並び替え)', async () => {
     const routine = await createRoutine(ownerId)
@@ -336,6 +356,50 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.sortOrder).toBe(2)
+  })
+
+  it('targetSetsを更新できる(sortOrderは省略可)', async () => {
+    const routine = await createRoutine(ownerId)
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+      .send({ targetSets: [{ weightKg: 40, reps: 12 }] })
+
+    expect(res.status).toBe(200)
+    expect(res.body.targetSets).toEqual([{ weightKg: 40, reps: 12 }])
+  })
+
+  it('targetSetsを空配列にすると目安セットをクリアできる', async () => {
+    const routine = await createRoutine(ownerId)
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 1, targetSets: [{ weightKg: 40, reps: 12 }] },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+      .send({ targetSets: [] })
+
+    expect(res.status).toBe(200)
+    expect(res.body.targetSets).toEqual([])
+  })
+
+  it('sortOrder・targetSetsのどちらも無ければ400を返す', async () => {
+    const routine = await createRoutine(ownerId)
+    const routineExercise = await prisma.routineExercise.create({
+      data: { routineId: routine.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/routines/${routine.id}/exercises/${routineExercise.id}`)
+      .send({})
+
+    expect(res.status).toBe(400)
   })
 })
 
