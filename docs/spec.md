@@ -268,8 +268,13 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 **③記録作成（`/workouts/new`）の`?date=`クエリ**は [utils/date.ts](../frontend/app/utils/date.ts) の
 `resolveTargetDate()` で解決する。形式が不正・実在しない暦日（`2026-02-30`等）・未来日のいずれかであれば
 今日にフォールバックする（フロント側のガードのみ。バックエンドAPI側に未来日を弾くバリデーションはまだ無い）。
-解決した日付は `useWorkoutSession().startWorkout()` に渡され、同じ日付のworkoutが既にあれば再利用、
-無ければ新規作成する。
+解決した日付は `useWorkoutSession().startWorkout()` に渡され、同じ日付のworkoutが既にあれば再利用する。
+**無ければ、この時点ではworkoutを作成しない**（`session.value.workoutId`は`null`のまま）。実際に
+セット記録・メモ保存のいずれかを行うタイミングで`ensureWorkout()`が呼ばれ、そこで初めて
+`POST /workouts`する（Issue #63）。③を開いただけ・種目を選んだだけで何も保存せずに離れた場合、
+workout行自体が作られないため、②ホームに空の記録カードが残ることはない。この間、③側では
+「今日の記録を完了」ボタンと「この記録を削除」セクションを表示しない（`workoutId`が無い＝
+完了・削除するものがまだ無いため）。
 
 `startWorkout()` は `session.value.performedAt` と引数の`performedAt`が一致するときだけ
 既存のセッションをそのまま使い回す（③⑥統合ステップ4で追加）。②の記録カードから日付の異なる
