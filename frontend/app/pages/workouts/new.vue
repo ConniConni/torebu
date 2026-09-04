@@ -7,9 +7,20 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, addSet, removeSet, finishWorkout } = useWorkoutSession()
+const { session, startWorkout, addSet, removeSet, updateMemo, finishWorkout } = useWorkoutSession()
 const today = todayLocalDateString()
 await startWorkout(today)
+
+const memoInput = ref(session.value.memo ?? '')
+const memoSaving = ref(false)
+async function onSaveMemo() {
+  memoSaving.value = true
+  try {
+    await updateMemo(memoInput.value)
+  } finally {
+    memoSaving.value = false
+  }
+}
 
 // ④種目選択・⑦種目追加から戻ってきた直後は、選ばれた種目のセット入力欄を開いた状態にする
 const pickedExerciseId = usePickedExerciseId()
@@ -137,6 +148,27 @@ async function onFinish() {
         <h1 class="text-base font-semibold text-gray-900">{{ today }}の記録</h1>
         <NuxtLink to="/" class="text-sm text-gray-500">中断してホームへ</NuxtLink>
       </div>
+
+      <section class="rounded-lg bg-white p-4 shadow">
+        <label class="flex flex-col gap-1 text-sm text-gray-700">
+          メモ
+          <textarea
+            v-model="memoInput"
+            rows="2"
+            maxlength="500"
+            placeholder="今日の体調・気づいたことなど"
+            class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <button
+          type="button"
+          :disabled="memoSaving"
+          class="mt-2 rounded border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-50"
+          @click="onSaveMemo"
+        >
+          {{ memoSaving ? '保存中...' : 'メモを保存' }}
+        </button>
+      </section>
 
       <section
         v-for="group in groupedSets"

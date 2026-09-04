@@ -10,12 +10,17 @@ interface WorkoutSetItem {
 interface SessionState {
   workoutId: string | null
   sets: WorkoutSetItem[]
+  memo: string | null
 }
 
 // ③記録作成の進行中状態(workoutId・登録済みset一覧)。④種目選択・⑦種目追加を挟んでも
 // ページ間を移動するとcomposableは再生成されるため、useStateで保持して途切れないようにする
 export function useWorkoutSession() {
-  const session = useState<SessionState>('workout-session', () => ({ workoutId: null, sets: [] }))
+  const session = useState<SessionState>('workout-session', () => ({
+    workoutId: null,
+    sets: [],
+    memo: null,
+  }))
   const requestFetch = useRequestFetch()
   const { workouts, fetchWorkouts } = useWorkouts()
 
@@ -34,20 +39,32 @@ export function useWorkoutSession() {
       return existing.id
     }
 
-    const workout = await $fetch<{ id: string }>('/api/workouts', {
+    const workout = await $fetch<{ id: string; memo: string | null }>('/api/workouts', {
       method: 'POST',
       body: { performedAt },
     })
-    session.value = { workoutId: workout.id, sets: [] }
+    session.value = { workoutId: workout.id, sets: [], memo: workout.memo }
     return workout.id
   }
 
   async function fetchSets() {
     if (!session.value.workoutId) return
-    const workout = await requestFetch<{ sets: WorkoutSetItem[] }>(
+    const workout = await requestFetch<{ sets: WorkoutSetItem[]; memo: string | null }>(
       `/api/workouts/${session.value.workoutId}`,
     )
     session.value.sets = workout.sets
+    session.value.memo = workout.memo
+  }
+
+  // 空文字列を送るとメモをクリア(null)できる(backend/src/routes/workouts.ts参照)
+  async function updateMemo(memo: string) {
+    if (!session.value.workoutId) return
+    const trimmed = memo.trim()
+    const updated = await $fetch<{ memo: string | null }>(`/api/workouts/${session.value.workoutId}`, {
+      method: 'PATCH',
+      body: { memo: trimmed },
+    })
+    session.value.memo = updated.memo
   }
 
   async function addSet(exerciseId: string, reps: number, weightKg?: number) {
@@ -70,10 +87,10 @@ export function useWorkoutSession() {
   // セッション状態をリセットする
   async function finishWorkout() {
     await fetchWorkouts()
-    session.value = { workoutId: null, sets: [] }
+    session.value = { workoutId: null, sets: [], memo: null }
   }
 
-  return { session, startWorkout, fetchSets, addSet, removeSet, finishWorkout }
+  return { session, startWorkout, fetchSets, addSet, removeSet, updateMemo, finishWorkout }
 }
 
 export type { WorkoutSetItem }
