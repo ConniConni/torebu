@@ -90,9 +90,15 @@ const groupedSets = computed(() => {
             <li
               v-for="set in group.sets"
               :key="set.id"
-              class="text-sm text-gray-700"
+              class="flex items-baseline gap-1 text-sm text-gray-700 tabular-nums"
             >
-              {{ set.setOrder }}セット目：{{ set.weightKg ?? '自重' }}{{ set.weightKg ? 'kg' : '' }} × {{ set.reps }}回
+              <span><span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目：</span>
+              <span>
+                <span class="inline-block w-14 text-right">{{ set.weightKg ?? '自重' }}</span
+                >{{ set.weightKg ? 'kg' : '' }}
+              </span>
+              <span>×</span>
+              <span><span class="inline-block w-6 text-right">{{ set.reps }}</span>回</span>
             </li>
           </ul>
         </section>
