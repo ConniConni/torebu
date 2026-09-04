@@ -2,7 +2,17 @@
 definePageMeta({ middleware: 'auth' })
 
 interface WorkoutSetSummary {
+  id: string
   exerciseId: string
+  setOrder: number
+  weightKg: number | null
+  reps: number
+}
+
+interface ExerciseGroup {
+  exerciseId: string
+  name: string
+  sets: WorkoutSetSummary[]
 }
 
 const { user, logout } = useAuth()
@@ -30,27 +40,28 @@ function onSelectDate(date: string) {
   selectedDate.value = date
 }
 
-// 一覧(GET /workouts)はsetsを含まないため、各記録のセット済み種目名は選択された日の分だけ
+// 一覧(GET /workouts)はsetsを含まないため、各記録の種目・セット内訳は選択された日の分だけ
 // 都度detail(GET /workouts/:id)を取って補う。通常は1日1記録想定で件数は少ない
-const workoutExerciseNames = ref<Record<string, string[]>>({})
+const workoutGroups = ref<Record<string, ExerciseGroup[]>>({})
 const summaryPending = ref<Record<string, boolean>>({})
 
 async function loadSummary(workoutId: string) {
-  if (workoutExerciseNames.value[workoutId] || summaryPending.value[workoutId]) return
+  if (workoutGroups.value[workoutId] || summaryPending.value[workoutId]) return
   summaryPending.value[workoutId] = true
   try {
     const detail = await requestFetch<{ sets: WorkoutSetSummary[] }>(`/api/workouts/${workoutId}`)
-    const seen = new Set<string>()
-    const names: string[] = []
+    // [id].vue・workouts/new.vueと同じ方針：種目ごとにグルーピングし、セット順に並べる
+    const byExercise = new Map<string, WorkoutSetSummary[]>()
     for (const set of detail.sets) {
-      if (!seen.has(set.exerciseId)) {
-        seen.add(set.exerciseId)
-        names.push(exerciseName(set.exerciseId))
-      }
+      byExercise.set(set.exerciseId, [...(byExercise.get(set.exerciseId) ?? []), set])
     }
-    workoutExerciseNames.value[workoutId] = names
+    workoutGroups.value[workoutId] = [...byExercise.entries()].map(([exerciseId, sets]) => ({
+      exerciseId,
+      name: exerciseName(exerciseId),
+      sets: [...sets].sort((a, b) => a.setOrder - b.setOrder),
+    }))
   } catch {
-    workoutExerciseNames.value[workoutId] = []
+    workoutGroups.value[workoutId] = []
   } finally {
     summaryPending.value[workoutId] = false
   }
@@ -114,20 +125,47 @@ async function onLogout() {
         <div class="rounded-lg bg-white p-4 shadow">
           <p class="mb-2 text-sm font-semibold text-gray-900">{{ selectedDate }}の記録</p>
           <p v-if="selectedWorkouts.length === 0" class="text-sm text-gray-500">記録がありません</p>
-          <ul v-else class="space-y-2">
-            <li v-for="workout in selectedWorkouts" :key="workout.id">
-              <NuxtLink
-                :to="`/workouts/${workout.id}`"
-                class="block rounded border border-gray-200 bg-white px-3 py-2 hover:border-blue-300 hover:bg-blue-50"
-              >
-                <p class="text-sm font-medium text-gray-900">
-                  <template v-if="workoutExerciseNames[workout.id]?.length">{{
-                    workoutExerciseNames[workout.id]!.join('、')
-                  }}</template>
-                  <template v-else-if="summaryPending[workout.id]">読み込み中...</template>
-                  <template v-else>種目未登録</template>
+          <ul v-else class="space-y-3">
+            <li
+              v-for="workout in selectedWorkouts"
+              :key="workout.id"
+              class="rounded border border-gray-200 px-3 py-2"
+            >
+              <NuxtLink :to="`/workouts/${workout.id}`" class="block hover:text-blue-600">
+                <p v-if="workout.memo" class="mb-1 text-xs text-gray-500">{{ workout.memo }}</p>
+
+                <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">
+                  読み込み中...
                 </p>
-                <p v-if="workout.memo" class="mt-1 text-xs text-gray-500">{{ workout.memo }}</p>
+                <p
+                  v-else-if="!workoutGroups[workout.id]?.length"
+                  class="text-sm text-gray-500"
+                >
+                  種目未登録
+                </p>
+                <div v-else class="space-y-1">
+                  <div v-for="group in workoutGroups[workout.id]" :key="group.exerciseId">
+                    <p class="text-sm font-medium text-gray-900">{{ group.name }}</p>
+                    <p
+                      v-for="set in group.sets"
+                      :key="set.id"
+                      class="flex items-baseline gap-1 pl-2 text-xs text-gray-600 tabular-nums"
+                    >
+                      <span
+                        ><span class="inline-block w-5 text-right">{{ set.setOrder }}</span
+                        >セット目：</span
+                      >
+                      <span>
+                        <span class="inline-block w-12 text-right">{{
+                          set.weightKg ?? '自重'
+                        }}</span
+                        >{{ set.weightKg ? 'kg' : '' }}
+                      </span>
+                      <span>×</span>
+                      <span><span class="inline-block w-5 text-right">{{ set.reps }}</span>回</span>
+                    </p>
+                  </div>
+                </div>
               </NuxtLink>
             </li>
           </ul>
