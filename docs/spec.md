@@ -255,3 +255,125 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 `Date#toISOString()` を使ってはいけない。あれはUTC基準で文字列にするため、
 **日本時間の深夜0:00〜8:59に「今日」が前日にズレる**（JSTはUTC+9のため）。
 APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列で統一している。
+
+---
+
+# ここから先は「引く章」
+
+**通読しなくてよい。** 実装するときに必要になったら開く一覧。
+
+---
+
+## 4. API一覧（引く章）
+
+全22エンドポイント。**リクエスト/レスポンスのフィールド一覧はここには書かない**
+（コードを正とする。2箇所に書くと必ず食い違うため）。実際の形は各ルートファイルを見る。
+
+### 認証まわり — [auth.ts](../backend/src/routes/auth.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| POST | `/auth/register` | 不要 | ユーザー登録（登録だけ。ログイン状態にはならない） |
+| POST | `/auth/login` | 不要 | ログイン。**レート制限あり**（同一IPから15分に10回まで） |
+| GET | `/auth/me` | 要 | ログイン中のユーザー情報を返す |
+| POST | `/auth/logout` | 要 | セッションを破棄する |
+
+### 種目マスタ — [exercises.ts](../backend/src/routes/exercises.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| GET | `/exercises` | 要 | 種目一覧 |
+| POST | `/exercises` | 要 | カスタム種目を追加する |
+
+### トレーニング記録 — [workouts.ts](../backend/src/routes/workouts.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| POST | `/workouts` | 要 | その日のworkoutを作る |
+| GET | `/workouts` | 要 | 自分のworkout一覧（`performedAt` 降順） |
+| GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧 |
+| PATCH | `/workouts/:id` | 要 | 記録日・メモを更新する |
+| DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
+| POST | `/workouts/:id/sets` | 要 | セットを1件追加する |
+| PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する |
+| DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除） |
+
+### ルーティン — [routines.ts](../backend/src/routes/routines.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| POST | `/routines` | 要 | ルーティンを作る |
+| GET | `/routines` | 要 | 自分のルーティン一覧（`createdAt` 降順） |
+| GET | `/routines/:id` | 要 | ルーティン1件＋種目一覧 |
+| PATCH | `/routines/:id` | 要 | 名前を変更する |
+| DELETE | `/routines/:id` | 要 | 削除する（**物理削除**。中の種目はDB側のCascadeで一緒に消える） |
+| POST | `/routines/:id/exercises` | 要 | ルーティンに種目を追加する |
+| PATCH | `/routines/:id/exercises/:routineExerciseId` | 要 | 並び順を変更する |
+| DELETE | `/routines/:id/exercises/:routineExerciseId` | 要 | ルーティンから種目を外す |
+
+※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
+
+### 4-1. 全エンドポイント共通のルール
+
+- `/health` 以外は**すべて `requireAuth` を通る**。未ログインは `401 unauthenticated`
+- エラーは `{ error: "コード", details?: ... }` の形で返す
+  - `400 invalid_request` … zodの検証に落ちた（`details` に内訳が入る）
+  - `404 not_found` … 存在しない、**または自分のものではない**
+  - `401 unauthenticated` … 未ログイン
+- **他人・削除済みのリソースは `403` ではなく `404`**（存在自体を隠す）
+- 日付は `YYYY-MM-DD` の文字列でやり取りする
+
+### 4-2. コードを読まないと分からない決定
+
+| どこ | 押さえること |
+|---|---|
+| `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → 名前順」の2段階**（`default_sort_order` は全件null運用のためソート条件に入れていない）。各種目に `useCount`（自分の使用回数）が付いてくる |
+| `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
+| 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
+| `PATCH /workouts/:id`<br>`PATCH .../sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
+| `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
+| 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
+
+---
+
+## 5. データモデル（引く章）
+
+正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の6テーブル。
+
+| テーブル | 役割 | 押さえること |
+|---|---|---|
+| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1） |
+| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用 |
+| `workouts` | 1日1回分のトレーニング | **`deleted_at` を持つ唯一のテーブル**（ソフトデリート） |
+| `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
+| `routines` | 「胸の日」等のテンプレート | 物理削除 |
+| `routine_exercises` | ルーティンに入っている種目と並び順 | **重量・回数の目安値は持たない**（毎回手入力する前提） |
+
+**`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
+`connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している
+（[session.ts](../backend/src/session.ts) の `createTableIfMissing: true`）。
+そのため `schema.prisma` には書かれていない。
+
+**部位（`MuscleGroup`）の7分類**：`chest` 胸 / `back` 背中 / `legs` 脚 / `shoulders` 肩 / `arms` 腕 /
+`glutes` お尻 / `abs` 腹筋。日本語ラベルの対応は [muscleGroup.ts](../frontend/app/utils/muscleGroup.ts)
+（Prismaの生成物をフロントで直接importしないため、値を複製して持っている）。
+
+---
+
+## 6. 実装済みのセキュリティ対策（引く章）
+
+[schema.md](./schema.md) の「セキュリティ実装の優先度」表のうち、**実際にコードに入っているもの**だけを挙げる。
+
+| 対策 | 実装 |
+|---|---|
+| パスワードのハッシュ化 | bcrypt、ソルトラウンド12（[auth.ts](../backend/src/routes/auth.ts)） |
+| ログイン試行のレート制限 | 同一IPから15分に10回まで（テスト時は無効化） |
+| メールアドレス列挙対策 | ユーザーが存在しなくてもダミーハッシュと比較し、応答時間とエラー内容を揃える |
+| セッション固定化対策 | ログイン成功時に `req.session.regenerate()` でセッションIDを振り直す |
+| Cookieの属性 | `HttpOnly` / `Secure`（本番のみ） / `SameSite=Lax` / 有効期限14日（[session.ts](../backend/src/session.ts)） |
+| CSRF対策 | `SameSite=Lax` のみ。**フロントとバックを同一サイトに揃えている前提**で成立している（§1-1） |
+| 認可（IDOR対策） | 自分のリソースかを必ず確認し、違えば `404`（`findOwnWorkout` / `findOwnRoutine`） |
+
+**注意**：`POST /auth/register` は「このメールアドレスは既に登録されています（`409`）」を返すため、
+列挙対策の対象外にしている。登録画面では重複を伝える必要があるため、意図的な判断
+（対策はログインAPI側で行っている）。
