@@ -29,6 +29,11 @@ interface RoutineDetail {
 const route = useRoute()
 const routineId = route.params.id as string
 const requestFetch = useRequestFetch()
+// ⑤一覧(routines/index.vue)とルーティンの一覧状態(useState)を共有するため、
+// 名前変更・削除はここのrenameRoutine/deleteRoutine経由で行う。
+// 直接$fetchすると一覧側のキャッシュが更新されず、削除・改名後に一覧へ戻った際
+// 古い名前が残って見える不具合になる(2026-09-05発見)
+const { renameRoutine, deleteRoutine } = useRoutines()
 
 const routine = ref<RoutineDetail | null>(null)
 const pending = ref(false)
@@ -77,10 +82,7 @@ async function onNameBlur() {
   savingName.value = true
   nameError.value = ''
   try {
-    const updated = await $fetch<{ name: string }>(`/api/routines/${routineId}`, {
-      method: 'PATCH',
-      body: { name },
-    })
+    const updated = await renameRoutine(routineId, name)
     if (routine.value) routine.value.name = updated.name
   } catch {
     nameError.value = '名前の変更に失敗しました。時間をおいて再度お試しください'
@@ -97,7 +99,7 @@ async function onDelete() {
   deleting.value = true
   deleteError.value = ''
   try {
-    await $fetch(`/api/routines/${routineId}`, { method: 'DELETE' })
+    await deleteRoutine(routineId)
     await navigateTo('/routines')
   } catch {
     deleteError.value = '削除に失敗しました。時間をおいて再度お試しください'
