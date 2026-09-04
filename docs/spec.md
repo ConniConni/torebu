@@ -142,7 +142,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 | ズレ | 状況 |
 |---|---|
-| **種目名の重複サジェスト表示** | [schema.md](./schema.md) では「DB制約の代わりにアプリ側のサジェストで対応する」と決定されているが、[exercises-new.vue](../frontend/app/pages/workouts/exercises-new.vue) にも `POST /exercises` にも**実装がない**。表記ゆれを防ぐ手段が今どこにもない状態 |
+| **種目名の重複サジェスト表示** | ⑦種目追加で名前を入力している最中に「似た名前の種目がすでにあります」と候補を出す機能のこと（*サジェスト＝入力途中に候補を提示すること*）。「ベンチプレス」と「ベンチ・プレス」のような表記ゆれを、登録される前に本人に気づかせる狙い。[schema.md](./schema.md) では「DBの制約で禁止するのではなく、この表示で防ぐ」と決定されているが、[exercises-new.vue](../frontend/app/pages/workouts/exercises-new.vue) にも `POST /exercises` にも**実装がない**。つまり表記ゆれを防ぐ手段が今どこにもない |
 | **種目の表示順** | docsでは「使用回数 → `default_sort_order` → 名前順」の3段階だが、実装は**2段階**（使用回数 → 名前順）。`default_sort_order` を全件null運用にしたための意図的な省略だが、docs側が更新されていない |
 | **パスワードリセット** | `users` に `password_reset_token` / `password_reset_expires_at` カラムはあるが、**APIは未実装** |
 | **記録のメモ欄** | `PATCH /workouts/:id` の `memo` はAPI実装済みだが、③記録作成に**入力欄がない**ためフロントから使えない |
@@ -160,7 +160,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `POST /auth/logout` | `auth` |
-| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `POST /workouts/:id/sets`, `DELETE .../sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
@@ -266,7 +266,8 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 
 ## 4. API一覧（引く章）
 
-全22エンドポイント。**リクエスト/レスポンスのフィールド一覧はここには書かない**
+全22エンドポイント。パスは省略記法（`...`）を使わず毎回フルで書く。
+**リクエスト/レスポンスのフィールド一覧はここには書かない**
 （コードを正とする。2箇所に書くと必ず食い違うため）。実際の形は各ルートファイルを見る。
 
 ### 認証まわり — [auth.ts](../backend/src/routes/auth.ts)
@@ -330,7 +331,7 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 | `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → 名前順」の2段階**（`default_sort_order` は全件null運用のためソート条件に入れていない）。各種目に `useCount`（自分の使用回数）が付いてくる |
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
-| `PATCH /workouts/:id`<br>`PATCH .../sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
+| `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
 | `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 
