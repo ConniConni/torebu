@@ -5,73 +5,9 @@
 
 ## MVP
 
-```
-users
-  id                        uuid PK
-  email                     text UNIQUE
-  password_hash             text            -- bcryptでハッシュ化
-  display_name              text
-  avatar_url                text  null
-  birth_date                date  null
-  gender                    enum  null      -- male/female/other/no_answer
-  occupation                text  null
-  password_reset_token      text  null
-  password_reset_expires_at timestamptz null
-  created_at                timestamptz
-  updated_at                timestamptz
-
-sessions                    -- 認証はセッション方式。退会・権限変更を即失効させやすいため
-                             -- テーブルの実体はPrismaではなく`connect-pg-simple`が管理する
-                             -- （Issue4で、当初Prismaで正規化していた構成から変更。経緯は下記メモ参照）
-  sid            text PK
-  sess           jsonb            -- セッションの中身（userIdや有効期限など）をまるごと格納
-  expire         timestamp
-
-exercises                   -- 種目マスタ
-  id                 uuid PK
-  name               text
-  muscle_group       enum            -- 胸/背中/脚/肩/腕/お尻/腹筋
-  muscle_detail      text  null      -- 将来の細分類用
-  equipment          text  null
-  created_by         uuid  null FK -> users  -- null=公式、値ありならカスタム種目（作成者と同グループの人に見える）
-  default_sort_order int null       -- 運営が定番種目に設定。使用履歴が無い時のフォールバック順
-                                     -- MVPでは当面null運用・編集手段なし(削除候補)。詳細はroadmap.mdの
-                                     -- 「既知の対応保留事項」参照
-  updated_at         timestamptz
-                      -- 公式種目名の重複防止は、DB制約ではなくアプリ側の重複サジェスト表示のみで運用（詳細は下記メモ）
-
-workouts                    -- 1回のセッション
-  id            uuid PK
-  user_id       uuid FK -> users
-  performed_at  date
-  memo          text  null
-  created_at    timestamptz
-  updated_at    timestamptz
-  deleted_at    timestamptz null  -- ソフトデリート。reactions/commentsを残すため
-
-workout_sets
-  id            uuid PK
-  workout_id    uuid FK -> workouts
-  exercise_id   uuid FK -> exercises
-  set_order     int
-  weight_kg     numeric null    -- 自重種目はnull
-  reps          int
-  created_at    timestamptz
-  updated_at    timestamptz
-
-routines                    -- 「胸の日」等のテンプレート
-  id            uuid PK
-  user_id       uuid FK -> users
-  name          text
-  created_at    timestamptz
-  updated_at    timestamptz
-
-routine_exercises
-  id            uuid PK
-  routine_id    uuid FK -> routines
-  exercise_id   uuid FK -> exercises
-  sort_order    int
-```
+MVPの6テーブル（`users` / `exercises` / `workouts` / `workout_sets` / `routines` / `routine_exercises`）
+の定義は[spec.md](./spec.md) §5「データモデル」を見る（正は[schema.prisma](../backend/prisma/schema.prisma)）。
+このファイルには以降、Phase2以降のドラフトと設計方針メモだけを残す。
 
 ## Phase2（交流・ランキング）
 
@@ -200,7 +136,7 @@ user_theme_purchases
 - **種目一覧の表示順**は「自分の使用回数 DESC → default_sort_order ASC → 名前順」
 - **アカウント削除は完全削除せず匿名化する**。display_nameを「退会済みユーザー」に置き換え、投稿・コメント・いいねは残す
 - **`birth_date`は登録時は任意のまま**。Phase3の「年代別分析・シェア」機能を使おうとしたタイミングで入力を促す
-- **セッションストアはIssue4で自前実装から`connect-pg-simple`に変更**。当初`sessions`テーブルをPrismaで正規化（`user_id`/`expires_at`等）して設計したが、セッションの有効期限切れ判定・期限切れ行の定期削除を自前で実装するコストに対し、認証は枯れたライブラリに乗る方が実務的にも妥当と判断し変更。自前実装で得られたはずの「定期実行ジョブ」の学習は見送り、`docs/roadmap.md`に別Issueとして積む
+- **セッションストアはIssue4で自前実装から`connect-pg-simple`に変更**。当初`sessions`テーブルをPrismaで正規化（`user_id`/`expires_at`等）して設計したが、セッションの有効期限切れ判定・期限切れ行の定期削除を自前で実装するコストに対し、認証は枯れたライブラリに乗る方が実務的にも妥当と判断し変更。自前実装で得られたはずの「定期実行ジョブ」の学習は見送り、`docs/backlog.md`に別Issueの候補として積む
 
 ## セキュリティ実装の優先度
 
