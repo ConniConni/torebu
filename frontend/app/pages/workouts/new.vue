@@ -17,7 +17,11 @@ const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishW
 const route = useRoute()
 const today = todayLocalDateString()
 const targetDate = resolveTargetDate(route.query.date, today)
+const previousWorkoutId = session.value.workoutId
 await startWorkout(targetDate)
+// ②ホームの記録カードから別の日のworkoutへ直接遷移した場合、入力待ちの種目(pendingExercises)は
+// 前の日のworkoutに紐づくものなので持ち越さない
+const switchedWorkout = previousWorkoutId !== null && previousWorkoutId !== session.value.workoutId
 
 const memoInput = ref(session.value.memo ?? '')
 const memoSaving = ref(false)
@@ -32,8 +36,13 @@ async function onSaveMemo() {
 
 // ④種目選択・⑦種目追加から戻ってきた直後は、選ばれた種目のセット入力欄を開いた状態にする
 const pickedExerciseId = usePickedExerciseId()
-const activeExerciseId = ref<string | null>(pickedExerciseId.value)
+const activeExerciseId = ref<string | null>(switchedWorkout ? null : pickedExerciseId.value)
 pickedExerciseId.value = null
+
+const pendingExercises = usePendingExercises()
+if (switchedWorkout) {
+  pendingExercises.value = []
+}
 
 const weightInput = ref('')
 const repsInput = ref('')
@@ -64,7 +73,6 @@ const { routines, fetchRoutines, fetchRoutineDetail } = useRoutines()
 const showRoutinePicker = ref(false)
 const routinePickerPending = ref(false)
 const routineApplyError = ref('')
-const pendingExercises = usePendingExercises()
 
 // 既にこのworkoutに乗っている（セット入力済み or 入力待ち or 入力中の）種目ID。
 // ルーティン適用時、ここに含まれる種目は重複として除外する
