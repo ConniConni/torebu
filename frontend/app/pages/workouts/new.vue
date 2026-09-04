@@ -150,7 +150,15 @@ async function onFinish() {
             :key="set.id"
             class="flex items-center justify-between text-sm text-gray-700"
           >
-            <span>{{ set.setOrder }}セット目：{{ set.weightKg ?? '自重' }}{{ set.weightKg ? 'kg' : '' }} × {{ set.reps }}回</span>
+            <span class="flex items-baseline gap-1 tabular-nums">
+              <span><span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目：</span>
+              <span>
+                <span class="inline-block w-14 text-right">{{ set.weightKg ?? '自重' }}</span
+                >{{ set.weightKg ? 'kg' : '' }}
+              </span>
+              <span>×</span>
+              <span><span class="inline-block w-6 text-right">{{ set.reps }}</span>回</span>
+            </span>
             <button type="button" class="text-xs text-red-600" @click="removeSet(set.id)">削除</button>
           </li>
         </ul>
