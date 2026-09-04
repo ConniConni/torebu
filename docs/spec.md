@@ -146,3 +146,112 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | **種目の表示順** | docsでは「使用回数 → `default_sort_order` → 名前順」の3段階だが、実装は**2段階**（使用回数 → 名前順）。`default_sort_order` を全件null運用にしたための意図的な省略だが、docs側が更新されていない |
 | **パスワードリセット** | `users` に `password_reset_token` / `password_reset_expires_at` カラムはあるが、**APIは未実装** |
 | **記録のメモ欄** | `PATCH /workouts/:id` の `memo` はAPI実装済みだが、③記録作成に**入力欄がない**ためフロントから使えない |
+
+---
+
+## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
+
+### 3-1. 画面一覧（実装済み9ページ）
+
+丸数字は [concept.md](./concept.md) / [screens.md](./screens.md) で使っている画面番号。
+
+| パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
+|---|---|---|---|---|
+| `/login` | ① | ログイン | `POST /auth/login` | `guest` |
+| `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
+| `/` | ② | ホーム（カレンダー） | `GET /workouts`, `POST /auth/logout` | `auth` |
+| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `POST /workouts/:id/sets`, `DELETE .../sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
+| `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
+| `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
+| `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
+| `/workouts/[id]` | ⑥ | 記録詳細 | `GET /workouts/:id`, `GET /exercises` | `auth` |
+
+**ミドルウェアの意味**
+- `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
+- `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
+
+### 3-2. 記録するときの流れ（実装どおり）
+
+```
+② ホーム（/）
+ │
+ ├─「＋今日の記録を始める」──────────> ③ 記録作成（/workouts/new）
+ │   ※ 入口は「今日」固定。カレンダーで              │
+ │      過去日を選んでも記録作成には繋がらない        │
+ │                                                    │
+ └─「ルーティン」─────> ⑤ 一覧（/routines）          │
+                            │                          │
+                            └─> ⑤ 編集（/routines/[id]）
+                                                       │
+   ┌───────────────────────────────────┘
+   │
+   ③ 記録作成でできること
+   │
+   ├─「＋種目を追加」──> ④ 種目選択（/workouts/exercises）
+   │                        部位ごとのセクション。各5件＋開閉で全件
+   │                        │
+   │                        ├─ 種目を選ぶ ──────────┐
+   │                        │                          │
+   │                        └─「＋種目を追加」──> ⑦ 種目追加（/workouts/exercises-new）
+   │                                                   │  部位は④のセクションを引き継ぐ
+   │                                                   │  追加した種目はそのまま選択済みになる
+   │                        ┌──────────────────┘
+   │                        ▼
+   │                   returnTo で元の画面へ戻る（既定は ③）
+   │                   戻った直後、その種目のセット入力欄が開いた状態になる
+   │
+   ├─「＋ルーティンから選ぶ」（画面遷移せず、③の中でピッカーが開く）
+   │      └─ ルーティンを選ぶと、その種目一式が「入力待ちの種目」として積まれる
+   │           ・既に記録済み／入力待ち／入力中の種目は重複として除外される
+   │           ・ルーティンは重量・回数の目安値を持たないため、値は毎回手入力する
+   │           ・⑤が0件なら、⑤への案内リンクが出る
+   │
+   ├─ セット入力（重量・回数）→「記録」を押すたびに1件ずつ保存される
+   │      ・重量欄は次のセットのためにあえてクリアしない（同じ重量が続くことが多いため）
+   │      ・「この種目の入力を終える」で入力欄を閉じる
+   │
+   └─「今日の記録を完了」──> ② ホームへ戻る
+```
+
+### 3-3. 画面をまたぐ状態の3つの持ち方 ← **ここが要注意**
+
+③記録作成は、④種目選択や⑦種目追加へ**一度画面を離れてから戻ってくる**。
+このとき「さっきまでの状態」をどう持ち越すかで、**3つの別々の仕組み**を使っている。
+Issue10で判断がブレたのはここ。違いを押さえておく。
+
+| 仕組み | 実体 | 何を運ぶか | ページを離れると |
+|---|---|---|---|
+| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutIdと、登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときだけリセット） |
+| `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため） |
+| `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
+
+**なぜ3つあるのか**
+- ④⑦は③からもルーティン編集画面からも来る**共通画面**なので、戻り先を知る必要がある → `returnTo`
+- 戻り先は「どの種目が選ばれたか」を知る必要がある → `usePickedExerciseId`
+- ③は画面を離れている間も「今日のworkout」を保持し続ける必要がある → `useWorkoutSession`
+
+**横断ルール：画面をまたいで残したい状態は `ref` ではなく `useState` に置く。**
+
+`ref` はそのページ専用なので、ページを離れた瞬間に中身が消える。`useState` はアプリ全体で共有されるので残る。
+
+> **このルールに違反している既知のバグ（MVP完成後の棚卸しで発見。修正は次のIssue以降）**
+>
+> [workouts/new.vue](../frontend/app/pages/workouts/new.vue) の `pendingExercises`（ルーティンから展開された
+> 「入力待ちの種目」リスト）は、`useState` ではなく**ページ専用の `ref` になっている**。
+> そのため次の手順で消える：
+>
+> 1. ルーティンを適用して「入力待ちの種目」が5件並ぶ
+> 2. そのうち1件の入力を終えて「＋種目を追加」で④へ移動する
+> 3. ③に戻ると、**残り4件が消えている**
+>
+> 同じファイルの `activeExerciseId` は `usePickedExerciseId`（＝`useState`）経由で保持されているのに、
+> `pendingExercises` だけ `ref` のまま、という食い違いになっている。
+
+### 3-4. 日付の扱い
+
+**日付は必ず [utils/date.ts](../frontend/app/utils/date.ts) の `toLocalDateString()` / `todayLocalDateString()` を使う。**
+
+`Date#toISOString()` を使ってはいけない。あれはUTC基準で文字列にするため、
+**日本時間の深夜0:00〜8:59に「今日」が前日にズレる**（JSTはUTC+9のため）。
+APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列で統一している。
