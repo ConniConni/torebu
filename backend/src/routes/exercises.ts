@@ -32,7 +32,7 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
   }))
 
   // 表示順：自分の使用回数DESC → 名前順
-  // (default_sort_orderは当面すべてnull運用のため、ソート条件には含めない。詳細はroadmap.md参照)
+  // (default_sort_orderは当面すべてnull運用のため、ソート条件には含めない。詳細はdocs/backlog.md参照)
   exercisesWithUseCount.sort(
     (a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name, 'ja'),
   )

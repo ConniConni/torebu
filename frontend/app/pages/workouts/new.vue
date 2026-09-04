@@ -38,7 +38,7 @@ const groupedSets = computed(() => {
 })
 
 // ⑤ルーティンから種目一式を展開する機能（Issue13）。
-// ルーティンはexerciseId・並び順のみを持ち重量・回数の目安値は持たないため（docs/roadmap.md参照）、
+// ルーティンはexerciseId・並び順のみを持ち重量・回数の目安値は持たないため（docs/backlog.md参照）、
 // ここでは「セット入力がまだの種目」を積んでおくだけの一時的なキュー（このページのローカル状態）として持つ。
 // 選ばれた種目は既存の1種目ずつのセット入力フロー（activeExerciseId）にそのまま乗せる
 const { routines, fetchRoutines, fetchRoutineDetail } = useRoutines()
