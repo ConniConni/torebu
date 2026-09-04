@@ -64,6 +64,10 @@ torebu/
 mainへ直接コミットせず以下の流れをデフォルトの振る舞いとする。
 細かいルールは`docs/git-workflow.md`参照。ユーザーから明示的に「今回はスキップ」と言われた場合はそれに従う。
 
+> ⚠️ **`git push`／`gh`コマンドは常に`env -u GITHUB_TOKEN`を前置きして実行する**（例：
+> `env -u GITHUB_TOKEN gh pr create ...`）。このマシンには無効な`GITHUB_TOKEN`が設定されており、
+> 前置きしないと`HTTP 401: Bad credentials`で失敗する。詳細は`docs/git-workflow.md`冒頭参照。
+
 > ⚠️ **2026-09-04〜：Issue起票もユーザー確認なしでClaudeが行う方針に変更**（バイブコーディング方針）。
 > これでIssue作成・ブランチ作成・コミット・push・PR作成まで**全ステップがユーザー確認なしのClaude主導**
 > になった。歯止めとして、**1セッションで新規に起票するIssueは基本1つ**に留める（次々起票して
