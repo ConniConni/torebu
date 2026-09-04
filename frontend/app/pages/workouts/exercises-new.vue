@@ -7,7 +7,10 @@ const route = useRoute()
 const returnTo = computed(() =>
   typeof route.query.returnTo === 'string' ? route.query.returnTo : '/workouts/new',
 )
-const { createExercise } = useExercises()
+const { exercises, createExercise, fetchExercises } = useExercises()
+if (!exercises.value) {
+  await fetchExercises()
+}
 
 const defaultMuscleGroup = MUSCLE_GROUPS.includes(route.query.muscleGroup as MuscleGroup)
   ? (route.query.muscleGroup as MuscleGroup)
@@ -17,6 +20,24 @@ const name = ref('')
 const muscleGroup = ref<MuscleGroup>(defaultMuscleGroup)
 const submitting = ref(false)
 const errorMessage = ref('')
+
+// 表記ゆれ（スペース・中点・大文字小文字）を吸収した部分一致で、登録前に本人へ重複候補を気づかせる。
+// DB制約による禁止はせず、この表示だけで防ぐ方針(docs/schema.md参照)なので登録自体はブロックしない
+const SIMILAR_NAME_MIN_LENGTH = 2
+const similarExercises = computed(() => {
+  const normalizedInput = normalizeExerciseName(name.value)
+  if (normalizedInput.length < SIMILAR_NAME_MIN_LENGTH) return []
+  return (exercises.value ?? []).filter((exercise) => {
+    const normalizedExisting = normalizeExerciseName(exercise.name)
+    return normalizedExisting.includes(normalizedInput) || normalizedInput.includes(normalizedExisting)
+  })
+})
+
+async function selectSimilarExercise(exerciseId: string) {
+  // 新規登録はせず、選んだ既存種目を選択済みにしてreturnToへ戻る(通常の選択・追加と同じ動線)
+  usePickedExerciseId().value = exerciseId
+  await navigateTo(returnTo.value)
+}
 
 async function onSubmit() {
   if (!name.value.trim()) return
@@ -66,6 +87,21 @@ async function onSubmit() {
             class="rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </label>
+
+        <div v-if="similarExercises.length > 0" class="rounded border border-amber-300 bg-amber-50 p-3">
+          <p class="text-xs text-amber-800">似た名前の種目がすでにあります</p>
+          <ul class="mt-1 space-y-1">
+            <li v-for="exercise in similarExercises" :key="exercise.id">
+              <button
+                type="button"
+                class="w-full rounded px-2 py-1 text-left text-sm text-amber-900 hover:bg-amber-100"
+                @click="selectSimilarExercise(exercise.id)"
+              >
+                {{ exercise.name }}
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
 
