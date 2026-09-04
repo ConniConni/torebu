@@ -4,11 +4,18 @@ import draggable from 'vuedraggable'
 
 definePageMeta({ middleware: 'auth' })
 
+// 目安セット1件。weightKgはnull=自重。入力欄からの一時的な空文字列も許容し、
+// 保存直前にnormalizeTargetSetsで数値/nullに正規化する
+interface TargetSet {
+  weightKg: number | string | null
+  reps: number | string
+}
 interface RoutineExerciseItem {
   id: string
   routineId: string
   exerciseId: string
   sortOrder: number
+  targetSets: TargetSet[]
   exercise: { id: string; name: string; muscleGroup: MuscleGroup }
 }
 interface RoutineDetail {
@@ -22,6 +29,11 @@ interface RoutineDetail {
 const route = useRoute()
 const routineId = route.params.id as string
 const requestFetch = useRequestFetch()
+// ⑤一覧(routines/index.vue)とルーティンの一覧状態(useState)を共有するため、
+// 名前変更・削除はここのrenameRoutine/deleteRoutine経由で行う。
+// 直接$fetchすると一覧側のキャッシュが更新されず、削除・改名後に一覧へ戻った際
+// 古い名前が残って見える不具合になる(2026-09-05発見)
+const { renameRoutine, deleteRoutine } = useRoutines()
 
 const routine = ref<RoutineDetail | null>(null)
 const pending = ref(false)
@@ -70,10 +82,7 @@ async function onNameBlur() {
   savingName.value = true
   nameError.value = ''
   try {
-    const updated = await $fetch<{ name: string }>(`/api/routines/${routineId}`, {
-      method: 'PATCH',
-      body: { name },
-    })
+    const updated = await renameRoutine(routineId, name)
     if (routine.value) routine.value.name = updated.name
   } catch {
     nameError.value = '名前の変更に失敗しました。時間をおいて再度お試しください'
@@ -90,7 +99,7 @@ async function onDelete() {
   deleting.value = true
   deleteError.value = ''
   try {
-    await $fetch(`/api/routines/${routineId}`, { method: 'DELETE' })
+    await deleteRoutine(routineId)
     await navigateTo('/routines')
   } catch {
     deleteError.value = '削除に失敗しました。時間をおいて再度お試しください'
@@ -103,10 +112,13 @@ async function addExercise(exerciseId: string) {
   const nextSortOrder = routine.value.exercises.length
     ? Math.max(...routine.value.exercises.map((e) => e.sortOrder)) + 1
     : 1
-  const created = await $fetch<{ id: string; routineId: string; exerciseId: string; sortOrder: number }>(
-    `/api/routines/${routineId}/exercises`,
-    { method: 'POST', body: { exerciseId, sortOrder: nextSortOrder } },
-  )
+  const created = await $fetch<{
+    id: string
+    routineId: string
+    exerciseId: string
+    sortOrder: number
+    targetSets: TargetSet[]
+  }>(`/api/routines/${routineId}/exercises`, { method: 'POST', body: { exerciseId, sortOrder: nextSortOrder } })
   // POSTのレスポンスには種目名・部位が含まれないため、選択直前まで持っていたexercise一覧から補う
   const { exercises } = useExercises()
   const exercise = exercises.value?.find((e) => e.id === exerciseId)
@@ -152,6 +164,69 @@ async function onDragEnd() {
     exerciseError.value = '並び替えの保存に失敗しました。時間をおいて再度お試しください'
     await fetchRoutine()
   }
+}
+
+// --- 目安セット(target_sets)の追加・編集・削除 ---
+// routine_exercise単位でセット配列をまるごと持つ設計のため、行を追加・削除・編集するたびに
+// 配列全体をPATCHで送り直す(workout_setsのような1セットごとのAPIは無い。docs/backlog.md参照)
+const targetSetsSaving = ref<Record<string, boolean>>({})
+const targetSetsErrors = ref<Record<string, string>>({})
+
+// 重量・回数はworkout_setsと同じ基準(重量0.5kg刻み・999.5kg以下、回数は正の整数・999以下)で検証する
+function normalizeTargetSets(sets: TargetSet[]) {
+  return sets.map((s) => {
+    const reps = Number(s.reps)
+    const weightRaw = String(s.weightKg ?? '').trim()
+    const weightKg = weightRaw ? Number(weightRaw) : null
+    return { weightKg, reps }
+  })
+}
+
+function isValidTargetSets(sets: { weightKg: number | null; reps: number }[]) {
+  return sets.every(
+    (s) =>
+      Number.isInteger(s.reps) &&
+      s.reps > 0 &&
+      s.reps <= 999 &&
+      (s.weightKg === null ||
+        (s.weightKg > 0 && s.weightKg <= 999.5 && Math.round(s.weightKg * 2) === s.weightKg * 2)),
+  )
+}
+
+// 「保存」ボタンは持たず、重量・回数の入力欄からblurするたびに自動保存する(他画面のセット編集と同じ方針)。
+// 値が不正な間（回数が空・0以下等）は保存をスキップし、入力欄の値はそのまま残す
+async function saveTargetSets(element: RoutineExerciseItem) {
+  const normalized = normalizeTargetSets(element.targetSets)
+  if (!isValidTargetSets(normalized)) return
+
+  targetSetsSaving.value = { ...targetSetsSaving.value, [element.id]: true }
+  targetSetsErrors.value = { ...targetSetsErrors.value, [element.id]: '' }
+  try {
+    const updated = await $fetch<{ targetSets: TargetSet[] }>(
+      `/api/routines/${routineId}/exercises/${element.id}`,
+      { method: 'PATCH', body: { targetSets: normalized } },
+    )
+    element.targetSets = updated.targetSets
+  } catch {
+    targetSetsErrors.value = {
+      ...targetSetsErrors.value,
+      [element.id]: '目安セットの保存に失敗しました。時間をおいて再度お試しください',
+    }
+  } finally {
+    targetSetsSaving.value = { ...targetSetsSaving.value, [element.id]: false }
+  }
+}
+
+// 新規行はいったんデフォルト値(自重・10回)で追加してすぐ保存し、その場で数値を手直ししてもらう。
+// backlog.mdで検討したルーティン適用時の「まず登録して手直しする」方針と同じ考え方
+function addTargetSet(element: RoutineExerciseItem) {
+  element.targetSets = [...element.targetSets, { weightKg: null, reps: 10 }]
+  saveTargetSets(element)
+}
+
+function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
+  element.targetSets = element.targetSets.filter((_, i) => i !== Number(index))
+  saveTargetSets(element)
 }
 </script>
 
@@ -202,15 +277,52 @@ async function onDragEnd() {
               @end="onDragEnd"
             >
               <template #item="{ element }">
-                <div class="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-                  <span class="flex items-center gap-2">
-                    <span class="drag-handle cursor-grab text-gray-400">⠿</span>
-                    {{ element.exercise.name }}
-                    <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
-                  </span>
-                  <button type="button" class="text-xs text-red-600" @click="removeExercise(element.id)">
-                    削除
-                  </button>
+                <div class="rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                      <span class="drag-handle cursor-grab text-gray-400">⠿</span>
+                      {{ element.exercise.name }}
+                      <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
+                    </span>
+                    <button type="button" class="text-xs text-red-600" @click="removeExercise(element.id)">
+                      削除
+                    </button>
+                  </div>
+
+                  <div class="mt-1 flex flex-col items-start gap-1 pl-6">
+                    <div
+                      v-for="(set, index) in element.targetSets"
+                      :key="index"
+                      class="flex items-center gap-1 text-xs text-gray-600"
+                    >
+                      <input
+                        v-model="set.weightKg"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        placeholder="自重"
+                        class="w-14 rounded border border-gray-300 px-1 py-0.5 text-right"
+                        @blur="saveTargetSets(element)"
+                      />
+                      <span>kg ×</span>
+                      <input
+                        v-model="set.reps"
+                        type="number"
+                        min="1"
+                        class="w-10 rounded border border-gray-300 px-1 py-0.5 text-right"
+                        @blur="saveTargetSets(element)"
+                      />
+                      <span>回</span>
+                      <button type="button" class="text-red-600" @click="removeTargetSet(element, index)">×</button>
+                    </div>
+                    <button type="button" class="text-xs text-blue-600" @click="addTargetSet(element)">
+                      ＋目安セットを追加
+                    </button>
+                    <p v-if="targetSetsSaving[element.id]" class="text-xs text-gray-400">保存中...</p>
+                    <p v-if="targetSetsErrors[element.id]" class="text-xs text-red-600">
+                      {{ targetSetsErrors[element.id] }}
+                    </p>
+                  </div>
                 </div>
               </template>
             </draggable>
