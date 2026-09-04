@@ -138,6 +138,13 @@ function onStartPendingExercise(exerciseId: string) {
   activeExerciseId.value = exerciseId
 }
 
+// 記録済みの種目カードから「＋セット追加」を押したときの切り替え。
+// 入力待ちキューからの取り出しは不要な点だけがonStartPendingExerciseと異なる
+// （Issue #69：同じ種目にさらにセットを追加する際、④種目選択を経由しなくて済むようにする）
+function onAddMoreSets(exerciseId: string) {
+  activeExerciseId.value = exerciseId
+}
+
 const activeExerciseName = computed(() =>
   activeExerciseId.value ? exerciseName(activeExerciseId.value) : '',
 )
@@ -278,7 +285,17 @@ async function onDeleteWorkout() {
         :key="group.exerciseId"
         class="rounded-lg bg-white p-4 shadow"
       >
-        <p class="mb-2 text-sm font-semibold text-gray-900">{{ group.name }}</p>
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
+          <button
+            v-if="activeExerciseId !== group.exerciseId"
+            type="button"
+            class="text-xs text-blue-600"
+            @click="onAddMoreSets(group.exerciseId)"
+          >
+            ＋セット追加
+          </button>
+        </div>
         <ul class="space-y-2">
           <li v-for="set in group.sets" :key="set.id" class="text-sm text-gray-700">
             <template v-if="editingSetId === set.id">
