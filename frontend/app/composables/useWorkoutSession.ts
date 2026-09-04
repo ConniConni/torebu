@@ -86,6 +86,16 @@ export function useWorkoutSession() {
     session.value.sets = session.value.sets.filter((s) => s.id !== setId)
   }
 
+  async function updateSet(setId: string, weightKg: number | null, reps: number) {
+    if (!session.value.workoutId) throw new Error('workoutが開始されていません')
+    const updated = await $fetch<WorkoutSetItem>(
+      `/api/workouts/${session.value.workoutId}/sets/${setId}`,
+      { method: 'PATCH', body: { weightKg, reps } },
+    )
+    session.value.sets = session.value.sets.map((s) => (s.id === updated.id ? updated : s))
+    return updated
+  }
+
   // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してから
   // セッション状態をリセットする
   async function finishWorkout() {
@@ -93,7 +103,7 @@ export function useWorkoutSession() {
     session.value = { workoutId: null, sets: [], memo: null }
   }
 
-  return { session, startWorkout, fetchSets, addSet, removeSet, updateMemo, finishWorkout }
+  return { session, startWorkout, fetchSets, addSet, removeSet, updateSet, updateMemo, finishWorkout }
 }
 
 export type { WorkoutSetItem }

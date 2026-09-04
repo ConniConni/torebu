@@ -155,7 +155,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
-| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
@@ -207,6 +207,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
    ├─ セット入力（重量・回数）→「記録」を押すたびに1件ずつ保存される
    │      ・重量欄は次のセットのためにあえてクリアしない（同じ重量が続くことが多いため）
    │      ・「この種目の入力を終える」で入力欄を閉じる
+   │
+   ├─ 記録済みセットの「編集」→ 重量・回数を修正して「保存」（⑥記録詳細と同じUI・
+   │      `PATCH /workouts/:id/sets/:setId`）。「削除」も既存どおり利用可能
    │
    ├─ メモ入力（任意）→「メモを保存」で `PATCH /workouts/:id` に保存される
    │      ・空欄で保存するとメモをクリアできる
