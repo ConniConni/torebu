@@ -133,7 +133,9 @@ user_theme_purchases
 - **退会後の同じグループへの再参加は可能**。実装は新規INSERTではなく、既存の`group_members`行をUPDATEして`left_at`をNULLに戻す形
 - **筋肉イラスト可視化**は`react-native-body-highlighter`のSVG・筋肉スラッグデータを流用（Reactコンポーネント自体ではなくSVGデータのみ、ライセンスはMIT想定だが実装時に要確認）。出典はExRx.net中心＋free-exercise-db等で補完
 - **有酸素運動は今回のmuscle_groupには含めない**。記録項目の設計とセットで将来の拡張機能として追加する
-- **種目一覧の表示順**は「自分の使用回数 DESC → default_sort_order ASC → 名前順」
+- **種目一覧の表示順**は「自分の使用回数 DESC → 名前順」の2段階。当初は`default_sort_order ASC`を
+  間に挟む3段階で設計していたが、`default_sort_order`を全件null運用にしたため実装ではソート条件から
+  省略している（詳細は[spec.md](./spec.md)の`GET /exercises`参照）
 - **アカウント削除は完全削除せず匿名化する**。display_nameを「退会済みユーザー」に置き換え、投稿・コメント・いいねは残す
 - **`birth_date`は登録時は任意のまま**。Phase3の「年代別分析・シェア」機能を使おうとしたタイミングで入力を促す
 - **セッションストアはIssue4で自前実装から`connect-pg-simple`に変更**。当初`sessions`テーブルをPrismaで正規化（`user_id`/`expires_at`等）して設計したが、セッションの有効期限切れ判定・期限切れ行の定期削除を自前で実装するコストに対し、認証は枯れたライブラリに乗る方が実務的にも妥当と判断し変更。自前実装で得られたはずの「定期実行ジョブ」の学習は見送り、`docs/backlog.md`に別Issueの候補として積む
