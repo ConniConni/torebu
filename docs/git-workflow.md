@@ -4,6 +4,23 @@
 **ブランチ → コミット → プルリク → マージ**の流れで進める。
 Issue・PRの作成はClaudeが`gh`コマンドで行い、マージはユーザーが行う。
 
+> ⚠️ **`gh`コマンドが`HTTP 401: Bad credentials`で失敗する場合**：環境変数`GITHUB_TOKEN`が
+> 設定されていて`gh`本来の認証を上書きしてしまっているのが原因のことが多い。次のコマンドで
+> `GITHUB_TOKEN`を一時的に外してログインし直す：
+>
+> ```bash
+> env -u GITHUB_TOKEN gh auth login
+> ```
+>
+> 上記の対処のため、以後`git push`・`gh issue create`・`gh pr create`などは
+> `env -u GITHUB_TOKEN`を前置きして実行する運用にしている（恒久対応であるシェル起動ファイルでの
+> `GITHUB_TOKEN` unsetは対応しない方針。2026-09-04時点）。ただし、この前置きが原因で
+> **認証が直った後もユーザー確認を求められ続けることがある**：Claude Codeの許可ルール
+> （`Bash(git push:*)`等）はコマンド文字列の前方一致なので、`env -u GITHUB_TOKEN git push ...`は
+> 素の`git push`ルールにマッチしない。この場合の許可ルールは個人用の`.claude/settings.local.json`
+> （gitignore対象、Git履歴に残らない）に`env -u GITHUB_TOKEN`付き・無し両方のパターンで追加している。
+> 開発環境を作り直したときは、このファイルが無くなっているため同じ確認プロンプトが復活しうる
+
 ## 全体の流れ
 
 1. Issueを立てる（やることを言語化する）
