@@ -9,6 +9,7 @@ interface WorkoutSetItem {
 
 interface SessionState {
   workoutId: string | null
+  performedAt: string | null
   sets: WorkoutSetItem[]
   memo: string | null
 }
@@ -18,6 +19,7 @@ interface SessionState {
 export function useWorkoutSession() {
   const session = useState<SessionState>('workout-session', () => ({
     workoutId: null,
+    performedAt: null,
     sets: [],
     memo: null,
   }))
@@ -25,16 +27,21 @@ export function useWorkoutSession() {
   const { workouts, fetchWorkouts } = useWorkouts()
 
   // その日の記録を開始する。同じ日のworkoutが既にあれば(ホームから戻って再開した場合など)
-  // 作り直さずそれを使う
+  // 作り直さずそれを使う。
+  // performedAtも比較しているのは、②ホームの記録カードから別の日のworkoutへ直接遷移できる
+  // ようになった(③⑥統合ステップ4)ため。workoutIdだけを見ると、既に別の日のworkoutを開いた
+  // 状態のセッションが残っていた場合にそれを誤って使い回してしまう
   async function startWorkout(performedAt: string) {
-    if (session.value.workoutId) return session.value.workoutId
+    if (session.value.workoutId && session.value.performedAt === performedAt) {
+      return session.value.workoutId
+    }
 
     if (!workouts.value) {
       await fetchWorkouts()
     }
     const existing = (workouts.value ?? []).find((w) => w.performedAt === performedAt)
     if (existing) {
-      session.value.workoutId = existing.id
+      session.value = { workoutId: existing.id, performedAt, sets: [], memo: null }
       await fetchSets()
       return existing.id
     }
@@ -46,7 +53,7 @@ export function useWorkoutSession() {
       method: 'POST',
       body: { performedAt },
     })
-    session.value = { workoutId: workout.id, sets: [], memo: workout.memo }
+    session.value = { workoutId: workout.id, performedAt, sets: [], memo: workout.memo }
     return workout.id
   }
 
@@ -100,7 +107,7 @@ export function useWorkoutSession() {
   // セッション状態をリセットする
   async function finishWorkout() {
     await fetchWorkouts()
-    session.value = { workoutId: null, sets: [], memo: null }
+    session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
   }
 
   // 記録全体の削除（⑥記録詳細のonDeleteWorkout相当）。finishWorkoutと同様、
@@ -109,7 +116,7 @@ export function useWorkoutSession() {
     if (!session.value.workoutId) return
     await requestFetch(`/api/workouts/${session.value.workoutId}`, { method: 'DELETE' })
     await fetchWorkouts()
-    session.value = { workoutId: null, sets: [], memo: null }
+    session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
   }
 
   return {

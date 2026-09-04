@@ -134,7 +134,7 @@
 | 7 | 他人のリソースは **`403` ではなく `404`** | 存在自体を隠すため |
 | 8 | `setOrder` は**サーバーが採番** | クライアント指定だと連続追加で番号がぶつかるため |
 | 9 | 種目マスタに**削除機能を作らない** | 過去の記録が参照している種目を消すと記録が壊れるため |
-| 10 | 記録の入口（②ホームのボタン・カレンダー操作）は**「今日」固定**、記録日は**作成後は編集不可** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる。**③のページ自体はIssue #52で`?date=`クエリに対応済み**（下記③の行・§3-4参照）だが、②側の導線（ホームのボタン・カレンダー）はまだ今日固定のまま |
+| 10 | 記録日は**作成後は編集不可**。②ホームの「＋今日の記録を始める」ボタンとカレンダー日付選択は**「今日」固定のまま** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる。**③のページ自体はIssue #52で`?date=`クエリに対応済み**（下記③の行・§3-4参照）で、**②の既存記録カード（過去日含む）から③へ日付付きで遷移する導線は実装済み**（⑥廃止・統合ステップ4）。未実装なのは「＋今日の記録を始める」の過去日対応とカレンダー日付選択→記録作成への連動のみ |
 
 ### 2-1. 決めたが、まだ実装されていないこと
 
@@ -146,21 +146,22 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み9ページ）
+### 3-1. 画面一覧（実装済み8ページ）
 
-丸数字は [concept.md](./concept.md) で使っている画面番号。
+丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
+（③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
+[roadmap.md](./roadmap.md)「③記録作成・⑥記録詳細の統合」参照）。
 
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
-| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
-| `/workouts/[id]` | ⑥ | 記録詳細 | `GET /workouts/:id`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -174,6 +175,10 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
  ├─「＋今日の記録を始める」──────────> ③ 記録作成（/workouts/new）
  │   ※ 入口は「今日」固定。カレンダーで              │
  │      過去日を選んでも記録作成には繋がらない        │
+ │                                                    │
+ ├─ 記録カード（過去日含む）を選ぶ ───> ③（/workouts/new?date=その日）
+ │   ※ 記録の見返し・編集・削除もここで行う           │
+ │      （⑥記録詳細は廃止し③に統合済み）             │
  │                                                    │
  └─「ルーティン」─────> ⑤ 一覧（/routines）          │
                             │                          │
@@ -208,8 +213,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
    │      ・重量欄は次のセットのためにあえてクリアしない（同じ重量が続くことが多いため）
    │      ・「この種目の入力を終える」で入力欄を閉じる
    │
-   ├─ 記録済みセットの「編集」→ 重量・回数を修正して「保存」（⑥記録詳細と同じUI・
-   │      `PATCH /workouts/:id/sets/:setId`）。「削除」も既存どおり利用可能
+   ├─ 記録済みセットの「編集」→ 重量・回数を修正して「保存」
+   │      （`PATCH /workouts/:id/sets/:setId`）。「削除」も既存どおり利用可能
    │
    ├─ メモ入力（任意）→「メモを保存」で `PATCH /workouts/:id` に保存される
    │      ・空欄で保存するとメモをクリアできる
@@ -218,7 +223,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
    │
    └─「この記録を削除」→ 画面内の2段階確認（削除する／キャンセル）を経て
           `DELETE /workouts/:id`（論理削除）。削除後は② ホームへ戻る
-          （⑥記録詳細と同じUI・確認方式。`window.confirm()`は使わない、理由はbacklog.md参照）
+          （`window.confirm()`は使わない、理由はbacklog.md参照）
 ```
 
 ヘッダーの「ホームへ戻る」リンクは記録を保存せずに戻るという意味ではない
@@ -232,7 +237,7 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 
 | 仕組み | 実体 | 何を運ぶか | ページを離れると |
 |---|---|---|---|
-| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutIdと、登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときだけリセット） |
+| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutId・performedAt・登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときだけリセット） |
 | `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため） |
 | `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときだけリセット） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
@@ -261,6 +266,12 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 今日にフォールバックする（フロント側のガードのみ。バックエンドAPI側に未来日を弾くバリデーションはまだ無い）。
 解決した日付は `useWorkoutSession().startWorkout()` に渡され、同じ日付のworkoutが既にあれば再利用、
 無ければ新規作成する。
+
+`startWorkout()` は `session.value.performedAt` と引数の`performedAt`が一致するときだけ
+既存のセッションをそのまま使い回す（③⑥統合ステップ4で追加）。②の記録カードから日付の異なる
+③へ直接遷移できるようになったため、日付が変われば必ずAPIから該当日のworkoutを取り直す。
+これを怠ると、同じセッション内で別の日の③を開いたときに前の日のworkoutIdが残って
+表示がずれる事故になる。
 
 ---
 

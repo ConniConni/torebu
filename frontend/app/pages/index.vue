@@ -131,7 +131,10 @@ async function onLogout() {
               :key="workout.id"
               class="rounded border border-gray-200 px-3 py-2"
             >
-              <NuxtLink :to="`/workouts/${workout.id}`" class="block hover:text-blue-600">
+              <NuxtLink
+                :to="`/workouts/new?date=${workout.performedAt}`"
+                class="block hover:text-blue-600"
+              >
                 <p v-if="workout.memo" class="mb-1 text-xs text-gray-500">{{ workout.memo }}</p>
 
                 <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">
