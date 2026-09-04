@@ -134,7 +134,7 @@
 | 7 | 他人のリソースは **`403` ではなく `404`** | 存在自体を隠すため |
 | 8 | `setOrder` は**サーバーが採番** | クライアント指定だと連続追加で番号がぶつかるため |
 | 9 | 種目マスタに**削除機能を作らない** | 過去の記録が参照している種目を消すと記録が壊れるため |
-| 10 | 記録の入口は**「今日」固定**、記録日は**作成後は編集不可** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる |
+| 10 | 記録の入口（②ホームのボタン・カレンダー操作）は**「今日」固定**、記録日は**作成後は編集不可** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる。**③のページ自体はIssue #52で`?date=`クエリに対応済み**（下記③の行・§3-4参照）だが、②側の導線（ホームのボタン・カレンダー）はまだ今日固定のまま |
 
 ### 2-1. 決めたが、まだ実装されていないこと
 
@@ -155,7 +155,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
-| `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
@@ -245,6 +245,12 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 `Date#toISOString()` を使ってはいけない。あれはUTC基準で文字列にするため、
 **日本時間の深夜0:00〜8:59に「今日」が前日にズレる**（JSTはUTC+9のため）。
 APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列で統一している。
+
+**③記録作成（`/workouts/new`）の`?date=`クエリ**は [utils/date.ts](../frontend/app/utils/date.ts) の
+`resolveTargetDate()` で解決する。形式が不正・実在しない暦日（`2026-02-30`等）・未来日のいずれかであれば
+今日にフォールバックする（フロント側のガードのみ。バックエンドAPI側に未来日を弾くバリデーションはまだ無い）。
+解決した日付は `useWorkoutSession().startWorkout()` に渡され、同じ日付のworkoutが既にあれば再利用、
+無ければ新規作成する。
 
 ---
 

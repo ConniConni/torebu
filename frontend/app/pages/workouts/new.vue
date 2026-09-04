@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// ③ 記録作成。今日のworkoutを開始し、種目ごとにセット(重量・回数)を積み上げていく本体画面
+// ③ 記録作成。指定日(省略時は今日)のworkoutを開始し、種目ごとにセット(重量・回数)を
+// 積み上げていく本体画面
 definePageMeta({ middleware: 'auth' })
 
 const { exercises, fetchExercises } = useExercises()
@@ -8,8 +9,14 @@ if (!exercises.value) {
 }
 
 const { session, startWorkout, addSet, removeSet, updateMemo, finishWorkout } = useWorkoutSession()
+
+// ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
+// startWorkout側は既に「同じ日付のworkoutがあれば再利用する」ロジックを持っているため、
+// ここでは開く日付を解決するだけでよい
+const route = useRoute()
 const today = todayLocalDateString()
-await startWorkout(today)
+const targetDate = resolveTargetDate(route.query.date, today)
+await startWorkout(targetDate)
 
 const memoInput = ref(session.value.memo ?? '')
 const memoSaving = ref(false)
@@ -145,7 +152,7 @@ async function onFinish() {
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <h1 class="text-base font-semibold text-gray-900">{{ today }}の記録</h1>
+        <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
         <NuxtLink to="/" class="text-sm text-gray-500">中断してホームへ</NuxtLink>
       </div>
 

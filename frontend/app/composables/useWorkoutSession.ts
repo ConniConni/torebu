@@ -39,7 +39,10 @@ export function useWorkoutSession() {
       return existing.id
     }
 
-    const workout = await $fetch<{ id: string; memo: string | null }>('/api/workouts', {
+    // SSR時、素の$fetchだとブラウザから来たCookieが転送されずログイン判定を誤る
+    // （useAuth.tsのfetchMeと同じ理由）。過去日を指定して初めてこのページを開く（＝その日の
+    // workoutがまだ無い）ケースはSSRで直接POSTが走るため、ここは必ずrequestFetchを使う
+    const workout = await requestFetch<{ id: string; memo: string | null }>('/api/workouts', {
       method: 'POST',
       body: { performedAt },
     })
