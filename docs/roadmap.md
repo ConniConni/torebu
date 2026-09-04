@@ -31,7 +31,7 @@
   遷移という設計（[backlog.md](./backlog.md)「未決定事項」参照）を進める過程で、③（セット追加はできるが
   値編集・記録削除ができない）と⑥（逆にセット追加ができない）の非対称に気づき、「その日の記録」画面として
   1つに統合する方針にした。安全に進めるため以下の順で分割する（[Issue #52](https://github.com/ConniConni/torebu/issues/52)が1番目）
-  - [ ] 1. ③記録作成画面を任意の日付に対応させる（[Issue #52](https://github.com/ConniConni/torebu/issues/52)、着手中）
+  - [x] 1. ③記録作成画面を任意の日付に対応させる（[Issue #52](https://github.com/ConniConni/torebu/issues/52)）
   - [ ] 2. ③にセット値編集機能を追加する（⑥の`onStartEditSet`/`onSaveSet`相当を移植）
   - [ ] 3. ③に記録（workout）削除機能を追加する（⑥の2段階確認の削除UIを移植）
   - [ ] 4. ⑥記録詳細ページを廃止し、②ホームの記録カードのリンク先を③（日付付き）に切り替える。
