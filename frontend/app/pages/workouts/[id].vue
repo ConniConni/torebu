@@ -64,8 +64,12 @@ const groupedSets = computed(() => {
   }))
 })
 
-// --- 記録日・メモの編集 ---
-const performedAtInput = ref(workout.value?.performedAt ?? '')
+// --- メモの編集 ---
+// 記録日(performedAt)は編集不可(意図的)：③「今日の記録を始める」が「同じ日付のworkoutが
+// あれば再開する」という日付ベースの引き当てをしているため、記録日を後から動かせると
+// 「移動先の元の日付で記録を始めようとした際に、行き場を失った古い日付の分と合わせて
+// 記録が実質二重になる」事故につながる(docs/backlog.md参照)。バックエンドAPIも合わせて
+// performedAtの更新を受け付けない
 const memoInput = ref(workout.value?.memo ?? '')
 const detailSaving = ref(false)
 const detailError = ref('')
@@ -79,7 +83,7 @@ async function onSaveDetail() {
       ...workout.value,
       ...(await requestFetch<WorkoutDetail>(`/api/workouts/${workoutId}`, {
         method: 'PATCH',
-        body: { performedAt: performedAtInput.value, memo: memoInput.value.trim() },
+        body: { memo: memoInput.value.trim() },
       })),
     }
   } catch {
@@ -180,14 +184,10 @@ async function onDeleteWorkout() {
 
       <template v-else>
         <section class="rounded-lg bg-white p-4 shadow">
-          <label class="flex flex-col gap-1 text-sm text-gray-700">
+          <p class="text-sm text-gray-700">
             記録日
-            <input
-              v-model="performedAtInput"
-              type="date"
-              class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-            />
-          </label>
+            <span class="ml-1 font-semibold text-gray-900">{{ workout.performedAt }}</span>
+          </p>
           <label class="mt-2 flex flex-col gap-1 text-sm text-gray-700">
             メモ
             <textarea
@@ -204,7 +204,7 @@ async function onDeleteWorkout() {
             class="mt-2 rounded border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-50"
             @click="onSaveDetail"
           >
-            {{ detailSaving ? '保存中...' : '記録日・メモを保存' }}
+            {{ detailSaving ? '保存中...' : 'メモを保存' }}
           </button>
           <p v-if="detailError" class="mt-2 text-sm text-red-600">{{ detailError }}</p>
         </section>

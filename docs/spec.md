@@ -134,7 +134,7 @@
 | 7 | 他人のリソースは **`403` ではなく `404`** | 存在自体を隠すため |
 | 8 | `setOrder` は**サーバーが採番** | クライアント指定だと連続追加で番号がぶつかるため |
 | 9 | 種目マスタに**削除機能を作らない** | 過去の記録が参照している種目を消すと記録が壊れるため |
-| 10 | 記録の入口は**「今日」固定** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した |
+| 10 | 記録の入口は**「今日」固定**、記録日は**作成後は編集不可** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる |
 
 ### 2-1. 決めたが、まだ実装されていないこと
 
@@ -154,7 +154,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー） | `GET /workouts`, `POST /auth/logout` | `auth` |
+| `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
 | `/workouts/new` | ③ | 記録作成（本体画面） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -283,7 +283,7 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 | POST | `/workouts` | 要 | その日のworkoutを作る |
 | GET | `/workouts` | 要 | 自分のworkout一覧（`performedAt` 降順） |
 | GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧 |
-| PATCH | `/workouts/:id` | 要 | 記録日・メモを更新する |
+| PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照） |
 | DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
 | POST | `/workouts/:id/sets` | 要 | セットを1件追加する |
 | PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する |

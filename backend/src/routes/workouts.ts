@@ -87,17 +87,15 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
   res.status(200).json({ ...serializeWorkout(workout), sets: sets.map(serializeSet) })
 })
 
-const updateWorkoutSchema = z
-  .object({
-    performedAt: z.coerce.date().optional(),
-    // 空文字列・nullはメモのクリア(null化)として扱う。省略時のみ「変更しない」
-    memo: z.string().trim().max(500).nullable().optional(),
-  })
-  // 記録日を間違えた場合の修正・メモの編集、どちらか一方でも呼べるようにするため、
-  // 両方省略(空のPATCH)だけを弾く
-  .refine((data) => data.performedAt !== undefined || data.memo !== undefined, {
-    message: 'performedAtかmemoのいずれかを指定してください',
-  })
+// performedAtは編集不可(意図的)：③「今日の記録を始める」が「同じ日付のworkoutがあれば再開する」
+// という日付ベースの引き当てをしているため、記録日を後から動かせると
+// 「移動先の元の日付でworkoutを再開しようとした際に、行き場を失った古い日付の分と合わせて
+// 実質的に記録が二重に増える」事故につながる(docs/backlog.md参照)。記録日を固定にすることで
+// この事故を構造的に防ぐ
+const updateWorkoutSchema = z.object({
+  // 空文字列・nullはメモのクリア(null化)として扱う。省略時のみ「変更しない」
+  memo: z.string().trim().max(500).nullable(),
+})
 
 workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
   const parsed = updateWorkoutSchema.safeParse(req.body)
@@ -115,10 +113,7 @@ workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
   const updated = await prisma.workout.update({
     where: { id: workout.id },
     // 空文字列はnull(メモ無し)に正規化して保存する
-    data: {
-      performedAt: parsed.data.performedAt,
-      memo: parsed.data.memo === undefined ? undefined : parsed.data.memo || null,
-    },
+    data: { memo: parsed.data.memo || null },
   })
 
   res.status(200).json(serializeWorkout(updated))
