@@ -45,7 +45,7 @@ const { routines, fetchRoutines, fetchRoutineDetail } = useRoutines()
 const showRoutinePicker = ref(false)
 const routinePickerPending = ref(false)
 const routineApplyError = ref('')
-const pendingExercises = ref<{ exerciseId: string; name: string }[]>([])
+const pendingExercises = usePendingExercises()
 
 // 既にこのworkoutに乗っている（セット入力済み or 入力待ち or 入力中の）種目ID。
 // ルーティン適用時、ここに含まれる種目は重複として除外する
@@ -123,6 +123,9 @@ function onDoneWithExercise() {
 
 async function onFinish() {
   await finishWorkout()
+  // 入力待ちの種目もworkout単位の状態のため、記録完了と合わせてリセットする
+  // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）
+  pendingExercises.value = []
   await navigateTo('/')
 }
 </script>

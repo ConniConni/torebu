@@ -32,8 +32,8 @@
 | **セッション / Cookie** | 「今このブラウザは誰か」をサーバー側のDBに持ち、ブラウザには鍵（`connect.sid`）だけを渡す方式。鍵からは中身が読めない | [session.ts](../backend/src/session.ts) |
 | **プロキシ** | フロント（:3000）に来た `/api/**` へのリクエストを、バックエンド（:3001）へ中継する仕組み | [nuxt.config.ts](../frontend/nuxt.config.ts) の `routeRules` |
 | **SSR** | 画面をブラウザではなく**サーバー側で先に組み立てる**Nuxtの動き。この時は素の `$fetch` にCookieが自動で付かない、という落とし穴がある | [useAuth.ts](../frontend/app/composables/useAuth.ts) の `useRequestFetch` のコメント |
-| **composable** | Vue/Nuxtで「状態＋その状態を操作する関数」をまとめて使い回すための関数。名前は必ず `use〜` で始まる | [composables/](../frontend/app/composables/) の6本 |
-| **`ref` と `useState` の違い** | どちらも「変化する値」を持つ入れ物。違いは**ページを移動したときに消えるか残るか**。`ref` はそのページ専用なので消える。`useState` はアプリ全体で共有されるので残る。**§3-3 で詳しく扱う（Issue13で作り込んだバグの原因）** | [useWorkoutSession.ts](../frontend/app/composables/useWorkoutSession.ts) |
+| **composable** | Vue/Nuxtで「状態＋その状態を操作する関数」をまとめて使い回すための関数。名前は必ず `use〜` で始まる | [composables/](../frontend/app/composables/) の7本 |
+| **`ref` と `useState` の違い** | どちらも「変化する値」を持つ入れ物。違いは**ページを移動したときに消えるか残るか**。`ref` はそのページ専用なので消える。`useState` はアプリ全体で共有されるので残る。**§3-3 で詳しく扱う（Issue13で作り込み、Issue #36で修正したバグの原因）** | [useWorkoutSession.ts](../frontend/app/composables/useWorkoutSession.ts) |
 | **バリデーション / zod** | 送られてきた値が想定通りの形か検査すること。zodはその検査ルールを書くライブラリ。通らなければ `400` を返す | [workouts.ts](../backend/src/routes/workouts.ts) の `weightKgSchema` |
 | **採番** | 連番（1セット目・2セット目…）を**誰が決めるか**という話。このアプリではサーバーが決めている | [workouts.ts](../backend/src/routes/workouts.ts) の `nextSetOrder` |
 | **ソフトデリート** | 行を実際には消さず「消した印」（`deletedAt`）を付けるだけの削除。後から参照される可能性があるデータに使う | `Workout` モデルの `deletedAt` |
@@ -219,22 +219,19 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 |---|---|---|---|
 | `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutIdと、登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときだけリセット） |
 | `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため） |
+| `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときだけリセット） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
 
-**なぜ3つあるのか**
+**なぜ4つあるのか**
 - ④⑦は③からもルーティン編集画面からも来る**共通画面**なので、戻り先を知る必要がある → `returnTo`
 - 戻り先は「どの種目が選ばれたか」を知る必要がある → `usePickedExerciseId`
 - ③は画面を離れている間も「今日のworkout」を保持し続ける必要がある → `useWorkoutSession`
+- ③は④⑦への往復を挟んでも「入力待ちの種目」を保持し続ける必要がある → `usePendingExercises`
+  （Issue13で作り込み、Issue #36で修正したバグの原因。当初 `ref` で持っていたため画面遷移で消えていた）
 
 **横断ルール：画面をまたいで残したい状態は `ref` ではなく `useState` に置く。**
 
 `ref` はそのページ専用なので、ページを離れた瞬間に中身が消える。`useState` はアプリ全体で共有されるので残る。
-
-> **このルールに違反している既知のバグ（MVP完成後の棚卸しで発見。修正は次のIssue以降）**
->
-> [workouts/new.vue](../frontend/app/pages/workouts/new.vue) の `pendingExercises`（ルーティンから展開された
-> 「入力待ちの種目」リスト）が `useState` ではなく**ページ専用の `ref` になっている**ため、画面遷移で
-> 消える。詳細は [backlog.md](./backlog.md) の「バグ」を見る。
 
 ### 3-4. 日付の扱い
 
