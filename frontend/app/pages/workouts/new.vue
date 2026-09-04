@@ -8,7 +8,7 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
+const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout, deleteWorkout } =
   useWorkoutSession()
 
 // ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
@@ -184,6 +184,26 @@ async function onFinish() {
   pendingExercises.value = []
   await navigateTo('/')
 }
+
+// --- 記録全体の削除（⑥記録詳細のconfirmingDelete/onDeleteWorkout相当を移植） ---
+// window.confirm()は「このページに追加のダイアログを表示させない」でブラウザ側から無効化されうる
+// (docs/backlog.md参照)ため、画面内の2段階確認(確認表示→実行ボタン)にする
+const confirmingDelete = ref(false)
+const deleting = ref(false)
+const deleteError = ref('')
+
+async function onDeleteWorkout() {
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await deleteWorkout()
+    pendingExercises.value = []
+    await navigateTo('/')
+  } catch {
+    deleteError.value = '記録の削除に失敗しました。時間をおいて再度お試しください'
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -191,7 +211,7 @@ async function onFinish() {
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
         <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
-        <NuxtLink to="/" class="text-sm text-gray-500">中断してホームへ</NuxtLink>
+        <NuxtLink to="/" class="text-sm text-gray-500">ホームへ戻る</NuxtLink>
       </div>
 
       <section class="rounded-lg bg-white p-4 shadow">
@@ -395,6 +415,39 @@ async function onFinish() {
       >
         今日の記録を完了
       </button>
+
+      <section class="rounded-lg bg-white p-4 shadow">
+        <template v-if="confirmingDelete">
+          <p class="text-sm text-gray-700">この記録を削除しますか？元に戻せません。</p>
+          <div class="mt-2 flex gap-2">
+            <button
+              type="button"
+              :disabled="deleting"
+              class="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+              @click="onDeleteWorkout"
+            >
+              {{ deleting ? '削除中...' : '削除する' }}
+            </button>
+            <button
+              type="button"
+              :disabled="deleting"
+              class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 disabled:opacity-50"
+              @click="confirmingDelete = false"
+            >
+              キャンセル
+            </button>
+          </div>
+        </template>
+        <button
+          v-else
+          type="button"
+          class="w-full rounded border border-red-600 py-2 text-sm font-semibold text-red-600"
+          @click="confirmingDelete = true"
+        >
+          この記録を削除
+        </button>
+        <p v-if="deleteError" class="mt-2 text-sm text-red-600">{{ deleteError }}</p>
+      </section>
     </div>
   </div>
 </template>
