@@ -160,7 +160,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
-| `/workouts/[id]` | ⑥ | 記録詳細 | `GET /workouts/:id`, `GET /exercises` | `auth` |
+| `/workouts/[id]` | ⑥ | 記録詳細 | `GET /workouts/:id`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
