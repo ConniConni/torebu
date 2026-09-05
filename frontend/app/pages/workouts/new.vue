@@ -138,6 +138,14 @@ async function onApplyRoutine(routineId: string) {
       return
     }
 
+    // 一部の種目だけが重複除外された場合も、無言でフィルタされないよう件数を通知する（Issue #84）。
+    // こちらは適用自体は成功しているのでピッカーは閉じるが、通知は本体側に残す
+    // （ピッカーの外にある routineApplyNotice の表示箇所を参照）
+    const excludedCount = detail.exercises.length - newExercises.length
+    if (excludedCount > 0) {
+      routineApplyNotice.value = `${newExercises.length}件を追加しました（${excludedCount}件は記録済みのため除外）`
+    }
+
     // 目安セットが1つでもある種目は即登録、無い種目は従来どおり入力待ちに積む。
     // 同じ種目内の複数セットはsetOrderをサーバーが「既存の最大+1」で採番するため、
     // Promise.allではなく1件ずつawaitして順番どおりに登録する
@@ -485,6 +493,15 @@ async function onDeleteWorkout() {
         <p v-if="routineApplyError" class="mt-2 text-sm text-red-600">{{ routineApplyError }}</p>
         <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600">{{ routineApplyNotice }}</p>
       </section>
+
+      <!-- 一部の種目のみ重複除外された場合の通知（Issue #84）。適用成功でピッカーは閉じるため、
+           ピッカーの外に置いてピッカーが閉じた後も表示され続けるようにする -->
+      <p
+        v-if="routineApplyNotice && !showRoutinePicker"
+        class="rounded-lg bg-white p-4 text-sm text-gray-600 shadow"
+      >
+        {{ routineApplyNotice }}
+      </p>
 
       <!-- 記録済みの種目は上のgroupedSetsカード内にインライン入力欄が出るため、
            ここは「まだ記録の無い新規種目」を選んだ場合のみ表示する（Issue #82） -->
