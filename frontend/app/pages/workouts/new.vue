@@ -163,51 +163,60 @@ async function onApplyRoutine(routineId: string) {
   }
 }
 
-// --- 記録済みセットの値編集（⑥記録詳細のonStartEditSet/onSaveSet相当を移植） ---
-const editingSetId = ref<string | null>(null)
-const editWeightInput = ref('')
-const editRepsInput = ref('')
-const setEditSaving = ref(false)
-const setEditError = ref('')
+// --- 記録済みセットの値編集（⑤ルーティンの目安セット編集と同じ、常時入力欄＋blur自動保存） ---
+// 「編集」ボタンで入力モードに切り替えるトグル方式は廃止し、⑤側の方式に統一した（Issue #95）。
+// セットごとに入力中の値をsetIdをキーに保持する。既に値がある場合は上書きしない
+// （他のセット追加・ルーティン適用のたびに入力中の値が巻き戻るのを防ぐため）
+// weightはtype="number"のv-modelがVue 3.4以降で有効な数値をNumberとして保持するため
+// string | numberで持つ（空欄=自重のときのみstringの''のまま）
+const setInputs = reactive<Record<string, { weight: string | number; reps: string | number }>>({})
+const setSaving = reactive<Record<string, boolean>>({})
+const setErrors = reactive<Record<string, string>>({})
 
-function onStartEditSet(set: (typeof session.value.sets)[number]) {
-  editingSetId.value = set.id
-  editWeightInput.value = set.weightKg === null ? '' : String(set.weightKg)
-  editRepsInput.value = String(set.reps)
-  setEditError.value = ''
-}
-
-// 「保存」ボタンは持たず、重量・回数の入力欄からblurするたびに自動保存する
-// （メモと同じ方針）。値が不正な間（回数が空・0以下等）は保存をスキップし、編集モードのまま
-// 待つ。保存が終わればeditingSetIdは維持したまま値だけ更新されるので、そのまま
-// 「閉じる」で表示モードへ戻る。閉じるタイミングでは保存中のPromiseを待つ必要はない
-// （ページ遷移を伴わないため、保存が完了すれば表示側のsession.value.setsが自然に更新される）
-async function onEditFieldBlur() {
-  if (!editingSetId.value) return
-  const reps = Number(editRepsInput.value)
-  if (!Number.isInteger(reps) || reps <= 0) return
-  const weightRaw = String(editWeightInput.value).trim()
-  const weightKg = weightRaw ? Number(weightRaw) : null
-
-  setEditSaving.value = true
-  setEditError.value = ''
-  try {
-    await updateSet(editingSetId.value, weightKg, reps)
-  } catch {
-    setEditError.value = 'セットの更新に失敗しました。時間をおいて再度お試しください'
-  } finally {
-    setEditSaving.value = false
+function ensureSetInput(set: { id: string; weightKg: number | null; reps: number }) {
+  if (setInputs[set.id]) return
+  setInputs[set.id] = {
+    weight: set.weightKg === null ? '' : String(set.weightKg),
+    reps: String(set.reps),
   }
 }
 
-function onCloseEditSet() {
-  editingSetId.value = null
+// 初回読み込み・セット追加・ルーティン適用のいずれでもsession.value.setsが更新されるたびに
+// 走らせ、新しく増えたセット分の入力欄を初期化する
+watch(
+  () => session.value.sets,
+  (sets) => {
+    for (const set of sets) ensureSetInput(set)
+  },
+  { immediate: true },
+)
+
+// 「保存」ボタンは持たず、重量・回数の入力欄からblurするたびに自動保存する（メモと同じ方針）。
+// 値が不正な間（回数が空・0以下等）は保存をスキップする。
+// Vue 3.4以降、type="number"のv-modelは有効な数値が入るとStringではなくNumberとして
+// 保持されるため（自重で空欄のときはStringのまま）、trim()の前にString()で揃える
+async function onSetFieldBlur(setId: string) {
+  const inputs = setInputs[setId]
+  if (!inputs) return
+  const reps = Number(inputs.reps)
+  if (!Number.isInteger(reps) || reps <= 0) return
+  const weightRaw = String(inputs.weight).trim()
+  const weightKg = weightRaw ? Number(weightRaw) : null
+
+  setSaving[setId] = true
+  setErrors[setId] = ''
+  try {
+    await updateSet(setId, weightKg, reps)
+  } catch {
+    setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    setSaving[setId] = false
+  }
 }
 
 // --- セット追加（Issue #91：自動保存方式への統一） ---
 // ⑤ルーティン編集の「＋目安セットを追加」と同じ方針：デフォルト値（自重・10回）で
-// その場でAPIに登録し、続けて編集モードを開いてその場で重量・回数を手直ししてもらう。
-// これにより「入力してから記録ボタンを押す」フォームが不要になる
+// その場でAPIに登録し、常時表示の入力欄でその場で重量・回数を手直ししてもらう
 const DEFAULT_SET_REPS = 10
 const addSetError = ref('')
 
@@ -215,7 +224,7 @@ async function onAddSet(exerciseId: string) {
   addSetError.value = ''
   try {
     const set = await addSet(exerciseId, DEFAULT_SET_REPS)
-    onStartEditSet(set)
+    ensureSetInput(set)
   } catch {
     addSetError.value = 'セットの記録に失敗しました。時間をおいて再度お試しください'
   }
@@ -308,67 +317,49 @@ async function onDeleteWorkout() {
         </div>
         <ul class="space-y-2">
           <li v-for="set in group.sets" :key="set.id" class="text-sm text-gray-700">
-            <template v-if="editingSetId === set.id">
-              <div class="flex items-end gap-2">
-                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-                  重量(kg・自重は空欄)
-                  <input
-                    v-model="editWeightInput"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    placeholder="自重"
-                    class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-                    @blur="onEditFieldBlur"
-                  />
-                </label>
-                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-                  回数
-                  <input
-                    v-model="editRepsInput"
-                    type="number"
-                    min="1"
-                    class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-                    @blur="onEditFieldBlur"
-                  />
-                </label>
-              </div>
-              <div class="mt-1 flex items-center gap-2">
-                <button type="button" class="text-xs text-gray-500" @click="onCloseEditSet">
-                  閉じる
-                </button>
-                <span v-if="setEditSaving" class="text-xs text-gray-400">保存中...</span>
-              </div>
-            </template>
-            <div v-else class="flex items-center justify-between">
-              <span class="flex items-baseline gap-1 tabular-nums">
-                <span><span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目：</span>
-                <span>
-                  <span class="inline-block w-14 text-right">{{ set.weightKg ?? '自重' }}</span
-                  >{{ set.weightKg ? 'kg' : '' }}
-                </span>
-                <span>×</span>
-                <span><span class="inline-block w-6 text-right">{{ set.reps }}</span>回</span>
+            <div v-if="setInputs[set.id]" class="flex items-end gap-2">
+              <span class="pb-1.5 text-xs text-gray-500">
+                <span class="inline-block w-6 text-right">{{ set.setOrder }}</span>セット目
               </span>
-              <span class="flex shrink-0 gap-2">
-                <button type="button" class="text-xs text-gray-500" @click="onStartEditSet(set)">
-                  編集
-                </button>
-                <button
-                  type="button"
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                  aria-label="このセットを削除"
-                  @click="removeSet(set.id)"
-                >
-                  <TrashIcon class="h-3.5 w-3.5" />
-                </button>
-              </span>
+              <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+                重量(kg・自重は空欄)
+                <input
+                  v-model="setInputs[set.id]!.weight"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  placeholder="自重"
+                  class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  @blur="onSetFieldBlur(set.id)"
+                />
+              </label>
+              <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+                回数
+                <input
+                  v-model="setInputs[set.id]!.reps"
+                  type="number"
+                  min="1"
+                  class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  @blur="onSetFieldBlur(set.id)"
+                />
+              </label>
+              <button
+                type="button"
+                class="mb-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                aria-label="このセットを削除"
+                @click="removeSet(set.id)"
+              >
+                <TrashIcon class="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div class="mt-1 flex items-center gap-2">
+              <span v-if="setSaving[set.id]" class="text-xs text-gray-400">保存中...</span>
+              <span v-if="setErrors[set.id]" class="text-xs text-red-600">{{ setErrors[set.id] }}</span>
             </div>
           </li>
         </ul>
       </section>
 
-      <p v-if="setEditError" class="text-center text-sm text-red-600">{{ setEditError }}</p>
       <p v-if="addSetError" class="text-center text-sm text-red-600">{{ addSetError }}</p>
 
       <p
