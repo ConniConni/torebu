@@ -92,9 +92,15 @@ describe('POST /routines', () => {
 })
 
 describe('GET /routines', () => {
-  it('自分のroutineのみ、作成日の新しい順に返る', async () => {
+  it('自分の、種目が1件以上あるroutineのみ、作成日の新しい順に返る', async () => {
     const older = await createRoutine(ownerId, { name: '胸の日' })
+    await prisma.routineExercise.create({
+      data: { routineId: older.id, exerciseId, sortOrder: 1 },
+    })
     const newer = await createRoutine(ownerId, { name: '脚の日' })
+    await prisma.routineExercise.create({
+      data: { routineId: newer.id, exerciseId, sortOrder: 1 },
+    })
     await createRoutine(otherId)
 
     const agent = await loginAsOwner()
@@ -103,6 +109,16 @@ describe('GET /routines', () => {
     expect(res.status).toBe(200)
     const ids = (res.body as Array<{ id: string }>).map((r) => r.id)
     expect(ids).toEqual([newer.id, older.id])
+  })
+
+  it('種目が1件も無いroutineは一覧に出さない(Issue #87)', async () => {
+    await createRoutine(ownerId, { name: '空のルーティン' })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/routines')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
   })
 })
 

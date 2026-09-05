@@ -88,8 +88,10 @@ routinesRouter.post('/', requireAuth, async (req, res) => {
 routinesRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
 
+  // 種目0件のroutineは一覧・ピッカーに出す意味が無い(空のまま保存されたもの。Issue #87)ため除外する。
+  // 編集画面(離脱時に自動削除される)を経ずに残った取りこぼし分の保険も兼ねる
   const routines = await prisma.routine.findMany({
-    where: { userId },
+    where: { userId, exercises: { some: {} } },
     orderBy: { createdAt: 'desc' },
   })
 
