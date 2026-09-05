@@ -318,55 +318,61 @@ async function onDeleteWorkout() {
         <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
              各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。重量・回数の列は
              frで種目カードの幅いっぱいまで伸ばし、右端に余白が余らないようにしている。それぞれの
-             入力欄の右に単位（kg・回）を添えることで、見出しの文言を短くできている -->
-        <div class="overflow-hidden rounded-lg">
-          <div class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
-            <span class="text-xs font-semibold text-gray-500">セット</span>
-            <span class="text-xs font-semibold text-gray-500">重量</span>
-            <span class="text-xs font-semibold text-gray-500">回数</span>
-            <span></span>
-          </div>
-          <template v-for="(set, i) in group.sets" :key="set.id">
-            <div
-              v-if="setInputs[set.id]"
-              class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-              :class="i % 2 === 1 ? 'bg-gray-50' : ''"
-            >
-              <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ set.setOrder }}</span>
-              <span class="flex min-w-0 items-baseline gap-1.5">
-                <input
-                  v-model="setInputs[set.id]!.weight"
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  placeholder="自重"
-                  class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                  @blur="onSetFieldBlur(set.id)"
-                />
-                <span class="shrink-0 text-xs text-gray-500">kg</span>
-              </span>
-              <span class="flex min-w-0 items-baseline gap-1.5">
-                <input
-                  v-model="setInputs[set.id]!.reps"
-                  type="number"
-                  min="1"
-                  class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                  @blur="onSetFieldBlur(set.id)"
-                />
-                <span class="shrink-0 text-xs text-gray-500">回</span>
-              </span>
-              <span class="flex justify-center">
-                <button
-                  type="button"
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                  aria-label="このセットを削除"
-                  @click="removeSet(set.id)"
-                >
-                  <TrashIcon class="h-3.5 w-3.5" />
-                </button>
-              </span>
+             入力欄の右に単位（kg・回）を添えることで、見出しの文言を短くできている。
+             列にminmaxで下限を設けているのは、画面幅が狭いと回数欄が数字の入る幅より縮んで
+             「10」が見切れて「1」に見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。
+             下限を割り込むほど狭い場合は個別にoverflow-x-autoで横スクロールさせ、他の要素を
+             巻き込んで崩れないようにする -->
+        <div class="overflow-x-auto">
+          <div class="min-w-[17rem] overflow-hidden rounded-lg">
+            <div class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
+              <span class="text-xs font-semibold text-gray-500">セット</span>
+              <span class="text-xs font-semibold text-gray-500">重量</span>
+              <span class="text-xs font-semibold text-gray-500">回数</span>
+              <span></span>
             </div>
-          </template>
+            <template v-for="(set, i) in group.sets" :key="set.id">
+              <div
+                v-if="setInputs[set.id]"
+                class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+              >
+                <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ set.setOrder }}</span>
+                <span class="flex min-w-0 items-baseline gap-1.5">
+                  <input
+                    v-model="setInputs[set.id]!.weight"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    placeholder="自重"
+                    class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                    @blur="onSetFieldBlur(set.id)"
+                  />
+                  <span class="shrink-0 text-xs text-gray-500">kg</span>
+                </span>
+                <span class="flex min-w-0 items-baseline gap-1.5">
+                  <input
+                    v-model="setInputs[set.id]!.reps"
+                    type="number"
+                    min="1"
+                    class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                    @blur="onSetFieldBlur(set.id)"
+                  />
+                  <span class="shrink-0 text-xs text-gray-500">回</span>
+                </span>
+                <span class="flex justify-center">
+                  <button
+                    type="button"
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                    aria-label="このセットを削除"
+                    @click="removeSet(set.id)"
+                  >
+                    <TrashIcon class="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              </div>
+            </template>
+          </div>
         </div>
         <template v-for="set in group.sets" :key="`msg-${set.id}`">
           <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400">

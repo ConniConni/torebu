@@ -317,53 +317,58 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                   <div class="mt-1 pl-6">
                     <!-- ③記録作成のセット表示と見た目を揃えたヘッダー帯付きコンパクト表形式
                          （ユーザー指摘、2026-09-05）。重量・回数の列はfrで幅いっぱいまで伸ばし、
-                         入力欄の右に単位（kg・回）を添えている -->
-                    <div v-if="element.targetSets.length > 0" class="overflow-hidden rounded-lg">
-                      <div class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
-                        <span class="text-xs font-semibold text-gray-500">セット</span>
-                        <span class="text-xs font-semibold text-gray-500">重量</span>
-                        <span class="text-xs font-semibold text-gray-500">回数</span>
-                        <span></span>
-                      </div>
-                      <div
-                        v-for="(set, index) in element.targetSets"
-                        :key="index"
-                        class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-                        :class="Number(index) % 2 === 1 ? 'bg-gray-50' : ''"
-                      >
-                        <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ Number(index) + 1 }}</span>
-                        <span class="flex min-w-0 items-baseline gap-1.5">
-                          <input
-                            v-model="set.weightKg"
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            placeholder="自重"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                            @blur="saveTargetSets(element)"
-                          />
-                          <span class="shrink-0 text-xs text-gray-500">kg</span>
-                        </span>
-                        <span class="flex min-w-0 items-baseline gap-1.5">
-                          <input
-                            v-model="set.reps"
-                            type="number"
-                            min="1"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                            @blur="saveTargetSets(element)"
-                          />
-                          <span class="shrink-0 text-xs text-gray-500">回</span>
-                        </span>
-                        <span class="flex justify-center">
-                          <button
-                            type="button"
-                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                            aria-label="この目安セットを削除"
-                            @click="removeTargetSet(element, index)"
-                          >
-                            <TrashIcon class="h-3.5 w-3.5" />
-                          </button>
-                        </span>
+                         入力欄の右に単位（kg・回）を添えている。列にminmaxで下限を設けているのは、
+                         画面幅が狭いと回数欄が数字の入る幅より縮んで「10」が見切れて「1」に
+                         見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。下限を割り込む
+                         ほど狭い場合は個別にoverflow-x-autoで横スクロールさせる -->
+                    <div v-if="element.targetSets.length > 0" class="overflow-x-auto">
+                      <div class="min-w-[17rem] overflow-hidden rounded-lg">
+                        <div class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
+                          <span class="text-xs font-semibold text-gray-500">セット</span>
+                          <span class="text-xs font-semibold text-gray-500">重量</span>
+                          <span class="text-xs font-semibold text-gray-500">回数</span>
+                          <span></span>
+                        </div>
+                        <div
+                          v-for="(set, index) in element.targetSets"
+                          :key="index"
+                          class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                          :class="Number(index) % 2 === 1 ? 'bg-gray-50' : ''"
+                        >
+                          <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ Number(index) + 1 }}</span>
+                          <span class="flex min-w-0 items-baseline gap-1.5">
+                            <input
+                              v-model="set.weightKg"
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              placeholder="自重"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                              @blur="saveTargetSets(element)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500">kg</span>
+                          </span>
+                          <span class="flex min-w-0 items-baseline gap-1.5">
+                            <input
+                              v-model="set.reps"
+                              type="number"
+                              min="1"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                              @blur="saveTargetSets(element)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500">回</span>
+                          </span>
+                          <span class="flex justify-center">
+                            <button
+                              type="button"
+                              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                              aria-label="この目安セットを削除"
+                              @click="removeTargetSet(element, index)"
+                            >
+                              <TrashIcon class="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <button
