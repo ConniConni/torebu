@@ -161,7 +161,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
-| `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines` | `auth` |
+| `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
 
 **ミドルウェアの意味**
@@ -186,14 +186,23 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
  │      （③側で未来日は今日にクランプされるため）    │
  │                                                    │
  └─「ルーティン」─────> ⑤ 一覧（/routines）          │
+                            │  ※ 各行の🗑️ボタン→画面内2段階確認で
+                            │     ルーティン本体を削除できる（`DELETE /routines/:id`）
                             │                          │
                             └─> ⑤ 編集（/routines/[id]）
                                   ルーティン名入力欄からフォーカスが外れる（blur）たびに
                                   自動保存される（`PATCH /routines/:id`）。明示的な「保存」
                                   ボタンは無い（種目の追加/削除/並び替えも元から即時保存）。
-                                  各種目には目安セット（重量・回数）を追加/編集/削除できる
-                                  （「＋目安セットを追加」で自重・10回のデフォルト値を追加後、
-                                  重量・回数欄のblurで自動保存。他画面のセット編集と同じ方針）
+                                  ④で種目を選ぶと、目安セット1件（自重・10回）が即登録された
+                                  状態で追加される（③で種目を選んだ瞬間に1セット目が登録される
+                                  のと同じ方針）。各種目には目安セット（重量・回数）を追加/編集/
+                                  削除でき（「＋目安セットを追加」で自重・10回のデフォルト値を
+                                  追加後、重量・回数欄のblurで自動保存。他画面のセット編集と
+                                  同じ方針）、種目の行自体には削除ボタンを持たない。目安セットを
+                                  最後の1件まで削除すると、その種目自体もルーティンから削除される
+                                  （`DELETE /routines/:id/exercises/:routineExerciseId`。
+                                  「空になったら消える」という下記のルーティン全体の設計を
+                                  routine_exercise単位にも揃えたもの）
                                   種目を1つも追加せずにこの画面を離れると、そのルーティンは
                                   自動的に削除される（空のルーティンを残さないため。ブラウザを
                                   閉じる等この離脱経路を通らない場合は取りこぼすが、その保険として

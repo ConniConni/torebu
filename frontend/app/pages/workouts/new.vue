@@ -354,8 +354,13 @@ async function onDeleteWorkout() {
                 <button type="button" class="text-xs text-gray-500" @click="onStartEditSet(set)">
                   編集
                 </button>
-                <button type="button" class="text-xs text-red-600" @click="removeSet(set.id)">
-                  削除
+                <button
+                  type="button"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  aria-label="このセットを削除"
+                  @click="removeSet(set.id)"
+                >
+                  <TrashIcon class="h-3.5 w-3.5" />
                 </button>
               </span>
             </div>
@@ -475,10 +480,10 @@ async function onDeleteWorkout() {
         <button
           v-else
           type="button"
-          class="w-full rounded border border-red-600 py-2 text-sm font-semibold text-red-600"
+          class="flex w-full items-center justify-center gap-1.5 rounded border border-red-600 py-2 text-sm font-semibold text-red-600"
           @click="confirmingDelete = true"
         >
-          この記録を削除
+          <TrashIcon class="h-4 w-4" />この記録を削除
         </button>
         <p v-if="deleteError" class="mt-2 text-sm text-red-600">{{ deleteError }}</p>
       </section>

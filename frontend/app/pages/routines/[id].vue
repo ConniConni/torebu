@@ -91,32 +91,20 @@ async function onNameBlur() {
   }
 }
 
-const confirmingDelete = ref(false)
-const deleting = ref(false)
-const deleteError = ref('')
-// 「このルーティンを削除する」で既に削除済みかどうか。trueなら下の離脱ガードで
-// 二重にDELETEを呼ばないようにする
-const alreadyDeleted = ref(false)
-
-async function onDelete() {
-  deleting.value = true
-  deleteError.value = ''
-  try {
-    await deleteRoutine(routineId)
-    alreadyDeleted.value = true
-    await navigateTo('/routines')
-  } catch {
-    deleteError.value = '削除に失敗しました。時間をおいて再度お試しください'
-    deleting.value = false
-  }
-}
-
 // 種目を1つも追加せずにこの画面を離れる場合、空のルーティンを残さないよう自動削除する
 // (Issue #87。本格的な遅延作成は規模が大きいため見送り、離脱時削除で代替する方針)。
 // ブラウザを閉じる等ここを通らない離脱経路では取りこぼすが、その保険としてGET /routines側で
 // 種目0件のルーティンを表示から除外している(backend/src/routes/routines.ts参照)
-onBeforeRouteLeave(async () => {
-  if (alreadyDeleted.value || !routine.value || routine.value.exercises.length > 0) {
+// なお「このルーティンを削除する」操作自体は⑤一覧画面（routines/index.vue）に移した
+// （Issue #93。詳細画面単体だと🗑️アイコンだけでは意味が伝わりにくいため、一覧の行内に統合）
+onBeforeRouteLeave(async (to) => {
+  if (!routine.value || routine.value.exercises.length > 0) {
+    return true
+  }
+  // 「＋種目を追加」で④種目選択へ向かう場合はこのページへ戻ってくる前提のため、
+  // 種目0件でも消してはいけない（Issue #87時点でこの導線を考慮できておらず、新規ルーティンで
+  // 最初の種目を選ぼうとすると「ルーティンの取得に失敗しました」になる不具合。Issue #93で発覚）
+  if (to.path === '/workouts/exercises' && to.query.returnTo === `/routines/${routineId}`) {
     return true
   }
   try {
@@ -151,10 +139,16 @@ async function addExercise(exerciseId: string) {
   // POSTのレスポンスには種目名・部位が含まれないため、選択直前まで持っていたexercise一覧から補う
   const { exercises } = useExercises()
   const exercise = exercises.value?.find((e) => e.id === exerciseId)
-  routine.value.exercises = [
-    ...routine.value.exercises,
-    { ...created, exercise: exercise ?? { id: exerciseId, name: '(不明な種目)', muscleGroup: 'chest' } },
-  ]
+  const newItem: RoutineExerciseItem = {
+    ...created,
+    exercise: exercise ?? { id: exerciseId, name: '(不明な種目)', muscleGroup: 'chest' },
+  }
+  routine.value.exercises = [...routine.value.exercises, newItem]
+  // ③で種目を選んだ瞬間に1セット目がデフォルト値で即登録されるのと同じく、目安セットも1件
+  // 即追加する。種目行に「削除」ボタンを別に持たず、目安セットを全部消したら種目ごと消える
+  // （removeTargetSet参照）という設計に揃えるため、種目だけ0件のまま残る状態を作らない
+  // （ユーザー指摘、2026-09-05・Issue #93）
+  addTargetSet(newItem)
 }
 
 async function removeExercise(routineExerciseId: string) {
@@ -253,8 +247,15 @@ function addTargetSet(element: RoutineExerciseItem) {
   saveTargetSets(element)
 }
 
+// 目安セットを最後の1件まで削除すると、種目自体も削除する（ルーティンが種目0件になると
+// 自動削除されるのと同じ「空になったら消える」考え方を、routine_exercise単位にも揃えた。
+// ユーザー指摘、2026-09-05・Issue #93）
 function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
   element.targetSets = element.targetSets.filter((_, i) => i !== Number(index))
+  if (element.targetSets.length === 0) {
+    removeExercise(element.id)
+    return
+  }
   saveTargetSets(element)
 }
 </script>
@@ -307,16 +308,11 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
             >
               <template #item="{ element }">
                 <div class="rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-                  <div class="flex items-center justify-between">
-                    <span class="flex items-center gap-2">
-                      <span class="drag-handle cursor-grab text-gray-400">⠿</span>
-                      {{ element.exercise.name }}
-                      <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
-                    </span>
-                    <button type="button" class="text-xs text-red-600" @click="removeExercise(element.id)">
-                      削除
-                    </button>
-                  </div>
+                  <span class="flex items-center gap-2">
+                    <span class="drag-handle cursor-grab text-gray-400">⠿</span>
+                    {{ element.exercise.name }}
+                    <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
+                  </span>
 
                   <div class="mt-1 flex flex-col items-start gap-1 pl-6">
                     <div
@@ -342,7 +338,14 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                         @blur="saveTargetSets(element)"
                       />
                       <span>回</span>
-                      <button type="button" class="text-red-600" @click="removeTargetSet(element, index)">×</button>
+                      <button
+                        type="button"
+                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                        aria-label="この目安セットを削除"
+                        @click="removeTargetSet(element, index)"
+                      >
+                        <TrashIcon class="h-3.5 w-3.5" />
+                      </button>
                     </div>
                     <button type="button" class="text-xs text-blue-600" @click="addTargetSet(element)">
                       ＋目安セットを追加
@@ -357,38 +360,6 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
             </draggable>
           </ClientOnly>
           <p v-if="exerciseError" class="mt-2 text-sm text-red-600">{{ exerciseError }}</p>
-        </div>
-
-        <div class="rounded-lg bg-white p-4 shadow">
-          <button
-            v-if="!confirmingDelete"
-            type="button"
-            class="text-sm text-red-600"
-            @click="confirmingDelete = true"
-          >
-            このルーティンを削除する
-          </button>
-          <div v-else class="flex flex-col gap-2">
-            <p class="text-sm text-gray-700">本当に削除しますか？（元に戻せません）</p>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="flex-1 rounded border border-gray-300 py-1.5 text-sm text-gray-700"
-                @click="confirmingDelete = false"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                :disabled="deleting"
-                class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                @click="onDelete"
-              >
-                削除する
-              </button>
-            </div>
-            <p v-if="deleteError" class="text-sm text-red-600">{{ deleteError }}</p>
-          </div>
         </div>
       </template>
     </div>
