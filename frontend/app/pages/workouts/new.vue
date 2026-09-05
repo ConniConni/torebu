@@ -315,53 +315,50 @@ async function onDeleteWorkout() {
             ＋セット追加
           </button>
         </div>
-        <ul class="space-y-2">
-          <li v-for="set in group.sets" :key="set.id" class="text-sm text-gray-700">
+        <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダーを1回だけ出し、
+             各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。
+             重量・回数の入力欄はグリッドの列幅で揃うため、個別にwidthを指定しない -->
+        <div class="grid grid-cols-[3.5rem_4.5rem_3.5rem_1.5rem] items-center gap-x-2 gap-y-1.5">
+          <span class="break-keep text-xs text-gray-500">セット数</span>
+          <span class="break-keep text-xs text-gray-500">重量(kg・自重は空欄)</span>
+          <span class="text-xs text-gray-500">回数</span>
+          <span></span>
+          <template v-for="set in group.sets" :key="set.id">
             <template v-if="setInputs[set.id]">
-              <div class="flex items-center justify-between">
-                <span class="whitespace-nowrap text-xs text-gray-500">
-                  <span class="inline-block w-5 text-right tabular-nums">{{ set.setOrder }}</span>セット目
-                </span>
-                <button
-                  type="button"
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                  aria-label="このセットを削除"
-                  @click="removeSet(set.id)"
-                >
-                  <TrashIcon class="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div class="mt-1 flex items-end gap-2">
-                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-                  重量(kg・自重は空欄)
-                  <input
-                    v-model="setInputs[set.id]!.weight"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    placeholder="自重"
-                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                    @blur="onSetFieldBlur(set.id)"
-                  />
-                </label>
-                <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-                  回数
-                  <input
-                    v-model="setInputs[set.id]!.reps"
-                    type="number"
-                    min="1"
-                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                    @blur="onSetFieldBlur(set.id)"
-                  />
-                </label>
-              </div>
+              <span class="text-sm tabular-nums text-gray-700">{{ set.setOrder }}</span>
+              <input
+                v-model="setInputs[set.id]!.weight"
+                type="number"
+                step="0.5"
+                min="0"
+                placeholder="自重"
+                class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
+                @blur="onSetFieldBlur(set.id)"
+              />
+              <input
+                v-model="setInputs[set.id]!.reps"
+                type="number"
+                min="1"
+                class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
+                @blur="onSetFieldBlur(set.id)"
+              />
+              <button
+                type="button"
+                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                aria-label="このセットを削除"
+                @click="removeSet(set.id)"
+              >
+                <TrashIcon class="h-3.5 w-3.5" />
+              </button>
             </template>
-            <div class="mt-1 flex items-center gap-2">
-              <span v-if="setSaving[set.id]" class="text-xs text-gray-400">保存中...</span>
-              <span v-if="setErrors[set.id]" class="text-xs text-red-600">{{ setErrors[set.id] }}</span>
-            </div>
-          </li>
-        </ul>
+          </template>
+        </div>
+        <template v-for="set in group.sets" :key="`msg-${set.id}`">
+          <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400">
+            {{ set.setOrder }}セット目を保存中...
+          </p>
+          <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600">{{ setErrors[set.id] }}</p>
+        </template>
       </section>
 
       <p v-if="addSetError" class="text-center text-sm text-red-600">{{ addSetError }}</p>

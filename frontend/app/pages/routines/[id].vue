@@ -314,44 +314,55 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                     <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
                   </span>
 
-                  <div class="mt-1 flex flex-col items-start gap-1 pl-6">
+                  <div class="mt-1 pl-6">
+                    <!-- ③記録作成のセット表示と見た目を揃えたヘッダー付きコンパクト表形式
+                         （ユーザー指摘、2026-09-05）。列幅はグリッドで揃えるため、入力欄は
+                         個別にwidthを指定しない -->
                     <div
-                      v-for="(set, index) in element.targetSets"
-                      :key="index"
-                      class="flex items-center gap-1 text-xs text-gray-600"
+                      v-if="element.targetSets.length > 0"
+                      class="grid grid-cols-[3.5rem_4.5rem_3.5rem_1.5rem] items-center gap-x-2 gap-y-1.5"
                     >
-                      <input
-                        v-model="set.weightKg"
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        placeholder="自重"
-                        class="w-14 rounded border border-gray-300 px-1 py-0.5 text-right"
-                        @blur="saveTargetSets(element)"
-                      />
-                      <span>kg ×</span>
-                      <input
-                        v-model="set.reps"
-                        type="number"
-                        min="1"
-                        class="w-10 rounded border border-gray-300 px-1 py-0.5 text-right"
-                        @blur="saveTargetSets(element)"
-                      />
-                      <span>回</span>
-                      <button
-                        type="button"
-                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                        aria-label="この目安セットを削除"
-                        @click="removeTargetSet(element, index)"
-                      >
-                        <TrashIcon class="h-3.5 w-3.5" />
-                      </button>
+                      <span class="break-keep text-xs text-gray-500">セット数</span>
+                      <span class="break-keep text-xs text-gray-500">重量(kg・自重は空欄)</span>
+                      <span class="text-xs text-gray-500">回数</span>
+                      <span></span>
+                      <template v-for="(set, index) in element.targetSets" :key="index">
+                        <span class="text-sm tabular-nums text-gray-700">{{ Number(index) + 1 }}</span>
+                        <input
+                          v-model="set.weightKg"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          placeholder="自重"
+                          class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
+                          @blur="saveTargetSets(element)"
+                        />
+                        <input
+                          v-model="set.reps"
+                          type="number"
+                          min="1"
+                          class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
+                          @blur="saveTargetSets(element)"
+                        />
+                        <button
+                          type="button"
+                          class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                          aria-label="この目安セットを削除"
+                          @click="removeTargetSet(element, index)"
+                        >
+                          <TrashIcon class="h-3.5 w-3.5" />
+                        </button>
+                      </template>
                     </div>
-                    <button type="button" class="text-xs text-blue-600" @click="addTargetSet(element)">
+                    <button
+                      type="button"
+                      class="mt-1 text-xs text-blue-600"
+                      @click="addTargetSet(element)"
+                    >
                       ＋目安セットを追加
                     </button>
-                    <p v-if="targetSetsSaving[element.id]" class="text-xs text-gray-400">保存中...</p>
-                    <p v-if="targetSetsErrors[element.id]" class="text-xs text-red-600">
+                    <p v-if="targetSetsSaving[element.id]" class="mt-1 text-xs text-gray-400">保存中...</p>
+                    <p v-if="targetSetsErrors[element.id]" class="mt-1 text-xs text-red-600">
                       {{ targetSetsErrors[element.id] }}
                     </p>
                   </div>
