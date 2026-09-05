@@ -315,44 +315,56 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                   </span>
 
                   <div class="mt-1 pl-6">
-                    <!-- ③記録作成のセット表示と見た目を揃えたヘッダー付きコンパクト表形式
-                         （ユーザー指摘、2026-09-05）。列幅はグリッドで揃えるため、入力欄は
-                         個別にwidthを指定しない -->
-                    <div
-                      v-if="element.targetSets.length > 0"
-                      class="grid grid-cols-[3.5rem_4.5rem_3.5rem_1.5rem] items-center gap-x-2 gap-y-1.5"
-                    >
-                      <span class="break-keep text-xs text-gray-500">セット数</span>
-                      <span class="break-keep text-xs text-gray-500">重量(kg・自重は空欄)</span>
-                      <span class="text-xs text-gray-500">回数</span>
-                      <span></span>
-                      <template v-for="(set, index) in element.targetSets" :key="index">
-                        <span class="text-sm tabular-nums text-gray-700">{{ Number(index) + 1 }}</span>
-                        <input
-                          v-model="set.weightKg"
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          placeholder="自重"
-                          class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
-                          @blur="saveTargetSets(element)"
-                        />
-                        <input
-                          v-model="set.reps"
-                          type="number"
-                          min="1"
-                          class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm"
-                          @blur="saveTargetSets(element)"
-                        />
-                        <button
-                          type="button"
-                          class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                          aria-label="この目安セットを削除"
-                          @click="removeTargetSet(element, index)"
-                        >
-                          <TrashIcon class="h-3.5 w-3.5" />
-                        </button>
-                      </template>
+                    <!-- ③記録作成のセット表示と見た目を揃えたヘッダー帯付きコンパクト表形式
+                         （ユーザー指摘、2026-09-05）。重量・回数の列はfrで幅いっぱいまで伸ばし、
+                         入力欄の右に単位（kg・回）を添えている -->
+                    <div v-if="element.targetSets.length > 0" class="overflow-hidden rounded-lg">
+                      <div class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
+                        <span class="text-xs font-semibold text-gray-500">セット</span>
+                        <span class="text-xs font-semibold text-gray-500">重量</span>
+                        <span class="text-xs font-semibold text-gray-500">回数</span>
+                        <span></span>
+                      </div>
+                      <div
+                        v-for="(set, index) in element.targetSets"
+                        :key="index"
+                        class="grid grid-cols-[2.75rem_1.15fr_0.85fr_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                        :class="Number(index) % 2 === 1 ? 'bg-gray-50' : ''"
+                      >
+                        <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ Number(index) + 1 }}</span>
+                        <span class="flex min-w-0 items-baseline gap-1.5">
+                          <input
+                            v-model="set.weightKg"
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            placeholder="自重"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                            @blur="saveTargetSets(element)"
+                          />
+                          <span class="shrink-0 text-xs text-gray-500">kg</span>
+                        </span>
+                        <span class="flex min-w-0 items-baseline gap-1.5">
+                          <input
+                            v-model="set.reps"
+                            type="number"
+                            min="1"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                            @blur="saveTargetSets(element)"
+                          />
+                          <span class="shrink-0 text-xs text-gray-500">回</span>
+                        </span>
+                        <span class="flex justify-center">
+                          <button
+                            type="button"
+                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                            aria-label="この目安セットを削除"
+                            @click="removeTargetSet(element, index)"
+                          >
+                            <TrashIcon class="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      </div>
                     </div>
                     <button
                       type="button"
