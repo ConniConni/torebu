@@ -27,11 +27,9 @@
 ## 次のIssue候補
 
 - 未対応事項・改善アイデアは `docs/backlog.md` にまとめてある。次のIssueを選ぶときはそちらを見る
-- **③セット入力UIを自動保存方式に統一する（実装Issue）**：[Issue #89](https://github.com/ConniConni/torebu/issues/89)
-  で方針決定済み（詳細は[backlog.md](./backlog.md)「解決済み・決定済み」参照）。③の新規セット入力
-  （[new.vue](../frontend/app/pages/workouts/new.vue)）を、⑤・セット編集と同じblur時自動保存方式に
-  作り直す。「記録」を押さずに離脱すると入力値が消える問題もこれで解消する想定。複数セットの
-  まとめ入力・詳細UI（数字入力方式等）は今回のスコープ外
+- ~~**③セット入力UIを自動保存方式に統一する**~~：[Issue #89](https://github.com/ConniConni/torebu/issues/89)
+  で方針決定、[Issue #91](https://github.com/ConniConni/torebu/issues/91)で実装対応済み（2026-09-05）。
+  詳細は[backlog.md](./backlog.md)「解決済み・決定済み」参照
 - **③記録作成・⑥記録詳細の統合**（2026-09-04検討）：②ホームのカレンダー日付選択→③記録作成画面へ
   遷移という設計（[backlog.md](./backlog.md)「未決定事項」参照）を進める過程で、③（セット追加はできるが
   値編集・記録削除ができない）と⑥（逆にセット追加ができない）の非対称に気づき、「その日の記録」画面として
