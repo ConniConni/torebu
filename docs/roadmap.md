@@ -27,6 +27,12 @@
 ## 次のIssue候補
 
 - 未対応事項・改善アイデアは `docs/backlog.md` にまとめてある。次のIssueを選ぶときはそちらを見る
+- **③記録本体のセット編集UIを、⑤ルーティンの目安セット編集と同じ「常時入力欄＋blur自動保存」に揃える**
+  （Issue #93対応中の会話で決定、2026-09-05）。現状の③は「編集」ボタンを押すと入力欄に切り替わり、
+  「閉じる」で表示モードへ戻るトグル方式（`onStartEditSet`/`onCloseEditSet`、[workouts/new.vue](../frontend/app/pages/workouts/new.vue)参照）。
+  一方⑤の目安セットは最初から入力欄が常時表示されていて、blurで自動保存される（「編集」ボタン自体が無い）。
+  編集操作の見た目を⑤側に揃えて統一感を出したい、という方向で合意。削除UIの統一（Issue #93）とは
+  別の関心事（編集操作の統一）のため、別Issueとして次に着手する
 - ~~**③セット入力UIを自動保存方式に統一する**~~：[Issue #89](https://github.com/ConniConni/torebu/issues/89)
   で方針決定、[Issue #91](https://github.com/ConniConni/torebu/issues/91)で実装対応済み（2026-09-05）。
   詳細は[backlog.md](./backlog.md)「解決済み・決定済み」参照
