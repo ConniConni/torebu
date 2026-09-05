@@ -56,20 +56,17 @@ function onMemoBlur() {
   saveMemoIfChanged()
 }
 
-// ④種目選択・⑦種目追加から戻ってきた直後は、選ばれた種目のセット入力欄を開いた状態にする
+// ④種目選択・⑦種目追加から戻ってきた直後は、選ばれた種目の1セット目をデフォルト値で
+// 即追加する（下のonAddSet参照）。ここでは値を捕まえて保持するだけにし、実際の追加は
+// 必要なstate・関数が揃った後(スクリプト末尾)で行う
 const pickedExerciseId = usePickedExerciseId()
-const activeExerciseId = ref<string | null>(switchedWorkout ? null : pickedExerciseId.value)
+const initialPickedExerciseId = switchedWorkout ? null : pickedExerciseId.value
 pickedExerciseId.value = null
 
 const pendingExercises = usePendingExercises()
 if (switchedWorkout) {
   pendingExercises.value = []
 }
-
-const weightInput = ref('')
-const repsInput = ref('')
-const submitting = ref(false)
-const errorMessage = ref('')
 
 function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
@@ -91,8 +88,7 @@ const groupedSets = computed(() => {
 // 目安セット（targetSets）が設定されている種目は、その場でworkout_setsとして即登録する
 // （修正が必要な分だけ既存のセット編集UIで手直ししてもらう想定。docs/backlog.md参照）。
 // targetSetsが無い（未設定）種目は、従来どおり「セット入力がまだの種目」として積んでおくだけの
-// 一時的なキュー（このページのローカル状態）に入れ、既存の1種目ずつのセット入力フロー
-// （activeExerciseId）にそのまま乗せる
+// 一時的なキュー（このページのローカル状態）に入れ、タップされたらonAddSetで1セット目を追加する
 const { routines, fetchRoutines, fetchRoutineDetail } = useRoutines()
 const showRoutinePicker = ref(false)
 const routinePickerPending = ref(false)
@@ -100,12 +96,11 @@ const routineApplying = ref(false)
 const routineApplyError = ref('')
 const routineApplyNotice = ref('')
 
-// 既にこのworkoutに乗っている（セット入力済み or 入力待ち or 入力中の）種目ID。
+// 既にこのworkoutに乗っている（セット入力済み or 入力待ちの）種目ID。
 // ルーティン適用時、ここに含まれる種目は重複として除外する
 const takenExerciseIds = computed(() => {
   const ids = new Set(groupedSets.value.map((g) => g.exerciseId))
   for (const p of pendingExercises.value) ids.add(p.exerciseId)
-  if (activeExerciseId.value) ids.add(activeExerciseId.value)
   return ids
 })
 
@@ -168,58 +163,6 @@ async function onApplyRoutine(routineId: string) {
   }
 }
 
-// 入力待ちの種目をタップしたら、既存のセット入力フローに切り替える
-function onStartPendingExercise(exerciseId: string) {
-  pendingExercises.value = pendingExercises.value.filter((p) => p.exerciseId !== exerciseId)
-  activeExerciseId.value = exerciseId
-}
-
-// 記録済みの種目カードから「＋セット追加」を押したときの切り替え。
-// 入力待ちキューからの取り出しは不要な点だけがonStartPendingExerciseと異なる
-// （Issue #69：同じ種目にさらにセットを追加する際、④種目選択を経由しなくて済むようにする）
-function onAddMoreSets(exerciseId: string) {
-  activeExerciseId.value = exerciseId
-}
-
-const activeExerciseName = computed(() =>
-  activeExerciseId.value ? exerciseName(activeExerciseId.value) : '',
-)
-
-// activeExerciseIdが既にgroupedSetsに記録済みの種目を指しているか（＝「＋セット追加」で
-// 既存カードにインライン入力を開いている状態）。この場合は末尾の独立した入力カードを
-// 出さず、既存カード内のインライン入力欄に任せる（Issue #82）
-const isAddingSetsToExistingExercise = computed(
-  () => activeExerciseId.value !== null && groupedSets.value.some((g) => g.exerciseId === activeExerciseId.value),
-)
-
-async function onAddSet() {
-  if (!activeExerciseId.value) return
-  const reps = Number(repsInput.value)
-  if (!Number.isInteger(reps) || reps <= 0) return
-  // type="number"の<input>はv-model経由でも値がstring/numberどちらで来るか環境依存なため、
-  // 一度Stringに揃えてから空欄判定する
-  const weightRaw = String(weightInput.value).trim()
-  const weightKg = weightRaw ? Number(weightRaw) : undefined
-
-  submitting.value = true
-  errorMessage.value = ''
-  try {
-    await addSet(activeExerciseId.value, reps, weightKg)
-    repsInput.value = ''
-    // 重量は同じ種目内で連続して同じ値を使うことが多いため、入力欄はあえてクリアしない
-  } catch {
-    errorMessage.value = 'セットの記録に失敗しました。時間をおいて再度お試しください'
-  } finally {
-    submitting.value = false
-  }
-}
-
-function onDoneWithExercise() {
-  activeExerciseId.value = null
-  weightInput.value = ''
-  repsInput.value = ''
-}
-
 // --- 記録済みセットの値編集（⑥記録詳細のonStartEditSet/onSaveSet相当を移植） ---
 const editingSetId = ref<string | null>(null)
 const editWeightInput = ref('')
@@ -259,6 +202,35 @@ async function onEditFieldBlur() {
 
 function onCloseEditSet() {
   editingSetId.value = null
+}
+
+// --- セット追加（Issue #91：自動保存方式への統一） ---
+// ⑤ルーティン編集の「＋目安セットを追加」と同じ方針：デフォルト値（自重・10回）で
+// その場でAPIに登録し、続けて編集モードを開いてその場で重量・回数を手直ししてもらう。
+// これにより「入力してから記録ボタンを押す」フォームが不要になる
+const DEFAULT_SET_REPS = 10
+const addSetError = ref('')
+
+async function onAddSet(exerciseId: string) {
+  addSetError.value = ''
+  try {
+    const set = await addSet(exerciseId, DEFAULT_SET_REPS)
+    onStartEditSet(set)
+  } catch {
+    addSetError.value = 'セットの記録に失敗しました。時間をおいて再度お試しください'
+  }
+}
+
+// 入力待ちの種目をタップしたら、キューから外して1セット目を即追加する
+async function onStartPendingExercise(exerciseId: string) {
+  pendingExercises.value = pendingExercises.value.filter((p) => p.exerciseId !== exerciseId)
+  await onAddSet(exerciseId)
+}
+
+// ④種目選択・⑦種目追加から戻ってきた直後、選ばれた種目の1セット目を即追加する
+// （必要なstate・関数が揃った後であるここで行う。initialPickedExerciseIdはスクリプト冒頭参照）
+if (initialPickedExerciseId) {
+  await onAddSet(initialPickedExerciseId)
 }
 
 // ③記録作成を離れる操作（旧「今日の記録を完了」「ホームへ戻る」）。セット記録・削除は
@@ -330,12 +302,7 @@ async function onDeleteWorkout() {
       >
         <div class="mb-2 flex items-center justify-between">
           <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
-          <button
-            v-if="activeExerciseId !== group.exerciseId"
-            type="button"
-            class="text-xs text-blue-600"
-            @click="onAddMoreSets(group.exerciseId)"
-          >
+          <button type="button" class="text-xs text-blue-600" @click="onAddSet(group.exerciseId)">
             ＋セット追加
           </button>
         </div>
@@ -350,6 +317,7 @@ async function onDeleteWorkout() {
                     type="number"
                     step="0.5"
                     min="0"
+                    placeholder="自重"
                     class="rounded border border-gray-300 px-2 py-1.5 text-sm"
                     @blur="onEditFieldBlur"
                   />
@@ -393,51 +361,13 @@ async function onDeleteWorkout() {
             </div>
           </li>
         </ul>
-
-        <!-- 記録済みの種目に続けてセットを追加する場合は、このカード内にインラインで
-             入力欄を出す（Issue #82：別カードにすると同じ種目のカードが2枚並んで
-             紛らわしいため、既存カードに統合する） -->
-        <div v-if="activeExerciseId === group.exerciseId" class="mt-3 border-t border-gray-100 pt-3">
-          <div class="flex items-end gap-2">
-            <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-              重量(kg・自重は空欄)
-              <input
-                v-model="weightInput"
-                type="number"
-                step="0.5"
-                min="0"
-                class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-              回数
-              <input
-                v-model="repsInput"
-                type="number"
-                min="1"
-                class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <button
-              type="button"
-              :disabled="!repsInput || submitting"
-              class="shrink-0 whitespace-nowrap rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-              @click="onAddSet"
-            >
-              記録
-            </button>
-          </div>
-          <p v-if="errorMessage" class="mt-2 text-sm text-red-600">{{ errorMessage }}</p>
-          <button type="button" class="mt-2 text-xs text-gray-500" @click="onDoneWithExercise">
-            この種目の入力を終える
-          </button>
-        </div>
       </section>
 
       <p v-if="setEditError" class="text-center text-sm text-red-600">{{ setEditError }}</p>
+      <p v-if="addSetError" class="text-center text-sm text-red-600">{{ addSetError }}</p>
 
       <p
-        v-if="groupedSets.length === 0 && !activeExerciseId && pendingExercises.length === 0"
+        v-if="groupedSets.length === 0 && pendingExercises.length === 0"
         class="text-center text-sm text-gray-500"
       >
         まだ種目が追加されていません
@@ -503,49 +433,7 @@ async function onDeleteWorkout() {
         {{ routineApplyNotice }}
       </p>
 
-      <!-- 記録済みの種目は上のgroupedSetsカード内にインライン入力欄が出るため、
-           ここは「まだ記録の無い新規種目」を選んだ場合のみ表示する（Issue #82） -->
-      <section
-        v-if="activeExerciseId && !isAddingSetsToExistingExercise"
-        class="rounded-lg bg-white p-4 shadow"
-      >
-        <p class="mb-2 text-sm font-semibold text-gray-900">{{ activeExerciseName }}</p>
-        <div class="flex items-end gap-2">
-          <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-            重量(kg・自重は空欄)
-            <input
-              v-model="weightInput"
-              type="number"
-              step="0.5"
-              min="0"
-              class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
-            回数
-            <input
-              v-model="repsInput"
-              type="number"
-              min="1"
-              class="rounded border border-gray-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <button
-            type="button"
-            :disabled="!repsInput || submitting"
-            class="shrink-0 whitespace-nowrap rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-            @click="onAddSet"
-          >
-            記録
-          </button>
-        </div>
-        <p v-if="errorMessage" class="mt-2 text-sm text-red-600">{{ errorMessage }}</p>
-        <button type="button" class="mt-2 text-xs text-gray-500" @click="onDoneWithExercise">
-          この種目の入力を終える
-        </button>
-      </section>
-
-      <div v-if="!activeExerciseId" class="flex gap-2">
+      <div class="flex gap-2">
         <button
           type="button"
           class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
