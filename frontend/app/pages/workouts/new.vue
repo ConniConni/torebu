@@ -177,6 +177,13 @@ const activeExerciseName = computed(() =>
   activeExerciseId.value ? exerciseName(activeExerciseId.value) : '',
 )
 
+// activeExerciseIdが既にgroupedSetsに記録済みの種目を指しているか（＝「＋セット追加」で
+// 既存カードにインライン入力を開いている状態）。この場合は末尾の独立した入力カードを
+// 出さず、既存カード内のインライン入力欄に任せる（Issue #82）
+const isAddingSetsToExistingExercise = computed(
+  () => activeExerciseId.value !== null && groupedSets.value.some((g) => g.exerciseId === activeExerciseId.value),
+)
+
 async function onAddSet() {
   if (!activeExerciseId.value) return
   const reps = Number(repsInput.value)
@@ -378,6 +385,45 @@ async function onDeleteWorkout() {
             </div>
           </li>
         </ul>
+
+        <!-- 記録済みの種目に続けてセットを追加する場合は、このカード内にインラインで
+             入力欄を出す（Issue #82：別カードにすると同じ種目のカードが2枚並んで
+             紛らわしいため、既存カードに統合する） -->
+        <div v-if="activeExerciseId === group.exerciseId" class="mt-3 border-t border-gray-100 pt-3">
+          <div class="flex items-end gap-2">
+            <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+              重量(kg・自重は空欄)
+              <input
+                v-model="weightInput"
+                type="number"
+                step="0.5"
+                min="0"
+                class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
+              回数
+              <input
+                v-model="repsInput"
+                type="number"
+                min="1"
+                class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              :disabled="!repsInput || submitting"
+              class="shrink-0 whitespace-nowrap rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+              @click="onAddSet"
+            >
+              記録
+            </button>
+          </div>
+          <p v-if="errorMessage" class="mt-2 text-sm text-red-600">{{ errorMessage }}</p>
+          <button type="button" class="mt-2 text-xs text-gray-500" @click="onDoneWithExercise">
+            この種目の入力を終える
+          </button>
+        </div>
       </section>
 
       <p v-if="setEditError" class="text-center text-sm text-red-600">{{ setEditError }}</p>
@@ -440,7 +486,12 @@ async function onDeleteWorkout() {
         <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600">{{ routineApplyNotice }}</p>
       </section>
 
-      <section v-if="activeExerciseId" class="rounded-lg bg-white p-4 shadow">
+      <!-- 記録済みの種目は上のgroupedSetsカード内にインライン入力欄が出るため、
+           ここは「まだ記録の無い新規種目」を選んだ場合のみ表示する（Issue #82） -->
+      <section
+        v-if="activeExerciseId && !isAddingSetsToExistingExercise"
+        class="rounded-lg bg-white p-4 shadow"
+      >
         <p class="mb-2 text-sm font-semibold text-gray-900">{{ activeExerciseName }}</p>
         <div class="flex items-end gap-2">
           <label class="flex flex-1 flex-col gap-1 text-xs text-gray-500">
@@ -477,7 +528,7 @@ async function onDeleteWorkout() {
         </button>
       </section>
 
-      <div v-else class="flex gap-2">
+      <div v-if="!activeExerciseId" class="flex gap-2">
         <button
           type="button"
           class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
