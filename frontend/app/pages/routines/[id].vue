@@ -94,18 +94,38 @@ async function onNameBlur() {
 const confirmingDelete = ref(false)
 const deleting = ref(false)
 const deleteError = ref('')
+// 「このルーティンを削除する」で既に削除済みかどうか。trueなら下の離脱ガードで
+// 二重にDELETEを呼ばないようにする
+const alreadyDeleted = ref(false)
 
 async function onDelete() {
   deleting.value = true
   deleteError.value = ''
   try {
     await deleteRoutine(routineId)
+    alreadyDeleted.value = true
     await navigateTo('/routines')
   } catch {
     deleteError.value = '削除に失敗しました。時間をおいて再度お試しください'
     deleting.value = false
   }
 }
+
+// 種目を1つも追加せずにこの画面を離れる場合、空のルーティンを残さないよう自動削除する
+// (Issue #87。本格的な遅延作成は規模が大きいため見送り、離脱時削除で代替する方針)。
+// ブラウザを閉じる等ここを通らない離脱経路では取りこぼすが、その保険としてGET /routines側で
+// 種目0件のルーティンを表示から除外している(backend/src/routes/routines.ts参照)
+onBeforeRouteLeave(async () => {
+  if (alreadyDeleted.value || !routine.value || routine.value.exercises.length > 0) {
+    return true
+  }
+  try {
+    await deleteRoutine(routineId)
+  } catch {
+    // 削除に失敗しても遷移自体はブロックしない。取りこぼしは一覧非表示の保険で吸収する
+  }
+  return true
+})
 
 async function addExercise(exerciseId: string) {
   if (!routine.value) return
