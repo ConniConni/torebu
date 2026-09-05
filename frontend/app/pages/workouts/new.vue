@@ -98,6 +98,7 @@ const showRoutinePicker = ref(false)
 const routinePickerPending = ref(false)
 const routineApplying = ref(false)
 const routineApplyError = ref('')
+const routineApplyNotice = ref('')
 
 // 既にこのworkoutに乗っている（セット入力済み or 入力待ち or 入力中の）種目ID。
 // ルーティン適用時、ここに含まれる種目は重複として除外する
@@ -111,6 +112,7 @@ const takenExerciseIds = computed(() => {
 async function onOpenRoutinePicker() {
   showRoutinePicker.value = true
   routineApplyError.value = ''
+  routineApplyNotice.value = ''
   if (!routines.value) {
     routinePickerPending.value = true
     try {
@@ -123,10 +125,18 @@ async function onOpenRoutinePicker() {
 
 async function onApplyRoutine(routineId: string) {
   routineApplyError.value = ''
+  routineApplyNotice.value = ''
   routineApplying.value = true
   try {
     const detail = await fetchRoutineDetail(routineId)
     const newExercises = detail.exercises.filter((e) => !takenExerciseIds.value.has(e.exerciseId))
+
+    // 全種目が重複除外された場合、無反応に見えないよう理由を表示する（Issue #80）。
+    // ピッカーは閉じず、別のルーティンを選び直せるようにしておく
+    if (newExercises.length === 0) {
+      routineApplyNotice.value = '追加できる種目がありませんでした（すべて記録済みか入力中です）'
+      return
+    }
 
     // 目安セットが1つでもある種目は即登録、無い種目は従来どおり入力待ちに積む。
     // 同じ種目内の複数セットはsetOrderをサーバーが「既存の最大+1」で採番するため、
@@ -427,6 +437,7 @@ async function onDeleteWorkout() {
           <NuxtLink to="/routines" class="text-blue-600">ルーティンを登録する</NuxtLink>
         </p>
         <p v-if="routineApplyError" class="mt-2 text-sm text-red-600">{{ routineApplyError }}</p>
+        <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600">{{ routineApplyNotice }}</p>
       </section>
 
       <section v-if="activeExerciseId" class="rounded-lg bg-white p-4 shadow">
