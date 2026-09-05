@@ -5,11 +5,18 @@ interface Routine {
   updatedAt: string
 }
 
+// 目安セット1件(重量・回数)。weightKgはnull=自重。未設定の種目は空配列で返る(backend/src/routes/routines.ts参照)
+interface TargetSet {
+  weightKg: number | null
+  reps: number
+}
+
 interface RoutineExerciseItem {
   id: string
   routineId: string
   exerciseId: string
   sortOrder: number
+  targetSets: TargetSet[]
   exercise: { id: string; name: string; muscleGroup: MuscleGroup }
 }
 
@@ -73,4 +80,4 @@ export function useRoutines() {
   }
 }
 
-export type { Routine, RoutineDetail, RoutineExerciseItem }
+export type { Routine, RoutineDetail, RoutineExerciseItem, TargetSet }
