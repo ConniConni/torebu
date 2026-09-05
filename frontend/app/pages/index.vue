@@ -104,7 +104,7 @@ async function onLogout() {
         class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white"
         @click="navigateTo('/workouts/new')"
       >
-        ＋今日の記録を始める
+        ＋今日の記録をつける
       </button>
 
       <NuxtLink
@@ -163,7 +163,12 @@ async function onLogout() {
                   <!-- ③記録作成・⑤ルーティンのセット表示と見た目を揃えたヘッダー帯付き表形式
                        （ユーザー指摘、2026-09-05）。ここは読み取り専用のプレビューのため
                        入力欄は持たず、値をそのままテキストで表示する。列の下限・横スクロールの
-                       考え方は③・⑤と同じ（Issue #95） -->
+                       考え方は③・⑤と同じ（Issue #95）。値と単位（kg・回）を別要素に分けているのも
+                       ③・⑤に合わせた対応（Issue #97）：単に連結すると「自重」の文字幅が数値と
+                       異なるため、行によって「kg」「回」の位置がずれて見えてしまう。
+                       なお自重（weightKg===null）のときは「自重kg」という不自然な表記になるのを
+                       避けるため単位（kg）自体を表示しない（③・⑤は入力欄＋固定の単位ラベルという
+                       別のUIのためこの対応は不要、ユーザー指摘2026-09-06） -->
                   <div v-for="group in workoutGroups[workout.id]" :key="group.exerciseId">
                     <p class="mb-1 text-sm font-medium text-gray-900">{{ group.name }}</p>
                     <div class="overflow-x-auto">
@@ -184,11 +189,17 @@ async function onLogout() {
                           <span class="text-center text-sm font-bold tabular-nums text-gray-900">{{
                             set.setOrder
                           }}</span>
-                          <span class="text-right text-sm tabular-nums text-gray-900">
-                            {{ set.weightKg ?? '自重' }}<span class="ml-1 text-xs text-gray-500">kg</span>
+                          <span class="flex min-w-0 items-baseline justify-end gap-1">
+                            <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">{{
+                              set.weightKg ?? '自重'
+                            }}</span>
+                            <span v-if="set.weightKg !== null" class="shrink-0 text-xs text-gray-500">kg</span>
                           </span>
-                          <span class="text-right text-sm tabular-nums text-gray-900">
-                            {{ set.reps }}<span class="ml-1 text-xs text-gray-500">回</span>
+                          <span class="flex min-w-0 items-baseline justify-end gap-1">
+                            <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">{{
+                              set.reps
+                            }}</span>
+                            <span class="shrink-0 text-xs text-gray-500">回</span>
                           </span>
                         </div>
                       </div>

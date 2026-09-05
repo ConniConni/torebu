@@ -86,10 +86,14 @@ async function selectExercise(exerciseId: string) {
           <button
             v-if="section.exercises.length > SECTION_PREVIEW_COUNT"
             type="button"
-            class="mt-1 text-xs text-gray-500"
+            class="mt-1 flex items-center gap-1 text-xs text-gray-500"
             @click="toggleExpanded(section.group)"
           >
             {{ expandedGroups.has(section.group) ? '閉じる' : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件）` }}
+            <ChevronDownIcon
+              class="h-3.5 w-3.5 transition-transform"
+              :class="expandedGroups.has(section.group) ? 'rotate-180' : ''"
+            />
           </button>
         </section>
       </template>
