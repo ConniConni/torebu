@@ -93,25 +93,29 @@ function nextMonth() {
         v-for="cell in cells"
         :key="cell.date"
         type="button"
-        class="flex aspect-square flex-col items-center justify-center rounded text-sm"
+        class="flex aspect-square items-center justify-center rounded text-sm"
         :class="[
           cell.inCurrentMonth ? 'text-gray-900' : 'text-gray-300',
-          cell.date === selectedDate ? 'bg-blue-600 text-white' : 'hover:bg-gray-100',
-          cell.isToday && cell.date !== selectedDate ? 'font-bold text-blue-600' : '',
+          cell.date === selectedDate ? '' : 'hover:bg-gray-100',
         ]"
         @click="emit('select', cell.date)"
       >
-        {{ cell.day }}
+        <!-- 記録がある日は、下に小さい点を添えるだけの表現だと見づらいという指摘（2026-09-04）
+             を受けて、日付そのものを丸背景で塗りつぶす表現に変更した。「今日」の印はこれと
+             区別するため、塗りつぶしではなく輪郭（リング）にしている -->
         <span
-          class="mt-0.5 h-1 w-1 rounded-full"
-          :class="
-            cell.hasRecord
-              ? cell.date === selectedDate
-                ? 'bg-white'
-                : 'bg-blue-600'
-              : 'bg-transparent'
-          "
-        />
+          class="flex h-6 w-6 items-center justify-center rounded-full"
+          :class="[
+            cell.date === selectedDate
+              ? 'bg-blue-600 text-white'
+              : cell.hasRecord
+                ? 'bg-blue-100 font-semibold text-blue-700'
+                : '',
+            cell.isToday && cell.date !== selectedDate ? 'ring-2 ring-blue-600' : '',
+          ]"
+        >
+          {{ cell.day }}
+        </span>
       </button>
     </div>
   </div>
