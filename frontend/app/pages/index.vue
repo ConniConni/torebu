@@ -159,27 +159,40 @@ async function onLogout() {
                 >
                   種目未登録
                 </p>
-                <div v-else class="space-y-1">
+                <div v-else class="space-y-2">
+                  <!-- ③記録作成・⑤ルーティンのセット表示と見た目を揃えたヘッダー帯付き表形式
+                       （ユーザー指摘、2026-09-05）。ここは読み取り専用のプレビューのため
+                       入力欄は持たず、値をそのままテキストで表示する。列の下限・横スクロールの
+                       考え方は③・⑤と同じ（Issue #95） -->
                   <div v-for="group in workoutGroups[workout.id]" :key="group.exerciseId">
-                    <p class="text-sm font-medium text-gray-900">{{ group.name }}</p>
-                    <p
-                      v-for="set in group.sets"
-                      :key="set.id"
-                      class="flex items-baseline gap-1 pl-2 text-xs text-gray-600 tabular-nums"
-                    >
-                      <span
-                        ><span class="inline-block w-5 text-right">{{ set.setOrder }}</span
-                        >セット目：</span
-                      >
-                      <span>
-                        <span class="inline-block w-12 text-right">{{
-                          set.weightKg ?? '自重'
-                        }}</span
-                        >{{ set.weightKg ? 'kg' : '' }}
-                      </span>
-                      <span>×</span>
-                      <span><span class="inline-block w-5 text-right">{{ set.reps }}</span>回</span>
-                    </p>
+                    <p class="mb-1 text-sm font-medium text-gray-900">{{ group.name }}</p>
+                    <div class="overflow-x-auto">
+                      <div class="min-w-[15rem] overflow-hidden rounded-lg">
+                        <div
+                          class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 px-3 py-1"
+                        >
+                          <span class="text-xs font-semibold text-gray-500">セット</span>
+                          <span class="text-xs font-semibold text-gray-500">重量</span>
+                          <span class="text-xs font-semibold text-gray-500">回数</span>
+                        </div>
+                        <div
+                          v-for="(set, i) in group.sets"
+                          :key="set.id"
+                          class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
+                          :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+                        >
+                          <span class="text-center text-sm font-bold tabular-nums text-gray-900">{{
+                            set.setOrder
+                          }}</span>
+                          <span class="text-right text-sm tabular-nums text-gray-900">
+                            {{ set.weightKg ?? '自重' }}<span class="ml-1 text-xs text-gray-500">kg</span>
+                          </span>
+                          <span class="text-right text-sm tabular-nums text-gray-900">
+                            {{ set.reps }}<span class="ml-1 text-xs text-gray-500">回</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </NuxtLink>
