@@ -109,6 +109,15 @@ async function onDelete() {
 
 async function addExercise(exerciseId: string) {
   if (!routine.value) return
+  // ④種目選択は呼び出し元(③⑤)を区別せず全種目を表示するため、既に追加済みの種目を
+  // 選び直すケースをここで防ぐ。target_setsは1行で複数セットを持てる設計のため、
+  // 同じ種目を複数行に分けて追加する実用上のメリットは無く、選択ミスと判断してブロックする
+  // （マージ先の行を選ばせる等のUIにはしない。ユーザー指摘、2026-09-05・Issue #78）
+  if (routine.value.exercises.some((e) => e.exerciseId === exerciseId)) {
+    exerciseError.value = 'この種目はすでに追加されています'
+    return
+  }
+  exerciseError.value = ''
   const nextSortOrder = routine.value.exercises.length
     ? Math.max(...routine.value.exercises.map((e) => e.sortOrder)) + 1
     : 1
