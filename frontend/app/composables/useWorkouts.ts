@@ -2,6 +2,7 @@ interface Workout {
   id: string
   performedAt: string // YYYY-MM-DD（backend/src/routes/workouts.tsのserializeWorkout参照）
   memo: string | null
+  hasSets: boolean // セットが1件以上あるか（②ホームのカレンダー印・記録カードの表示振り分けに使う）
   createdAt: string
   updatedAt: string
 }
