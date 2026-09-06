@@ -93,6 +93,7 @@ describe('POST /workouts', () => {
       id: expect.any(String),
       performedAt: '2026-09-01',
       memo: '胸の日',
+      hasSets: false,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })
@@ -123,6 +124,24 @@ describe('GET /workouts', () => {
     const ids = (res.body as Array<{ id: string }>).map((w) => w.id)
     expect(ids).not.toContain(deleted.id)
   })
+
+  it('hasSetsは、セットが1件以上あるworkoutではtrue、無ければfalseを返す', async () => {
+    const withSet = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+    await prisma.workoutSet.create({
+      data: { workoutId: withSet.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+    const memoOnly = await createWorkout(ownerId, {
+      performedAt: new Date('2026-09-02'),
+      memo: 'オフ日',
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/workouts')
+
+    const byId = new Map((res.body as Array<{ id: string; hasSets: boolean }>).map((w) => [w.id, w]))
+    expect(byId.get(withSet.id)?.hasSets).toBe(true)
+    expect(byId.get(memoOnly.id)?.hasSets).toBe(false)
+  })
 })
 
 describe('GET /workouts/:id', () => {
@@ -146,6 +165,7 @@ describe('GET /workouts/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.id).toBe(workout.id)
+    expect(res.body.hasSets).toBe(true)
     expect(res.body.sets).toEqual([
       expect.objectContaining({ exerciseId, setOrder: 1, reps: 10, weightKg: 60 }),
     ])
@@ -170,6 +190,7 @@ describe('PATCH /workouts/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.memo).toBe('書き換え後')
+    expect(res.body.hasSets).toBe(false)
   })
 
   it('memoを空文字列で送るとnull(メモ無し)にクリアできる', async () => {
