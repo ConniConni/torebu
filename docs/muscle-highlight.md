@@ -53,8 +53,19 @@ torebu（Vue）への移植は、この自前実装をベースに行う。プ�
 
 - `main_body_part`（7分類、既存の`MuscleGroup`と対応）ごとの内訳：脚16・胸15・腕14・肩11・
   背中9・腹筋9・お尻3（合計77種目）
-- `main_muscle`は`main_body_part`より細かい粒度（例：「大胸筋上部」「脊柱起立筋」等）
-- `main_zone`は`upper`/`mid`/`lower`等、ベンチ角度などで起始が変わる場合の描画分岐に使う
+- `main_muscle`は`main_body_part`より細かい粒度。15種類（例：「大胸筋」「脊柱起立筋」等）。
+  ただし`related_muscles`側には`main_muscle`より細かい表記（「胸上部（大胸筋上部）」「胸（中部）」等）が
+  混在しており、粒度が完全には揃っていない。実装時にどちらの表記に寄せるか整理が必要
+- **`main_zone`は`main_muscle`によって意味が変わる**（77種目中31種目のみ値あり、46種目はnull）。
+  対応表：
+
+  | main_muscle | main_zoneの意味 | 値の例 |
+  |---|---|---|
+  | 大胸筋 | ベンチ角度による起始の違い | `upper`/`mid`/`lower` |
+  | 三角筋 | 前部・側部・後部の区別 | `front`/`lateral`/`back` |
+  | 広背筋・上背部 | 広背筋か上背部かの区別 | `lat`/`upper_back` |
+  | それ以外 | （使わない） | 常にnull |
+
   （後述の「内側」ゾーンは廃止済み）
 - 元データに対応が無い種目は`source.exercise_id: null` + `note`で理由を明記して例外追加する
   （ルールの経緯はdecision_log.md 38節）
@@ -78,21 +89,30 @@ SVGライブラリ（react-native-body-highlighter）由来のスラッグ構成
 - ダーク／ライト両テーマ、男性／女性図の切り替えは、元プロジェクトのプロトタイプ
   （`muscle_highlight_proto.html`）で実装・動作確認済み
 
-## スキーマ・データ移行方針（2026-09-07確定）
+## スキーマ・データ移行方針（2026-09-07確定、09-08一部見直し）
 
 具体的なカラム定義は[schema.md](./schema.md)のPhase2セクション参照。要点：
 
-- `exercises`に`main_muscle`/`related_muscles`/`main_zone`/`source_dataset`/`source_exercise_id`/
-  `source_note`をnullableカラムとして追加する（関連テーブルへの分離はしない）
+- `exercises`に`main_muscle`/`related_muscles`/`main_zone`をnullableカラムとして追加する
+  （関連テーブルへの分離はしない）
+- **出典情報（`source_dataset`/`source_exercise_id`/`source_note`）は本番カラムにはしない**。
+  アプリの実行時機能はこれらを参照しないため、seedのソースファイル側にだけ持たせる
+  （09-07時点では本番カラムに含める案だったが、実行時に不要なメタデータを本番スキーマに混ぜる
+  理由が無いと判断し09-08に見直した）
 - **既存の公式種目seed（約30種目・7分類）は削除し、`master_exercises_v1.json`（77種目）に総入れ替え**。
   `WorkoutSet`/`RoutineExercise`が旧`exercises`行を`onDelete: Restrict`で参照しているため、
   **既存のトレーニング記録（workouts/workout_sets/routines/routine_exercises）も全削除**が前提になる
   （ユーザー判断、本番DBの現状データはユーザー自身のテスト記録のみのため許容）
-- **カスタム種目**（`main_muscle`等のデータを持たない）は、可視化時に`muscle_group`（7分類）に対応する
-  体の範囲をゾーン・発光なしで塗るフォールバック表示にする
+- **カスタム種目は色によるハイライト表示を行わない**（09-07時点では`muscle_group`ベースのフォールバック
+  表示を検討したが、「脚」だけで8スラッグに及び範囲が広すぎて実用的でないため09-08に見送った）。
+  代わりに「部位ハイライトのデータが無い種目」であることを示す表示（バッジ等）を検討する。
+  UIの具体案はこのPhaseの着手時に決める
 
 ## 未着手・次に決めること
 
 - ライブラリ由来SVGデータのライセンス確認（実装時に対応する）
 - Vue側のコンポーネント構成・データアセットの配置（`muscle_highlight_proto.html`からの移植方法）は
   このPhaseの着手時に設計する
+- `main_muscle`と`related_muscles`の表記粒度の不揃い（上記参照）を、seedデータ側で整理するか
+  アプリ側の表示ロジックで吸収するか未検討
+- カスタム種目に対する「ハイライトデータなし」表示のUI案は未検討

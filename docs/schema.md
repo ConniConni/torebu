@@ -22,24 +22,35 @@ exercises への追加カラム（既存の6テーブルの1つを拡張）
 
   main_muscle         text  null  -- 主働筋。muscle_groupより細かい粒度（例:「大胸筋上部」）
   related_muscles     text[] null -- 関連筋の配列（例:["上腕三頭筋","三角筋前部"]）
-  main_zone           text  null  -- upper/mid/lower等。ベンチ角度等で起始が変わる種目の描画分岐に使う
-  source_dataset      text  null  -- 移行元データセット名（例:"hasaneyldrm/exercises-dataset"）
-  source_exercise_id  text  null  -- 移行元データセット内のID。対応する元データが無い例外はnull
-  source_note         text  null  -- source_exercise_idがnullの場合に理由を明記（decision_log.md 38節のルール）
+  main_zone           text  null  -- 意味は main_muscle によって変わる（対応表は下記・muscle-highlight.md参照）
 ```
 
-- 4カラムとも既存の`muscle_detail`と同様nullableで追加し、マイグレーション不要な形にする
+- 3カラムとも既存の`muscle_detail`と同様nullableで追加し、マイグレーション不要な形にする
+- **`main_zone`は`main_muscle`とセットで初めて意味が確定する**（同じ値でも部位によって指すものが違う）。
+  実データの分布は以下の通り：
+  - 胸（大胸筋）：`upper`/`mid`/`lower`＝ベンチ角度による起始の違い
+  - 肩（三角筋）：`front`/`lateral`/`back`＝前部・側部・後部の区別
+  - 背中：`lat`/`upper_back`＝広背筋か上背部かの区別
+  - それ以外の`main_muscle`は`main_zone`が常にnull（77種目中46種目がnull）
+  - 実装時は上記の対応関係を`muscle-highlight.md`に対応表として明記し、コード側のコメントにも残す
+    （1つのtextカラムに複数の意味が混在する設計のため、ドキュメントを欠かすと次のセッションが誤読する）
+- **移行元データセットの出典（`source_dataset`/`source_exercise_id`/`source_note`）は本番カラムにはしない**。
+  アプリの実行時機能（ハイライト表示）はこれらを参照しないため、`master_exercises_v1.json`相当のファイルを
+  seedのソースとしてリポジトリに残すだけにする（現行の[seed.ts](../backend/prisma/seed.ts)が種目データを
+  コード内に直書きしているのと同じ位置づけ）
 - **公式種目マスタ（`created_by IS NULL`）は総入れ替えする**：現行seed（[seed.ts](../backend/prisma/seed.ts)、
-  約30種目・7分類のみ）を削除し、`master_exercises_v1.json`（77種目、上記カラムを含む）を新seedとする
+  約30種目・7分類のみ）を削除し、`master_exercises_v1.json`（77種目）を新seedの元データとする
   - `WorkoutSet.exercise`/`RoutineExercise.exercise`は`onDelete: Restrict`のため、旧`exercises`行を
     削除するには参照する`workouts`/`workout_sets`/`routines`/`routine_exercises`を先に全削除する必要がある。
     **既存のトレーニング記録は総入れ替えに伴い全削除する**（本番DBもこの時点ではユーザー自身のテスト記録のみ、
     2026-09-07ユーザー判断）
   - 実施時は`env -u GITHUB_TOKEN`のようなうっかりミスを避けるため、本番（Neon）に対する削除操作である旨を
     実行前に一言確認してから進める
-- **カスタム種目（`created_by`が値あり）は上記カラムを持たない**（ユーザーが部位選択式・種目名自由記入で
-  作るため、`main_muscle`等の詳細データが無い）。可視化時は`muscle_group`（7分類）に対応する体の範囲を
-  ゾーン・発光なしで塗るフォールバック表示にする（旧Phase3案のStage1相当の簡易表示を流用）
+- **カスタム種目（`created_by`が値あり）は色によるハイライト表示を行わない**（`muscle_group`の7分類だけで
+  部位別に色分けしようとすると、例えば「脚」は内転筋群・ふくらはぎ・足・足首・前脛骨筋・大腿四頭筋・膝・
+  ハムストリングの8スラッグ全部が対象になり範囲が広すぎて実用的でないため、2026-09-07にフォールバック
+  表示自体を見送った）。代わりに「部位ハイライトのデータが無い種目」であることを示す表示（バッジ等）を
+  検討する。UIの具体案はこのPhaseの着手時に決める
 
 ## Phase3（記録を可視化する）
 
