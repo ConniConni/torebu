@@ -18,8 +18,9 @@ export interface MuscleHighlightResult {
 const EMPTY_SIDE: SideMaps = { intensityMap: {}, zoneSpecs: [], labelMap: {}, active: false }
 
 // exercises APIのmainMuscle/relatedMuscles/mainZone(日本語文字列)から、
-// 前面/背面それぞれの発光・ラベル指定を計算する
-export function useMuscleHighlight(source: HighlightSource): MuscleHighlightResult {
+// 前面/背面それぞれの発光・ラベル指定を計算する。
+// showRelatedがfalseなら関連筋を含めない(主働筋のみ表示)
+export function useMuscleHighlight(source: HighlightSource, showRelated: boolean): MuscleHighlightResult {
   if (!source.mainMuscle) {
     return { hasHighlightData: false, front: EMPTY_SIDE, back: EMPTY_SIDE }
   }
@@ -42,6 +43,6 @@ export function useMuscleHighlight(source: HighlightSource): MuscleHighlightResu
     related,
   }
 
-  const { front, back } = computeHighlightMaps(highlightExercise)
+  const { front, back } = computeHighlightMaps(highlightExercise, showRelated)
   return { hasHighlightData: true, front, back }
 }

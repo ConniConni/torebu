@@ -169,7 +169,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
 
 **部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
-- コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)（全画面シート本体、前面/背面トグル）
+- コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)
+  （全画面シート本体、前面/背面トグル・「関連筋も見る」トグル）
   ＋ [MuscleBodyDiagram.vue](../frontend/app/components/MuscleBodyDiagram.vue)（片面のSVG描画）
 - ロジック：[muscleHighlightSvg.ts](../frontend/app/utils/muscleHighlightSvg.ts)（発光・ゾーン塗り分け・ラベル配置。
   プロトタイプ由来のライトテーマ用パラメータのみ移植）、[muscleSlugs.ts](../frontend/app/utils/muscleSlugs.ts)
@@ -179,8 +180,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - `mainMuscle`が無い種目（カスタム種目、および対応表に無い想定外の値）はシートに
   「部位ハイライトのデータがありません」と表示する。光る部位が無い面を選んだ場合は図と
   「この面に光る部位はありません」を表示する（選択肢は隠さない）
-- 女性図・ダーク/ライトテーマ切替・「関連筋も見る」の個別トグルはプロトタイプには存在するが
-  torebuでは未実装（関連筋は常時表示。理由はdocs/backlog.md参照）
+- 「関連筋も見る」トグルは初期状態オフ（主働筋のみ表示）。関連筋が無い種目ではボタン自体を出さない
+- 女性図・ダーク/ライトテーマ切替はプロトタイプには存在するがtorebuでは未実装（理由はdocs/backlog.md参照）
 
 ### 3-2. 記録するときの流れ（実装どおり）
 

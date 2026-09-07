@@ -3,6 +3,8 @@
   画面配置・UI仕様はdocs/muscle-highlight.md「画面配置・UI仕様」参照：
   - 全画面シート(ポップオーバーではない)。上部に✕と種目名を固定表示
   - 前面/背面トグルを常設。光る部位が無い面を選んでも図と注記を出す(選択肢を隠さない)
+  - 「関連筋も見る」トグル(プロトタイプ由来)：初期状態は主働筋のみ表示で、関連筋がある種目だけ
+    ボタンを出す
 -->
 <script setup lang="ts">
 import { BODY_SVG_DATA, ZONE_LABEL } from '~/utils/muscleHighlightSvg'
@@ -17,12 +19,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
+// 主働筋のみ表示がデフォルト(プロトタイプと同じ初期状態)。ボタンで関連筋の表示をon/offする
+const showRelated = ref(false)
+
 const highlight = computed(() =>
-  useMuscleHighlight({
-    mainMuscle: props.mainMuscle,
-    relatedMuscles: props.relatedMuscles,
-    mainZone: props.mainZone,
-  }),
+  useMuscleHighlight(
+    {
+      mainMuscle: props.mainMuscle,
+      relatedMuscles: props.relatedMuscles,
+      mainZone: props.mainZone,
+    },
+    showRelated.value,
+  ),
 )
 
 type Side = 'front' | 'back'
@@ -66,6 +74,14 @@ const mainZoneLabel = computed(() => {
         >
           背面
         </button>
+        <button
+          v-if="relatedMuscles.length"
+          type="button"
+          class="ml-2 rounded-full border border-gray-300 px-4 py-1 text-xs font-medium text-gray-600"
+          @click="showRelated = !showRelated"
+        >
+          {{ showRelated ? '主働筋のみ表示' : '関連筋も見る' }}
+        </button>
       </div>
 
       <div class="flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-2">
@@ -87,7 +103,7 @@ const mainZoneLabel = computed(() => {
           <span class="font-semibold text-blue-700">主働筋</span>：{{ mainMuscle
           }}<template v-if="mainZoneLabel">（{{ mainZoneLabel }}に効きやすい）</template>
         </p>
-        <p v-if="relatedMuscles.length" class="mt-1">
+        <p v-if="showRelated && relatedMuscles.length" class="mt-1">
           <span class="font-semibold text-blue-400">関連筋</span>：{{ relatedMuscles.join('、') }}
         </p>
       </div>

@@ -362,22 +362,28 @@ export interface SideMaps {
 }
 
 // 主働筋・関連筋の情報から、前面/背面それぞれの発光・ラベル指定を計算する。
-// FRONT/BACK間引き（三角筋前部/後部・僧帽筋/上腕三頭筋）もここで反映する
-export function computeHighlightMaps(ex: HighlightExercise): { front: SideMaps; back: SideMaps } {
+// FRONT/BACK間引き（三角筋前部/後部・僧帽筋/上腕三頭筋）もここで反映する。
+// showRelatedがfalseの場合は関連筋を一切含めない(主働筋のみ表示)
+export function computeHighlightMaps(
+  ex: HighlightExercise,
+  showRelated: boolean,
+): { front: SideMaps; back: SideMaps } {
+  const related = showRelated ? ex.related : []
+
   const intensityMap: IntensityMap = {}
   const labelMap: LabelMap = {}
   if (ex.mainSlug) {
     intensityMap[ex.mainSlug] = I_MAIN
     labelMap[ex.mainSlug] = { ja: ex.mainMuscleJa ?? '', isMain: true }
   }
-  for (const r of ex.related) {
+  for (const r of related) {
     if (!(r.slug in intensityMap)) intensityMap[r.slug] = I_FLAT
     if (!(r.slug in labelMap)) labelMap[r.slug] = { ja: r.ja, isMain: false }
   }
 
   const zoneSpecs: ZoneSpec[] = []
   if (ex.mainSlug && ex.mainZone) zoneSpecs.push({ slug: ex.mainSlug, zone: ex.mainZone, isMain: true })
-  for (const r of ex.related) {
+  for (const r of related) {
     if (r.zone && (ZONE_GRADIENT[r.zone] || ZONE_SUBPATH_GROUPS[r.slug]?.[r.zone])) {
       zoneSpecs.push({ slug: r.slug, zone: r.zone, isMain: false })
     }
@@ -400,7 +406,7 @@ export function computeHighlightMaps(ex: HighlightExercise): { front: SideMaps; 
     Reflect.deleteProperty(backIntensityMap, ex.mainSlug)
     Reflect.deleteProperty(backLabelMap, ex.mainSlug)
   }
-  for (const r of ex.related) {
+  for (const r of related) {
     if (r.zone && MAIN_FRONT_ONLY_ZONE[r.slug] === r.zone && ex.mainSlug !== r.slug) {
       Reflect.deleteProperty(backIntensityMap, r.slug)
       Reflect.deleteProperty(backLabelMap, r.slug)
