@@ -15,12 +15,12 @@
 - フロントエンド: Nuxt.js + TypeScript
 - バックエンド: Express + PostgreSQL（Prisma推奨）
 - 認証: セッション方式（JWTではない。理由は`docs/schema.md`参照）
-- リアルタイム通知: Socket.io（Phase2で採用検討）
+- リアルタイム通知: Socket.io（Phase4で採用検討）
 - DBホスティング: **Neon**（本番）／**Docker Compose**（ローカル開発）
   - Supabase（Auth/Storage/Realtimeがバンドル）ではなくNeon（素のPostgres）を選んだ理由：
     1. セッション管理・API設計を自前のExpressで実装する学習方針と合わせるため。バンドル機能に頼ると学習目的からズレる
     2. Supabaseの無料プロジェクトは1週間アクセスが無いと自動停止し手動再開が必要。断続的に触る個人学習プロジェクトだと地味にストレスになる。Neonは接続時に自動復帰するため放置に強い
-  - Phase4で画像ストレージが必要になったら、Neon（DB）とは別にCloudflare R2等を組み合わせる想定（Supabase Storageだけ部分利用してもよい）
+  - Phase5で画像ストレージが必要になったら、Neon（DB）とは別にCloudflare R2等を組み合わせる想定（Supabase Storageだけ部分利用してもよい）
 
 ## リポジトリ構成（モノレポ）
 
@@ -36,6 +36,7 @@ torebu/
 - `docs/spec.md` — **実装済みの確定仕様（現状の正）。まずここを読む。**
 - `docs/concept.md` — ブレストのサマリー（コア体験・機能アイデア・ターゲット・アプリ名の検討経緯）
 - `docs/schema.md` — DBスキーマのドラフト（Phase2以降のテーブル定義・設計方針・セキュリティ実装の優先度。MVPのテーブル定義は`spec.md`参照）
+- `docs/muscle-highlight.md` — Phase2（部位ハイライト可視化）の検討経緯サマリー（元の検討は`/Users/koni/Desktop/ClaudeCode/筋トレ部位紐付け/decision_log.md`、詳細はそちらを参照）
 - `docs/backlog.md` — 保留事項・課題・アイデア（バグ／ドキュメントと実装のズレ／技術的負債／UI改善アイデア／未決定事項／先送りにした学習項目）
 - `docs/roadmap.md` — Issueバックログ（着手予定のIssueをタイトルだけ並べた見通し用のメモ）
 - `docs/learning-log.md` — 学習ログ（**MVPまでの記録。凍結済みで、以降は更新しない**）
@@ -44,7 +45,7 @@ torebu/
 
 ## 開発の進め方
 
-- 機能はMVP → Phase2 → Phase3 → Phase4の順で育てる（詳細は`docs/concept.md`のフェーズ一覧）
+- 機能はMVP → Phase2 → Phase3 → Phase4 → Phase5の順で育てる（詳細は`docs/concept.md`のフェーズ一覧）
 - 新しい依存関係を追加するときは、なぜ必要かを一言添える
 - **実装したら`docs/spec.md`を同じPRで更新する**（詳細は「開発フロー」5）
 
