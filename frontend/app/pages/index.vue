@@ -29,16 +29,24 @@ function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
 }
 
-const markedDates = computed(() => new Set((workouts.value ?? []).map((w) => w.performedAt)))
+// カレンダーの印を「セットを1件以上記録した日」と「メモのみの日」で分ける（Issue #99）。
+// hasSetsはGET /workoutsのレスポンスに含まれる（backend/src/routes/workouts.ts参照）
+const recordedDates = computed(
+  () => new Set((workouts.value ?? []).filter((w) => w.hasSets).map((w) => w.performedAt)),
+)
+const memoOnlyDates = computed(
+  () => new Set((workouts.value ?? []).filter((w) => !w.hasSets).map((w) => w.performedAt)),
+)
 
 const today = todayLocalDateString()
 const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
 )
-// 過去日にまだ記録が無いときだけ、その日で③記録作成を始める導線を出す。
-// 未来日は③側で今日にクランプされてしまい紛らわしいため対象外
-const isPastDate = computed(() => selectedDate.value < today)
+// 今日・過去日にまだ記録が無いときだけ、その日で③記録作成を始める導線を出す。
+// 未来日は③側で今日にクランプされてしまい紛らわしいため対象外（Issue #99で今日も対象に含めた。
+// 以前は過去日のみだったが、今日を選択した場合だけ導線が出ないのは不自然という指摘を受けた）
+const isTodayOrPastDate = computed(() => selectedDate.value <= today)
 
 function onSelectDate(date: string) {
   selectedDate.value = date
@@ -121,7 +129,8 @@ async function onLogout() {
 
       <template v-else>
         <HomeCalendar
-          :marked-dates="markedDates"
+          :recorded-dates="recordedDates"
+          :memo-only-dates="memoOnlyDates"
           :selected-date="selectedDate"
           @select="onSelectDate"
         />
@@ -131,7 +140,7 @@ async function onLogout() {
           <template v-if="selectedWorkouts.length === 0">
             <p class="text-sm text-gray-500">記録がありません</p>
             <NuxtLink
-              v-if="isPastDate"
+              v-if="isTodayOrPastDate"
               :to="`/workouts/new?date=${selectedDate}`"
               class="mt-2 block w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
             >
@@ -153,11 +162,14 @@ async function onLogout() {
                 <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">
                   読み込み中...
                 </p>
+                <!-- セット0件（メモのみ）の記録は、カード自体が③記録作成へのリンクになっている
+                     ことを踏まえ、「＋この日の記録を始める」等の既存の能動的な文言と語彙を揃えた
+                     表現にする（Issue #99。以前の「種目未登録」は受動的で分かりにくいという指摘） -->
                 <p
                   v-else-if="!workoutGroups[workout.id]?.length"
-                  class="text-sm text-gray-500"
+                  class="text-sm font-medium text-blue-600"
                 >
-                  種目未登録
+                  ＋種目を記録する
                 </p>
                 <div v-else class="space-y-2">
                   <!-- ③記録作成・⑤ルーティンのセット表示と見た目を揃えたヘッダー帯付き表形式

@@ -6,11 +6,13 @@ import type { WorkoutModel, WorkoutSetModel } from '../generated/prisma/models.j
 
 export const workoutsRouter = Router()
 
-function serializeWorkout(workout: WorkoutModel) {
+// hasSetsは呼び出し側で数えて渡す(一覧はfindManyの_count、単体はcount済みの値を使い分けるため)
+function serializeWorkout(workout: WorkoutModel, hasSets: boolean) {
   return {
     id: workout.id,
     performedAt: workout.performedAt.toISOString().slice(0, 10),
     memo: workout.memo,
+    hasSets,
     createdAt: workout.createdAt,
     updatedAt: workout.updatedAt,
   }
@@ -57,18 +59,22 @@ workoutsRouter.post('/', requireAuth, async (req, res) => {
     data: { userId, performedAt: parsed.data.performedAt, memo: parsed.data.memo },
   })
 
-  res.status(201).json(serializeWorkout(workout))
+  // 作成直後は必ずセット0件
+  res.status(201).json(serializeWorkout(workout, false))
 })
 
 workoutsRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
 
+  // ②ホームのカレンダー印・記録カードが「セットが1件以上あるか」を判定できるよう、
+  // _countで件数だけ添える(sets本体は返さない。一覧では使わないため)
   const workouts = await prisma.workout.findMany({
     where: { userId, deletedAt: null },
     orderBy: { performedAt: 'desc' },
+    include: { _count: { select: { sets: true } } },
   })
 
-  res.status(200).json(workouts.map(serializeWorkout))
+  res.status(200).json(workouts.map((w) => serializeWorkout(w, w._count.sets > 0)))
 })
 
 workoutsRouter.get('/:id', requireAuth, async (req, res) => {
@@ -84,7 +90,7 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
     orderBy: { setOrder: 'asc' },
   })
 
-  res.status(200).json({ ...serializeWorkout(workout), sets: sets.map(serializeSet) })
+  res.status(200).json({ ...serializeWorkout(workout, sets.length > 0), sets: sets.map(serializeSet) })
 })
 
 // performedAtは編集不可(意図的)：③「今日の記録を始める」が「同じ日付のworkoutがあれば再開する」
@@ -115,8 +121,9 @@ workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
     // 空文字列はnull(メモ無し)に正規化して保存する
     data: { memo: parsed.data.memo || null },
   })
+  const setCount = await prisma.workoutSet.count({ where: { workoutId: workout.id } })
 
-  res.status(200).json(serializeWorkout(updated))
+  res.status(200).json(serializeWorkout(updated, setCount > 0))
 })
 
 workoutsRouter.delete('/:id', requireAuth, async (req, res) => {
