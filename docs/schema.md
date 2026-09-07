@@ -9,7 +9,47 @@ MVPの6テーブル（`users` / `exercises` / `workouts` / `workout_sets` / `rou
 の定義は[spec.md](./spec.md) §5「データモデル」を見る（正は[schema.prisma](../backend/prisma/schema.prisma)）。
 このファイルには以降、Phase2以降のドラフトと設計方針メモだけを残す。
 
-## Phase2（交流・ランキング）
+## Phase2（部位ハイライト可視化）
+
+別プロジェクト（`筋トレ部位紐付け`）での先行検討が完了済み。詳細な経緯・確定事項は
+[muscle-highlight.md](./muscle-highlight.md)（および元の検討ログ）を参照。要点：
+
+- `react-native-body-highlighter`は**ライブラリとして利用しない**。SVGパス座標のみ静的コピーし、
+  ゾーン塗り分け・FRONT/BACK間引き・ラベル衝突回避は自前のJS（DOM操作）をVueへ移植する
+
+```
+exercises への追加カラム（既存の6テーブルの1つを拡張）
+
+  main_muscle         text  null  -- 主働筋。muscle_groupより細かい粒度（例:「大胸筋上部」）
+  related_muscles     text[] null -- 関連筋の配列（例:["上腕三頭筋","三角筋前部"]）
+  main_zone           text  null  -- upper/mid/lower等。ベンチ角度等で起始が変わる種目の描画分岐に使う
+  source_dataset      text  null  -- 移行元データセット名（例:"hasaneyldrm/exercises-dataset"）
+  source_exercise_id  text  null  -- 移行元データセット内のID。対応する元データが無い例外はnull
+  source_note         text  null  -- source_exercise_idがnullの場合に理由を明記（decision_log.md 38節のルール）
+```
+
+- 4カラムとも既存の`muscle_detail`と同様nullableで追加し、マイグレーション不要な形にする
+- **公式種目マスタ（`created_by IS NULL`）は総入れ替えする**：現行seed（[seed.ts](../backend/prisma/seed.ts)、
+  約30種目・7分類のみ）を削除し、`master_exercises_v1.json`（77種目、上記カラムを含む）を新seedとする
+  - `WorkoutSet.exercise`/`RoutineExercise.exercise`は`onDelete: Restrict`のため、旧`exercises`行を
+    削除するには参照する`workouts`/`workout_sets`/`routines`/`routine_exercises`を先に全削除する必要がある。
+    **既存のトレーニング記録は総入れ替えに伴い全削除する**（本番DBもこの時点ではユーザー自身のテスト記録のみ、
+    2026-09-07ユーザー判断）
+  - 実施時は`env -u GITHUB_TOKEN`のようなうっかりミスを避けるため、本番（Neon）に対する削除操作である旨を
+    実行前に一言確認してから進める
+- **カスタム種目（`created_by`が値あり）は上記カラムを持たない**（ユーザーが部位選択式・種目名自由記入で
+  作るため、`main_muscle`等の詳細データが無い）。可視化時は`muscle_group`（7分類）に対応する体の範囲を
+  ゾーン・発光なしで塗るフォールバック表示にする（旧Phase3案のStage1相当の簡易表示を流用）
+
+## Phase3（記録を可視化する）
+
+個人の集計・前回記録の自動反映・週間サマリー・ストリーク。現時点でスキーマドラフトは未着手
+（着手時に本ファイルへ追記する）。
+
+> 筋肉イラスト可視化はここに含まれない。別プロジェクトでの先行検討が完了していたため、
+> 2026-09-07にPhase2として独立させた（経緯は[muscle-highlight.md](./muscle-highlight.md)参照）。
+
+## Phase4（交流・ランキング）
 
 ```
 groups
@@ -77,21 +117,7 @@ topic_posts                 -- 一言＋任意で写真の投稿
   created_at    timestamptz
 ```
 
-## Phase3（可視化）
-
-```
-exercises への追加カラム   -- 筋肉イラスト可視化、3段階で拡張
-
-  -- Stage1: 追加カラムなし。muscle_group(7分類)→ライブラリのスラッグは
-  --         アプリコード内の対応表で解決し、該当部分だけ塗る（濃淡なし・出典不要）
-
-  highlight_slugs   jsonb null  -- Stage2: 効く部位のスラッグ配列。例 ["chest","triceps"]（濃淡なし）
-
-  highlight_muscles jsonb null  -- Stage3: [{slug, is_main}] 主働筋/協働筋の区別つき
-                                 -- highlight_slugsを置き換え。濃淡表示＋部位検索(is_main=trueのみ対象)に使う
-```
-
-## Phase4（テーマ課金）
+## Phase5（テーマ課金）
 
 ```
 themes
@@ -110,11 +136,11 @@ user_theme_purchases
 ## 設計方針メモ
 
 - **ランキング**は専用テーブルを持たず、`workout_sets`を集計するクエリ／マテリアライズドビューで算出する。個人の合計・推移集計（Phase3）を先に作り、その延長でグループ集計＝ランキングに拡張する
-- **「イチオシこだわり共有」**は選択式アンケートではなく自由記述。写真投稿はストレージ費用が絡むためPhase4まで保留し、それまではテキストのみ
+- **「イチオシこだわり共有」**は選択式アンケートではなく自由記述。写真投稿はストレージ費用が絡むためPhase5まで保留し、それまではテキストのみ
 - **退会してもgroup_membersの行は物理削除しない**（`left_at`で論理管理）。過去に同じグループにいた事実が残るので、退会後も過去の記録・カスタム種目は仲間から見え続ける
 - **オーナー権限は`group_members.role`で管理し複数人可**。唯一のownerは退会不可、ownerは他メンバーをownerに任命可能というルールはアプリ側のロジックで保証する
 - **招待コードの「あと何人入れるか」は別カウンタを持たず**、参加時に「アクティブなgroup_members数（`left_at IS NULL`）< `member_limit`」を都度チェックして判定する。退会者が出れば自動的に枠が空く
-- **種目マスタの削除機能は作らない**。表示・非表示の扱いはPhase3以降で検討する
+- **種目マスタの削除機能は作らない**。表示・非表示の扱いはPhase2以降で検討する
 - **部位分類は大分類（7分類）から開始**。`exercises.muscle_detail`をnullableで先に持たせ、後から細分化してもマイグレーション不要にする
 - **カスタム種目**は`created_by`を持たせ、作成者と過去含めて同じグループにいたことがあるメンバーに見える。追加は専用画面（部位を選択式・種目名を自由記入）で行う
 - **カスタム種目の公式マスタへの昇格**は`created_by`をNULLに書き換えるだけ。`exercise_id`は変わらないため過去記録の付け替えは不要
@@ -122,13 +148,13 @@ user_theme_purchases
 - **ランキング集計の対象は公式種目のみ**。カスタム種目は記録・ルーティンには使えるが、ランキング比較の対象からは外す
 - **`reactions`/`comments`は`target_type`+`target_id`を持つ汎用テーブル**。workoutsは反応・コメント両方、workout_setsは反応のみ、topic_postsは反応・コメント両方
 - **`workouts`の削除はソフトデリート**（`deleted_at`）。編集・削除しても`reactions`/`comments`は残る
-- **`groups`の削除もソフトデリート**、実行はownerのみ。Phase2で実装
+- **`groups`の削除もソフトデリート**、実行はownerのみ。Phase4で実装
 - **ソフトデリート/物理削除の使い分け基準**：削除後も他のレコードから参照され続ける（`reactions`/`comments`の対象になる、退会後も履歴として残す等）テーブルのみソフトデリートにし、参照する側が存在しないテーブルは物理削除でよい。全テーブル一律ソフトデリートにはしない（クエリに`deleted_at IS NULL`条件が常に必要になる、UNIQUE制約が複雑化する等のコストが見合わないため）。例：`routines`/`routine_exercises`は`reactions`/`comments`等の`target_type`一覧に含まれず参照されないため物理削除（Issue7）
 - **認証はセッション方式**（JWTではなく）。退会・グループ削除・招待コード失効など「権限をすぐ失効させたい」場面が多いため
 - **`weight_kg`はnullable**。自重種目（懸垂・腕立て伏せ等）に対応
 - **`topic_posts`は1人1投稿の制約を設けない**。同じお題への連投を許可
 - **`notifications`はreactions/commentsと同じ`target_type`+`target_id`の形に統一し、`actor_id`を直接持たせる**（GitHub・Slack等の通知機能で使われるオーソドックスな形）。配り方はFan-out on Write方式
-- **`avatar_url`の画像アップロード実装はPhase4に回す**。MVP〜Phase3はイニシャルアイコン等で代替
+- **`avatar_url`の画像アップロード実装はPhase5に回す**。MVP〜Phase4はイニシャルアイコン等で代替
 - **編集され得るテーブルには`updated_at`を付与**。過去の変更履歴を全部残すバージョン管理は今の規模では不要と判断
 - **退会後の同じグループへの再参加は可能**。実装は新規INSERTではなく、既存の`group_members`行をUPDATEして`left_at`をNULLに戻す形
 - **筋肉イラスト可視化**は`react-native-body-highlighter`のSVG・筋肉スラッグデータを流用（Reactコンポーネント自体ではなくSVGデータのみ、ライセンスはMIT想定だが実装時に要確認）。出典はExRx.net中心＋free-exercise-db等で補完
@@ -148,10 +174,10 @@ user_theme_purchases
 |---|---|
 | CSRF対策（SameSite Cookie等） | MVP |
 | セッションCookieの属性設定（HttpOnly/Secure/SameSite） | MVP |
-| 認可チェック（IDOR対策） | MVP（基本）→ Phase2で対象拡大 |
+| 認可チェック（IDOR対策） | MVP（基本）→ Phase4で対象拡大 |
 | ログイン試行のレート制限 | MVP |
 | メールアドレス列挙対策 | MVP |
-| XSS対策 | MVP（基本）→ Phase2で対象拡大 |
+| XSS対策 | MVP（基本）→ Phase4で対象拡大 |
 | セッション固定化対策 | MVP |
 
 - **CSRF対策は`SameSite=Lax`のみで対応し、CSRFトークン等の追加実装はしない**。ただし`SameSite`はオリジン単位ではなく「サイト」（プロトコル＋登録可能ドメイン。ポート・サブドメインの違いは無視）単位で判定されるため、これが機能する前提として、**フロントエンド（Nuxt）とバックエンド（Express）を同一サイトに揃える**（ローカル開発はNuxtの開発サーバーのプロキシ機能でExpressへのリクエストを中継、本番も同一登録可能ドメイン配下に両方置く）という構成を取る。フロント・バックエンドが別ドメインにデプロイされる構成に変わる場合は、この前提が崩れるためCSRFトークン等の追加対策を再検討する
