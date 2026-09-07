@@ -193,6 +193,9 @@ describe('POST /exercises', () => {
       muscleDetail: null,
       equipment: 'ダンベル',
       createdBy: ownerId,
+      mainMuscle: null,
+      relatedMuscles: [],
+      mainZone: null,
     })
   })
 })

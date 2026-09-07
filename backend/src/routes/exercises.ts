@@ -88,5 +88,10 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     muscleDetail: exercise.muscleDetail,
     equipment: exercise.equipment,
     createdBy: exercise.createdBy,
+    // カスタム種目は部位ハイライト非対応のため常にnull/空配列(docs/muscle-highlight.md参照)。
+    // GET /exercisesと形を揃えるためレスポンスに含める
+    mainMuscle: exercise.mainMuscle,
+    relatedMuscles: exercise.relatedMuscles,
+    mainZone: exercise.mainZone,
   })
 })
