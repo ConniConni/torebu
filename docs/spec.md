@@ -423,7 +423,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | テーブル | 役割 | 押さえること |
 |---|---|---|
 | `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1） |
-| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。7部位を網羅する公式種目（計28件）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない） |
+| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**（ハイライト表示はPhase2のUI実装で対応、現時点ではAPIが値を返すのみ） |
 | `workouts` | 1日1回分のトレーニング | **`deleted_at` を持つ唯一のテーブル**（ソフトデリート） |
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |
