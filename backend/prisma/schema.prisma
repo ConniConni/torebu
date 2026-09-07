@@ -76,6 +76,7 @@ model Exercise {
   workoutSets      WorkoutSet[]
   routineExercises RoutineExercise[]
 
+  @@index([createdBy])
   @@map("exercises")
 }
 
@@ -91,6 +92,7 @@ model Workout {
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   sets WorkoutSet[]
 
+  @@index([userId, performedAt])
   @@map("workouts")
 }
 
@@ -107,6 +109,8 @@ model WorkoutSet {
   workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
 
+  @@index([workoutId])
+  @@index([exerciseId])
   @@map("workout_sets")
 }
 
@@ -120,6 +124,7 @@ model Routine {
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercises RoutineExercise[]
 
+  @@index([userId])
   @@map("routines")
 }
 
@@ -133,5 +138,7 @@ model RoutineExercise {
   routine  Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
 
+  @@index([routineId])
+  @@index([exerciseId])
   @@map("routine_exercises")
 }
