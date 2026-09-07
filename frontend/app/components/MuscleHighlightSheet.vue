@@ -6,6 +6,8 @@
   - 「関連筋も見る」トグル(プロトタイプ由来)：初期状態は主働筋のみ表示で、関連筋がある種目だけ
     ボタンを出す。凡例欄の関連筋行はトグルOFFでも高さだけ確保する(invisible)。表示/非表示で
     行数が変わると、下の凡例が伸び縮みして図の描画エリア(flex-1)ごと縮んで見えてしまうため
+  - シート表示中は背景(④の種目一覧)のスクロールをロックする。`fixed inset-0`で覆っているだけでは
+    bodyのスクロール自体は止まらず、閉じたときに一覧が別のスクロール位置になってしまうため
 -->
 <script setup lang="ts">
 import { BODY_SVG_DATA, ZONE_LABEL } from '~/utils/muscleHighlightSvg'
@@ -19,6 +21,23 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ close: [] }>()
+
+// 背景スクロールのロック。torebuのCSSリセットではスクロール主体がdocument.body ではなく
+// documentElement(<html>)側になる(document.scrollingElementで確認済み)ため、bodyだけでなく
+// documentElementのoverflowも止める。マウント時の値を保存し、アンマウント時に元へ戻す
+// (別のダイアログ等が既にoverflow:hiddenを設定していても壊さないため)
+let previousHtmlOverflow = ''
+let previousBodyOverflow = ''
+onMounted(() => {
+  previousHtmlOverflow = document.documentElement.style.overflow
+  previousBodyOverflow = document.body.style.overflow
+  document.documentElement.style.overflow = 'hidden'
+  document.body.style.overflow = 'hidden'
+})
+onUnmounted(() => {
+  document.documentElement.style.overflow = previousHtmlOverflow
+  document.body.style.overflow = previousBodyOverflow
+})
 
 // 主働筋のみ表示がデフォルト(プロトタイプと同じ初期状態)。ボタンで関連筋の表示をon/offする
 const showRelated = ref(false)
