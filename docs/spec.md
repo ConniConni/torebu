@@ -159,7 +159,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
-| `/workouts/exercises` | ④ | 種目選択 | `GET /exercises` | `auth` |
+| `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
@@ -167,6 +167,20 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
+
+**部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
+- コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)（全画面シート本体、前面/背面トグル）
+  ＋ [MuscleBodyDiagram.vue](../frontend/app/components/MuscleBodyDiagram.vue)（片面のSVG描画）
+- ロジック：[muscleHighlightSvg.ts](../frontend/app/utils/muscleHighlightSvg.ts)（発光・ゾーン塗り分け・ラベル配置。
+  プロトタイプ由来のライトテーマ用パラメータのみ移植）、[muscleSlugs.ts](../frontend/app/utils/muscleSlugs.ts)
+  （`mainMuscle`/`relatedMuscles`の日本語文字列 → SVGスラッグ・ゾーンの対応表）
+- SVG座標データ：[muscle-body-svg.json](../frontend/app/assets/data/muscle-body-svg.json)
+  （react-native-body-highlighter由来・MIT。ライセンス全文は同ディレクトリの`.LICENSE.md`）。男性図のみ
+- `mainMuscle`が無い種目（カスタム種目、および対応表に無い想定外の値）はシートに
+  「部位ハイライトのデータがありません」と表示する。光る部位が無い面を選んだ場合は図と
+  「この面に光る部位はありません」を表示する（選択肢は隠さない）
+- 女性図・ダーク/ライトテーマ切替・「関連筋も見る」の個別トグルはプロトタイプには存在するが
+  torebuでは未実装（関連筋は常時表示。理由はdocs/backlog.md参照）
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -423,7 +437,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | テーブル | 役割 | 押さえること |
 |---|---|---|
 | `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1） |
-| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**（ハイライト表示はPhase2のUI実装で対応、現時点ではAPIが値を返すのみ） |
+| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用 |
 | `workouts` | 1日1回分のトレーニング | **`deleted_at` を持つ唯一のテーブル**（ソフトデリート） |
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |
