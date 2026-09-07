@@ -115,6 +115,36 @@ describe('GET /exercises', () => {
     expect(order.indexOf(usedOnce.id)).toBeLessThan(order.indexOf(unused.id))
   })
 
+  it('部位ハイライト用の項目(mainMuscle/relatedMuscles/mainZone)を返す。カスタム種目は全てnull', async () => {
+    const official = await createExercise({
+      data: {
+        name: 'ベンチプレス(ハイライトテスト)',
+        muscleGroup: 'chest',
+        mainMuscle: '大胸筋',
+        relatedMuscles: ['上腕三頭筋', '三角筋前部'],
+        mainZone: 'mid',
+      },
+    })
+    const custom = await createExercise({
+      data: { name: '自作種目(ハイライトテスト)', muscleGroup: 'arms', createdBy: ownerId },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const byId = new Map((res.body as Array<Record<string, unknown>>).map((e) => [e.id, e]))
+    expect(byId.get(official.id)).toMatchObject({
+      mainMuscle: '大胸筋',
+      relatedMuscles: ['上腕三頭筋', '三角筋前部'],
+      mainZone: 'mid',
+    })
+    expect(byId.get(custom.id)).toMatchObject({
+      mainMuscle: null,
+      relatedMuscles: [],
+      mainZone: null,
+    })
+  })
+
   it('使用回数が同点の場合は名前順(あいうえお順)に並ぶ', async () => {
     // 使用回数はどちらも0(未使用)のまま。名前だけを五十音順が崩れる並びで作る
     const wa = await createExercise({ data: { name: 'わ種目', muscleGroup: 'chest' } })
@@ -163,6 +193,9 @@ describe('POST /exercises', () => {
       muscleDetail: null,
       equipment: 'ダンベル',
       createdBy: ownerId,
+      mainMuscle: null,
+      relatedMuscles: [],
+      mainZone: null,
     })
   })
 })

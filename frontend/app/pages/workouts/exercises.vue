@@ -2,6 +2,8 @@
 // ④ 種目選択。部位ごとにセクション分けし、各セクション上位5件＋開閉トグルで全件表示
 // ③記録作成・⑤ルーティン編集の両方から遷移してくる共通画面。選択後にどこへ戻るかは
 // クエリパラメータreturnTo(未指定なら③記録作成)で決める
+import type { Exercise } from '~/composables/useExercises'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -45,6 +47,9 @@ async function selectExercise(exerciseId: string) {
   usePickedExerciseId().value = exerciseId
   await navigateTo(returnTo.value)
 }
+
+// 部位ハイライトシート(Issue #106)。選択中はnull以外になり、シートを表示する
+const highlightExercise = ref<Exercise | null>(null)
 </script>
 
 <template>
@@ -72,13 +77,21 @@ async function selectExercise(exerciseId: string) {
 
           <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">種目がありません</p>
           <ul v-else class="space-y-1">
-            <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
+            <li v-for="exercise in visibleExercises(section)" :key="exercise.id" class="flex items-center gap-1">
               <button
                 type="button"
-                class="w-full rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+                class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
                 @click="selectExercise(exercise.id)"
               >
                 {{ exercise.name }}
+              </button>
+              <button
+                type="button"
+                class="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="この種目が効く部位を見る"
+                @click="highlightExercise = exercise"
+              >
+                <InfoIcon class="h-4 w-4" />
               </button>
             </li>
           </ul>
@@ -98,5 +111,14 @@ async function selectExercise(exerciseId: string) {
         </section>
       </template>
     </div>
+
+    <MuscleHighlightSheet
+      v-if="highlightExercise"
+      :exercise-name="highlightExercise.name"
+      :main-muscle="highlightExercise.mainMuscle"
+      :related-muscles="highlightExercise.relatedMuscles"
+      :main-zone="highlightExercise.mainZone"
+      @close="highlightExercise = null"
+    />
   </div>
 </template>

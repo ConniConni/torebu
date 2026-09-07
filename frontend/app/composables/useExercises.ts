@@ -8,6 +8,10 @@ interface Exercise {
   equipment: string | null
   createdBy: string | null
   useCount: number
+  // 部位ハイライト用(Phase2、docs/muscle-highlight.md参照)。カスタム種目は常にnull/空配列
+  mainMuscle: string | null
+  relatedMuscles: string[]
+  mainZone: string | null
 }
 
 interface CreateExercisePayload {
