@@ -60,6 +60,11 @@ model Exercise {
   name             String
   muscleGroup      MuscleGroup @map("muscle_group")
   muscleDetail     String?     @map("muscle_detail") // 将来の細分類用
+  // 部位ハイライト可視化（Phase2）用。詳細はdocs/muscle-highlight.md参照
+  mainMuscle       String?     @map("main_muscle") // 主働筋。muscleGroupより細かい粒度（例:「大胸筋」）
+  relatedMuscles   String[]    @default([]) @map("related_muscles") // 関連筋（例:["上腕三頭筋","三角筋前部"]）
+  // mainMuscleとセットで初めて意味が確定する（同じ値でも部位によって指すものが違う）。対応表はdocs/muscle-highlight.md参照
+  mainZone         String?     @map("main_zone")
   equipment        String?
   createdBy        String?     @map("created_by") // null=公式、値ありならカスタム種目
   defaultSortOrder Int?        @map("default_sort_order") // 運営が定番種目に設定。使用履歴が無い時のフォールバック順
