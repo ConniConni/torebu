@@ -46,6 +46,11 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
       equipment: exercise.equipment,
       createdBy: exercise.createdBy,
       useCount: exercise.useCount,
+      // 部位ハイライト用（Phase2、docs/muscle-highlight.md参照）。公式種目のみ値を持ち、
+      // カスタム種目は常にnull（フロント側で「データなし」表示に使う）
+      mainMuscle: exercise.mainMuscle,
+      relatedMuscles: exercise.relatedMuscles,
+      mainZone: exercise.mainZone,
     })),
   )
 })
