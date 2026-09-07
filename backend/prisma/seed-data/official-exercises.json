@@ -1,0 +1,1085 @@
+[
+  {
+    "main_body_part": "胸",
+    "name_ja": "ベンチプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0025"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "バーベル",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "インクラインベンチプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0047"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部",
+      "上腕三頭筋"
+    ],
+    "equipment": "バーベル",
+    "main_zone": "upper"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "デクラインベンチプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0033"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "バーベル",
+    "main_zone": "lower"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ダンベルプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0289"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "インクラインダンベルプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0314"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部",
+      "上腕三頭筋"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "upper"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ディップス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0251"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "自重",
+    "main_zone": "lower"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "プッシュアップ(腕立て伏せ)",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0662"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "自重",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "チェストプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0576"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "三角筋前部"
+    ],
+    "equipment": "マシン",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ダンベルフライ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0308"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ケーブルフライ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0227"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ペックデック",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0596"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "マシン",
+    "main_zone": "mid"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ローケーブルクロスオーバー",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0179"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "upper"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ハイケーブルクロスオーバー",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0158"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "lower"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "ペックフライ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": null,
+      "note": "元データに直接対応する種目なし（インクライン/デクラインのマシンペックフライは存在せず、近いのはプレス動作のlever incline/decline chest pressのみ）。主働筋・関連筋はトレーニング理論に基づき手動設定"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "マシン",
+    "main_zone": "upper"
+  },
+  {
+    "main_body_part": "胸",
+    "name_ja": "インクラインダンベルフライ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0319"
+    },
+    "main_muscle": "大胸筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "upper"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "デッドリフト",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0032"
+    },
+    "main_muscle": "脊柱起立筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "脊柱起立筋",
+      "僧帽筋"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "ベントオーバーロー",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0027"
+    },
+    "main_muscle": "上背部",
+    "related_muscles": [
+      "上腕二頭筋",
+      "前腕",
+      "僧帽筋",
+      "三角筋後部"
+    ],
+    "equipment": "バーベル",
+    "main_zone": "upper_back"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "ラットプルダウン",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0673"
+    },
+    "main_muscle": "広背筋",
+    "related_muscles": [
+      "上腕二頭筋",
+      "前腕",
+      "僧帽筋",
+      "三角筋後部"
+    ],
+    "equipment": "マシン",
+    "main_zone": "lat"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "チンニング(懸垂)",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "1326"
+    },
+    "main_muscle": "広背筋",
+    "related_muscles": [
+      "上腕二頭筋",
+      "前腕",
+      "僧帽筋",
+      "三角筋後部"
+    ],
+    "equipment": "自重",
+    "main_zone": "lat"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "シュラッグ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0095"
+    },
+    "main_muscle": "僧帽筋",
+    "related_muscles": [],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "バックエクステンション",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0489"
+    },
+    "main_muscle": "脊柱起立筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "ワンハンドローイング",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0292"
+    },
+    "main_muscle": "上背部",
+    "related_muscles": [
+      "上腕二頭筋",
+      "前腕",
+      "僧帽筋",
+      "三角筋後部"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "upper_back"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "アシストチンニング",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0572"
+    },
+    "main_muscle": "広背筋",
+    "related_muscles": [
+      "上腕二頭筋",
+      "前腕",
+      "僧帽筋",
+      "三角筋後部"
+    ],
+    "equipment": "マシン",
+    "main_zone": "lat"
+  },
+  {
+    "main_body_part": "背中",
+    "name_ja": "ローロウ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "1350",
+      "note": "元データのtarget（upper back）とは異なり、主働筋を下背部としている（ユーザーの体感を優先。31.4節で一度削除した経緯あり）"
+    },
+    "main_muscle": "脊柱起立筋",
+    "related_muscles": [
+      "上背部",
+      "僧帽筋",
+      "上腕二頭筋",
+      "前腕"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "ケーブルショルダープレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0219"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "上背部"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "front"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "アーノルドプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "2137"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "胸上部（大胸筋上部）"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "front"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "ケーブルサイドレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0178"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋",
+      "上腕三頭筋"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "lateral"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "ケーブルフロントレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0162"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "前腕"
+    ],
+    "equipment": "ケーブル",
+    "main_zone": "front"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "アップライトロウ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0120"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋",
+      "上腕二頭筋"
+    ],
+    "equipment": "バーベル",
+    "main_zone": "lateral"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "リアレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0380"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "back"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "ダンベルサイドレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0334"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "lateral"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "インクラインサイドレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0323"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋",
+      "上腕三頭筋"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "lateral"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "シーテッドサイドレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0396"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "僧帽筋"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "lateral"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "ダンベルショルダープレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0405"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "胸上部（大胸筋上部）"
+    ],
+    "equipment": "ダンベル",
+    "main_zone": "front"
+  },
+  {
+    "main_body_part": "肩",
+    "name_ja": "スミスショルダープレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0766"
+    },
+    "main_muscle": "三角筋",
+    "related_muscles": [
+      "上腕三頭筋",
+      "胸上部（大胸筋上部）"
+    ],
+    "equipment": "マシン",
+    "main_zone": "front"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "バーベルスクワット",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0043"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "スミスマシンスクワット",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0770"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "レッグプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0739"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ゴブレットスクワット",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0534"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "ケトルベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "バーベルランジ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0054"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ウォーキングランジ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "1460"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ステップアップ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0114"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "レッグエクステンション",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0585"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "ハムストリング"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ライイングレッグカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0586"
+    },
+    "main_muscle": "ハムストリング",
+    "related_muscles": [
+      "ふくらはぎ"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "シーテッドレッグカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0599"
+    },
+    "main_muscle": "ハムストリング",
+    "related_muscles": [
+      "ふくらはぎ"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ルーマニアンデッドリフト",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0085"
+    },
+    "main_muscle": "ハムストリング",
+    "related_muscles": [
+      "臀筋群",
+      "脊柱起立筋"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "スタンディングカーフレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0605"
+    },
+    "main_muscle": "ふくらはぎ",
+    "related_muscles": [],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "カーフレイズ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "1373"
+    },
+    "main_muscle": "ふくらはぎ",
+    "related_muscles": [],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ブルガリアンスクワット",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0410"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "ヒップアダクションマシン",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0598"
+    },
+    "main_muscle": "内転筋群",
+    "related_muscles": [
+      "ハムストリング",
+      "臀筋群"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "脚",
+    "name_ja": "スクワット",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": null,
+      "note": "元データに直接対応する種目なし（修飾なしの2脚立ち自重スクワットが存在せず、ジャンプ・片脚・スプリット等の修飾付きバリエーションのみ）。主働筋・関連筋はバーベルスクワット等の既存スクワット系種目と同一構成"
+    },
+    "main_muscle": "大腿四頭筋",
+    "related_muscles": [
+      "臀筋群",
+      "ハムストリング",
+      "ふくらはぎ"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "バーベルカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0031"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "ハンマーカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0313"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "プリーチャーカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0070"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "ケーブルカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0195"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ケーブル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "コンセントレーションカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0297"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "リバースカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0080"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "トライセプスプッシュダウン",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0201"
+    },
+    "main_muscle": "上腕三頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ケーブル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "トライセプスエクステンション",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0061"
+    },
+    "main_muscle": "上腕三頭筋",
+    "related_muscles": [],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "クローズグリップベンチプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0030"
+    },
+    "main_muscle": "上腕三頭筋",
+    "related_muscles": [
+      "胸（中部）",
+      "三角筋前部"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "ダンベルカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0294"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "インクラインダンベルカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0315"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "フレンチプレス",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "2188"
+    },
+    "main_muscle": "上腕三頭筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "ダンベル"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "マシンカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0575"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "腕",
+    "name_ja": "リバースプッシュアップ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0814"
+    },
+    "main_muscle": "上腕三頭筋",
+    "related_muscles": [
+      "三角筋前部"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "お尻",
+    "name_ja": "グルートブリッジ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "3013"
+    },
+    "main_muscle": "臀筋群",
+    "related_muscles": [
+      "ハムストリング"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "お尻",
+    "name_ja": "ヒップスラスト",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "3562"
+    },
+    "main_muscle": "臀筋群",
+    "related_muscles": [
+      "ハムストリング"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "お尻",
+    "name_ja": "ヒップアブダクションマシン",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0597"
+    },
+    "main_muscle": "臀筋群",
+    "related_muscles": [
+      "ハムストリング"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "ロシアンツイスト",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0687"
+    },
+    "main_muscle": "腹斜筋",
+    "related_muscles": [
+      "腹直筋"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "アブローラー",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0857"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [
+      "脊柱起立筋"
+    ],
+    "equipment": "アブローラー"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "ケーブルクランチ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0212"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [
+      "腹斜筋"
+    ],
+    "equipment": "ケーブル"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "クランチ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0274"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "アブドミナル",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0595"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [
+      "腹斜筋"
+    ],
+    "equipment": "マシン"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "上体起こし",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "3679"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "ツイストクランチ",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0635"
+    },
+    "main_muscle": "腹直筋",
+    "related_muscles": [
+      "腹斜筋"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "サイドプランク",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": "0705"
+    },
+    "main_muscle": "腹斜筋",
+    "related_muscles": [
+      "臀筋群"
+    ],
+    "equipment": "自重"
+  },
+  {
+    "main_body_part": "腹筋",
+    "name_ja": "トーソ・ローテーション",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": null,
+      "note": "元データに直接対応する種目なし（\"torso\"を含む種目名が1件も存在しない）。主働筋・関連筋はロシアンツイストと同じ回旋動作の理論に基づき手動設定"
+    },
+    "main_muscle": "腹斜筋",
+    "related_muscles": [
+      "腹直筋"
+    ],
+    "equipment": "マシン"
+  }
+]
