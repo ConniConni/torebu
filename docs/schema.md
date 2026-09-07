@@ -16,6 +16,9 @@ MVPの6テーブル（`users` / `exercises` / `workouts` / `workout_sets` / `rou
 
 - `react-native-body-highlighter`は**ライブラリとして利用しない**。SVGパス座標のみ静的コピーし、
   ゾーン塗り分け・FRONT/BACK間引き・ラベル衝突回避は自前のJS（DOM操作）をVueへ移植する
+- **スコープは種目1件ごとの単発ハイライトのみ**（実績の累計から鍛えた部位が分かる機能は将来の拡張）。
+  ④種目選択画面の各行に「ⓘ」ボタンを追加し、タップで全画面シートを開いて前面／背面を手動切り替えできる
+  UIにする（詳細はmuscle-highlight.mdの「画面配置・UI仕様」参照）
 
 ```
 exercises への追加カラム（既存の6テーブルの1つを拡張）
