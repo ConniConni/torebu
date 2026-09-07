@@ -4,7 +4,8 @@
   - 全画面シート(ポップオーバーではない)。上部に✕と種目名を固定表示
   - 前面/背面トグルを常設。光る部位が無い面を選んでも図と注記を出す(選択肢を隠さない)
   - 「関連筋も見る」トグル(プロトタイプ由来)：初期状態は主働筋のみ表示で、関連筋がある種目だけ
-    ボタンを出す
+    ボタンを出す。凡例欄の関連筋行はトグルOFFでも高さだけ確保する(invisible)。表示/非表示で
+    行数が変わると、下の凡例が伸び縮みして図の描画エリア(flex-1)ごと縮んで見えてしまうため
 -->
 <script setup lang="ts">
 import { BODY_SVG_DATA, ZONE_LABEL } from '~/utils/muscleHighlightSvg'
@@ -103,7 +104,7 @@ const mainZoneLabel = computed(() => {
           <span class="font-semibold text-blue-700">主働筋</span>：{{ mainMuscle
           }}<template v-if="mainZoneLabel">（{{ mainZoneLabel }}に効きやすい）</template>
         </p>
-        <p v-if="showRelated && relatedMuscles.length" class="mt-1">
+        <p v-if="relatedMuscles.length" class="mt-1" :class="{ invisible: !showRelated }">
           <span class="font-semibold text-blue-400">関連筋</span>：{{ relatedMuscles.join('、') }}
         </p>
       </div>
