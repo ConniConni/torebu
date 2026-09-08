@@ -20,6 +20,21 @@ interface GroupDetail extends Group {
   members: GroupMember[]
 }
 
+interface GroupWorkoutExerciseSummary {
+  name: string
+  setCount: number
+}
+
+interface GroupWorkout {
+  id: string
+  userId: string
+  displayName: string
+  performedAt: string
+  memo: string | null
+  hasSets: boolean
+  exerciseSummaries: GroupWorkoutExerciseSummary[]
+}
+
 // バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
 // （エラーコード自体は backend/src/routes/groups.ts 参照）
 const ERROR_MESSAGES: Record<string, string> = {
@@ -68,6 +83,10 @@ export function useGroups() {
     return await $fetch<GroupDetail>(`/api/groups/${id}`)
   }
 
+  async function fetchGroupWorkouts(id: string) {
+    return await $fetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
+  }
+
   async function reissueInvite(id: string) {
     return await $fetch<Group>(`/api/groups/${id}/invite`, { method: 'POST' })
   }
@@ -97,6 +116,7 @@ export function useGroups() {
     fetchGroups,
     createGroup,
     fetchGroupDetail,
+    fetchGroupWorkouts,
     reissueInvite,
     joinGroup,
     leaveGroup,
@@ -104,4 +124,4 @@ export function useGroups() {
   }
 }
 
-export type { Group, GroupDetail, GroupMember }
+export type { Group, GroupDetail, GroupMember, GroupWorkout, GroupWorkoutExerciseSummary }
