@@ -307,9 +307,9 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 
 | 仕組み | 実体 | 何を運ぶか | ページを離れると |
 |---|---|---|---|
-| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutId・performedAt・登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときだけリセット） |
-| `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため） |
-| `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときだけリセット） |
+| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutId・performedAt・登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだとき、またはログアウト時にリセット） |
+| `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため。ログアウト時にもリセット） |
+| `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだとき、またはログアウト時にリセット） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
 
 **なぜ4つあるのか**
@@ -322,6 +322,14 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 **横断ルール：画面をまたいで残したい状態は `ref` ではなく `useState` に置く。**
 
 `ref` はそのページ専用なので、ページを離れた瞬間に中身が消える。`useState` はアプリ全体で共有されるので残る。
+
+**注意点：`useState` はログアウトしても自動では消えない。** ログアウト→ログインは`navigateTo()`による
+SPA内遷移（フルリロード無し）のため、上記3つに加えて `useExercises`（`exercises`）・`useWorkouts`
+（`workouts`）・`useRoutines`（`routines`）のキャッシュも、明示的にリセットしないと同じブラウザタブで
+別アカウントにログインし直したときに前のユーザーのデータが残ったまま表示されてしまう
+（[Issue #111](https://github.com/ConniConni/torebu/issues/111)で発覚・修正）。そのため
+[useAuth.ts](../frontend/app/composables/useAuth.ts)の`logout()`で、ユーザーに紐づく`useState`を
+まとめてリセットしている。**新しく画面をまたぐ`useState`を追加したら、ここにも追記が必要。**
 
 ### 3-4. 日付の扱い
 
