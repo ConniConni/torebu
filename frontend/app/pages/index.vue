@@ -18,6 +18,7 @@ interface ExerciseGroup {
 const { user, logout } = useAuth()
 const { workouts, pending, error, fetchWorkouts } = useWorkouts()
 const { exercises, fetchExercises } = useExercises()
+const { fetchVolume } = useStats()
 const requestFetch = useRequestFetch()
 
 await fetchWorkouts()
@@ -47,6 +48,25 @@ const trainingDaysThisMonth = computed(() =>
   countTrainingDaysInMonth(allRecordedDates.value, today),
 )
 const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates.value))
+
+// 今週のサマリー（合計負荷重量・トレ日数、Phase3-D）。新規バックエンドAPIは作らず、
+// 既存GET /stats/volume（range=1mで直近4〜5週をカバー）をフロントで週集計する。
+// トレ日数は今月/通算と同じallRecordedDatesを流用する（frontend/app/utils/weeklySummary.ts参照）
+const weeklyVolumePoints = ref<{ date: string; volumeKg: number }[]>([])
+const weeklyVolumePending = ref(true)
+const weeklyVolumeError = ref(false)
+try {
+  weeklyVolumePoints.value = await fetchVolume('1m')
+} catch {
+  weeklyVolumeError.value = true
+} finally {
+  weeklyVolumePending.value = false
+}
+const weeklyVolumeKg = computed(() => sumWeeklyVolume(weeklyVolumePoints.value, today))
+const weeklyTrainingDays = computed(() =>
+  countWeeklyTrainingDays(allRecordedDates.value, today),
+)
+
 const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
@@ -158,6 +178,31 @@ async function onLogout() {
             }}</span
             >日
           </p>
+        </div>
+
+        <!-- 今週のサマリー（Phase3-D）。今月/通算の記録日数帯のすぐ下に置き、「継続」の文脈を
+             まとめる。集計元は既存GET /stats/volume（フロントで週集計、weeklySummary.ts参照）で、
+             このAPI呼び出しだけ失敗しても他の表示は妨げないよう独立してエラー処理する -->
+        <div class="rounded-lg border border-gray-200 bg-white p-3">
+          <p class="mb-2 text-xs font-semibold text-gray-500">今週のサマリー</p>
+          <p v-if="weeklyVolumePending" class="text-xs text-gray-400">読み込み中...</p>
+          <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
+            今週のサマリーの取得に失敗しました
+          </p>
+          <div v-else class="flex items-end justify-between">
+            <div>
+              <p class="text-2xl font-extrabold tabular-nums text-blue-700">
+                {{ weeklyVolumeKg.toLocaleString() }}<span class="ml-1 text-sm font-medium text-gray-700">kg</span>
+              </p>
+              <p class="text-xs text-gray-500">合計負荷重量</p>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-extrabold tabular-nums text-blue-700">
+                {{ weeklyTrainingDays }}<span class="ml-1 text-sm font-medium text-gray-700">日</span>
+              </p>
+              <p class="text-xs text-gray-500">トレ日数</p>
+            </div>
+          </div>
         </div>
 
         <HomeCalendar
