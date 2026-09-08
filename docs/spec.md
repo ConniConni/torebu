@@ -332,6 +332,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   `commentCount`（件数、いいねの`reactionCount`と同じ形で`groupBy`により1クエリで取得）のみを
   含め、コメント本文自体は展開時に`GET /workouts/:id/comments`で遅延取得する（記録フィード
   自体のペイロードを重くしないため）
+- **入力欄のEnter送信はIME変換確定と区別する**：`@keydown.enter`ハンドラ（`onCommentEnter`）で
+  `event.isComposing`を見て、変換中のEnterでは送信せず、変換確定後に改めて押したEnterでのみ送信する
+  （2026-09-09、レビュー指摘で修正。PC入力で変換確定のEnterがそのまま誤送信されていた）
 - 自分のコメントのみ、Issue #93で確立した「即削除・確認なし系」の丸バッジ×ゴミ箱アイコン
   （[TrashIcon.vue](../frontend/app/components/TrashIcon.vue)）を表示する。確認ダイアログは
   挟まない
@@ -343,8 +346,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   無かったため着手。事前にUIモックで合意した上で実装した
 - **通知を作るAPIは無い**：`POST /workouts/:id/reactions`・`POST /workouts/:id/comments`
   （[workouts.ts](../backend/src/routes/workouts.ts)）の内部で`notifyWorkoutOwner`関数を呼び、
-  副作用として`notifications`を作る。対象は常に**自分の記録**（通知の宛先＝記録の投稿者）なので、
-  グループIDのような追加の紐付けは不要
+  副作用として`notifications`を作る。対象は常に**自分の記録**（通知の宛先＝記録の投稿者）
 - **自分の記録への自分の操作では作らない**（`recipientId === actorId`ならスキップ）
 - いいねは`upsert`で冪等だが、**通知は新規いいね時のみ**作る（2回目以降の押下で複製しないよう、
   `upsert`実行前に既存いいねの有無を確認している）。いいね取り消し（`DELETE`）時に通知を削除する
@@ -356,9 +358,16 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   フロントは**一覧取得→既読化の順で呼ぶ**ことで、開いた瞬間の未読/既読の見た目（背景色・ドット）を
   取得時点のスナップショットで出せるようにしている（先に既読化すると全件既読の見た目になり、
   どれが新着だったか分からなくなるため）
-- 通知一覧の各項目は自分の記録（`/workouts/new?date=YYYY-MM-DD`、③記録作成・見返し画面）への
-  リンクになっている。③⑥統合（[roadmap.md](./roadmap.md)参照）により、日付を指定するだけで
-  対象の記録に直接遷移できる
+- **通知一覧の各項目のリンク先はグループの記録フィード（`/groups/:groupId/workouts?workout=:workoutId`）
+  を優先する**（実装当初は自分の記録画面`/workouts/new`にリンクしていたが、いいね・コメントは
+  自分の記録画面には表示されずグループの記録フィードでしか見えないため、レビュー指摘を受けて
+  変更した。2026-09-09）。`GET /notifications`のレスポンスに、通知した相手（actor）と自分が
+  **現在も同席しているアクティブなグループ**を1つ引いた`target.groupId`を含める
+  （`findSharedGroupIds`関数。判定基準は`shareActiveGroup`と同じ）。actorが既に共通のグループを
+  全て退会している等で`groupId`が`null`の場合のみ、自分の記録画面（`/workouts/new?date=...`）に
+  フォールバックする
+  - グループの記録フィード側（`groups/[id]/workouts.vue`）は`?workout=`クエリを見て、対象カードまで
+    自動スクロール・コメント欄を自動展開・一時的な枠線ハイライトを行う
 - ベルアイコンは[BellIcon.vue](../frontend/app/components/BellIcon.vue)を新規追加
   （HeartIcon.vue・CommentIcon.vue等と同じ方針でHeroiconsのSVGパスを静的コピー）
 
@@ -670,7 +679,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している |
 | `GET/POST /workouts/:id/comments`<br>`DELETE /workouts/:id/comments/:commentId` | 認可は`reactions`と同じ`shareActiveGroup`関数を再利用。削除は`userId`一致も条件に加えるため、自分のコメント以外は`404` |
 | いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる |
-| `GET /notifications` | 対象は常に**自分の記録**（`notifyWorkoutOwner`が`recipientId = workout.userId`で作るため）。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）を含める。この要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
+| `GET /notifications` | 対象は常に**自分の記録**（`notifyWorkoutOwner`が`recipientId = workout.userId`で作るため）。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
 
 ---
 
