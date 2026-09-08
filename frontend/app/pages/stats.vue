@@ -92,7 +92,11 @@ watch(range, () => {
   loadVolume()
   loadHistory()
 })
-watch(selectedExerciseId, loadHistory)
+// immediate: trueが必要。selectedExerciseIdの初期値は上のwatchEffectでこのwatch登録より前に
+// 同期的にセットされるため、immediateなしだとその初回セットをwatchが検知できず、
+// ページを開いた直後(=自動選択された種目)はloadHistory()が一度も呼ばれないまま
+// 「この期間の記録がありません」の初期状態で放置されてしまう(Issue #126)
+watch(selectedExerciseId, loadHistory, { immediate: true })
 await loadVolume()
 
 const chartOptions = { responsive: true, maintainAspectRatio: false }
