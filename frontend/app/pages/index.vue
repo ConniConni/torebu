@@ -232,18 +232,20 @@ async function onLogout() {
                 >
                   {{ point.label }}
                 </p>
-                <div class="h-3 flex-1 rounded-full bg-blue-50">
+                <div
+                  v-if="point.volumeKg > 0"
+                  class="h-3 flex-1 rounded-full bg-blue-50"
+                >
                   <div
                     class="h-3 rounded-full bg-blue-600"
                     :class="point.label === '今週' ? '' : 'opacity-40'"
                     :style="{
-                      width:
-                        point.volumeKg === 0
-                          ? '0%'
-                          : `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
+                      width: `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
                     }"
                   />
                 </div>
+                <!-- 記録が無い週は薄い空バーを出さず、余白のみにする（ユーザー指摘、2026-09-08） -->
+                <div v-else class="h-3 flex-1" />
               </div>
             </div>
           </div>
