@@ -61,7 +61,17 @@ export function useExercises() {
     )
   }
 
-  return { exercises, pending, error, fetchExercises, createExercise, deleteExercise }
+  // lastSetをその場で書き換える(前回記録の自動反映、Issue #116)。`exercises`はuseStateで
+  // セッション中ずっとキャッシュされ続ける(③に戻るたびの再取得はしない設計)ため、セットを
+  // 保存しても放っておくとlastSetが古いまま残ってしまう。セット保存の成功直後に呼んで、
+  // 次にこの種目を別の日で使うときの前回値をその場で最新化する
+  function patchLastSet(exerciseId: string, lastSet: { weightKg: number | null; reps: number }) {
+    exercises.value = (exercises.value ?? []).map((e) =>
+      e.id === exerciseId ? { ...e, lastSet } : e,
+    )
+  }
+
+  return { exercises, pending, error, fetchExercises, createExercise, deleteExercise, patchLastSet }
 }
 
 export type { Exercise }

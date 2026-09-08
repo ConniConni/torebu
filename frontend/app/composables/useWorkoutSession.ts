@@ -25,6 +25,7 @@ export function useWorkoutSession() {
   }))
   const requestFetch = useRequestFetch()
   const { workouts, fetchWorkouts } = useWorkouts()
+  const { patchLastSet } = useExercises()
 
   // その日の記録を開始する。同じ日のworkoutが既にあれば(ホームから戻って再開した場合など)
   // 作り直さずそれを使う。
@@ -104,6 +105,8 @@ export function useWorkoutSession() {
       body: { exerciseId, reps, weightKg },
     })
     session.value.sets = [...session.value.sets, set]
+    // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する。詳細はuseExercises.ts参照
+    patchLastSet(exerciseId, { weightKg: set.weightKg, reps: set.reps })
     return set
   }
 
@@ -120,6 +123,16 @@ export function useWorkoutSession() {
       { method: 'PATCH', body: { weightKg, reps } },
     )
     session.value.sets = session.value.sets.map((s) => (s.id === updated.id ? updated : s))
+    // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する（詳細はuseExercises.ts参照）。
+    // ただし編集したのがこのworkout内でその種目の最後(setOrder最大)のセットのときだけ更新する。
+    // 例えば3セット中1セット目だけ編集した場合、lastSetは引き続き3セット目の値を指すべきなので、
+    // 1セット目の編集でlastSetを上書きしてしまうと誤った値になる
+    const sameExerciseSetOrders = session.value.sets
+      .filter((s) => s.exerciseId === updated.exerciseId)
+      .map((s) => s.setOrder)
+    if (updated.setOrder === Math.max(...sameExerciseSetOrders)) {
+      patchLastSet(updated.exerciseId, { weightKg: updated.weightKg, reps: updated.reps })
+    }
     return updated
   }
 

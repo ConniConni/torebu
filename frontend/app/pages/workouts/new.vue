@@ -201,7 +201,16 @@ watch(
 // 値が不正な間（回数が空・0以下等）は保存をスキップする。
 // Vue 3.4以降、type="number"のv-modelは有効な数値が入るとStringではなくNumberとして
 // 保持されるため（自重で空欄のときはStringのまま）、trim()の前にString()で揃える
-function onSetFieldBlur(setId: string) {
+// 同じセットに対するblur保存が短時間に連続すると（例：重量欄→回数欄と続けてblurする）、
+// 2つのPATCHがほぼ同時に飛び、レスポンスが送信順と逆に返ってくることがある。
+// 素朴にそれぞれのthenでsession.value.sets/lastSetキャッシュを更新すると、後から返ってきた方が
+// 「新しい値」として上書きしてしまい、実際は先勝ちしたはずの古い値が残ってしまう
+// （updateSet自体は毎回サーバーの最新状態を返すので個々の呼び出しは正しいが、順序が問題になる）。
+// これを避けるため、同じsetIdへの保存は直前の保存が終わるまで待ってから始める(直列化する)
+async function onSetFieldBlur(setId: string) {
+  const previous = pendingSetSaves.get(setId)
+  if (previous) await previous
+
   const inputs = setInputs[setId]
   if (!inputs) return
   const reps = Number(inputs.reps)
@@ -300,14 +309,29 @@ if (initialPickedExerciseId) {
 // セッション状態をリセットする」だけの処理（workoutが未作成なら再取得もしない）。
 // 「今日の記録を完了」だけがこの再取得をしていて、「ホームへ戻る」は素のリンクだったため
 // 遷移直後の②ホームに今回の変更が反映されないことがあった。実質同じ操作なので1つに統合する。
-// メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる
+// メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる。
+// セットの重量・回数も同様：フィールドのblurは離脱ボタンのclickより先に発火する
+// （ブラウザのイベント順序上、blur→clickの順になる）ため、この時点でpendingSetSavesには
+// 直前の編集の保存Promiseが積まれているはずだが、それを待たずに遷移すると
+// 直前の入力が保存されないまま失われる(気づいたことをその場で修正。Issue #116の動作確認中に発覚)
 async function onLeaveWorkout() {
   await (pendingMemoSave ?? saveMemoIfChanged())
+  await Promise.all(pendingSetSaves.values())
   await finishWorkout()
   // 入力待ちの種目もworkout単位の状態のため、離脱と合わせてリセットする
   // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）
   pendingExercises.value = []
   await navigateTo('/')
+}
+
+// 「＋種目を追加」も④への画面遷移(離脱)を伴うため、onLeaveWorkoutと同じ理由で
+// 保存中のセット編集を待ってから遷移する
+async function onGoToExercisePicker() {
+  await Promise.all(pendingSetSaves.values())
+  await navigateTo({
+    path: '/workouts/exercises',
+    query: { returnTo: `/workouts/new?date=${targetDate}` },
+  })
 }
 
 // --- 記録全体の削除（⑥記録詳細のconfirmingDelete/onDeleteWorkout相当を移植） ---
@@ -508,7 +532,7 @@ async function onDeleteWorkout() {
         <button
           type="button"
           class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
-          @click="navigateTo({ path: '/workouts/exercises', query: { returnTo: `/workouts/new?date=${targetDate}` } })"
+          @click="onGoToExercisePicker"
         >
           ＋種目を追加
         </button>
