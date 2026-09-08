@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { countWeeklyTrainingDays, sumWeeklyVolume, weekStartDate } from './weeklySummary'
+import {
+  countWeeklyTrainingDays,
+  sumWeeklyVolume,
+  weekStartDate,
+  weeklyVolumeTrend,
+} from './weeklySummary'
 
 describe('weekStartDate', () => {
   it('日曜日ならその日自身を返す', () => {
@@ -58,5 +63,42 @@ describe('countWeeklyTrainingDays', () => {
 
   it('今週の記録が無ければ0を返す', () => {
     expect(countWeeklyTrainingDays([], today)).toBe(0)
+  })
+})
+
+describe('weeklyVolumeTrend', () => {
+  const today = '2026-09-08' // 火曜日、今週は09-06(日)〜09-12(土)
+
+  it('デフォルトで直近4週分を古い週→新しい週の順で返す', () => {
+    const points = [
+      { date: '2026-08-16', volumeKg: 100 }, // 3週前(08-16〜08-22)
+      { date: '2026-08-25', volumeKg: 200 }, // 2週前(08-23〜08-29)
+      { date: '2026-09-02', volumeKg: 300 }, // 1週前(08-30〜09-05)
+      { date: '2026-09-06', volumeKg: 400 }, // 今週(09-06〜09-12)
+      { date: '2026-09-08', volumeKg: 50 }, // 今週(同じ週に2件)
+    ]
+    expect(weeklyVolumeTrend(points, today)).toEqual([
+      { weekStart: '2026-08-16', label: '3週前', volumeKg: 100 },
+      { weekStart: '2026-08-23', label: '2週前', volumeKg: 200 },
+      { weekStart: '2026-08-30', label: '1週前', volumeKg: 300 },
+      { weekStart: '2026-09-06', label: '今週', volumeKg: 450 },
+    ])
+  })
+
+  it('データが無い週は0kgとして埋める', () => {
+    expect(weeklyVolumeTrend([], today)).toEqual([
+      { weekStart: '2026-08-16', label: '3週前', volumeKg: 0 },
+      { weekStart: '2026-08-23', label: '2週前', volumeKg: 0 },
+      { weekStart: '2026-08-30', label: '1週前', volumeKg: 0 },
+      { weekStart: '2026-09-06', label: '今週', volumeKg: 0 },
+    ])
+  })
+
+  it('weeksを指定すると件数を変えられる', () => {
+    const result = weeklyVolumeTrend([], today, 2)
+    expect(result).toEqual([
+      { weekStart: '2026-08-30', label: '1週前', volumeKg: 0 },
+      { weekStart: '2026-09-06', label: '今週', volumeKg: 0 },
+    ])
   })
 })

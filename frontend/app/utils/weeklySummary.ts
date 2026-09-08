@@ -45,3 +45,29 @@ export function countWeeklyTrainingDays(recordedDates: string[], today: string):
   const end = weekEndDate(today)
   return new Set(recordedDates.filter((d) => d >= start && d <= end)).size
 }
+
+export interface WeeklyVolumeTrendPoint {
+  weekStart: string
+  label: string // 今週／1週前／2週前…
+  volumeKg: number
+}
+
+// todayを含む週を最新として、直近weeks週分の合計負荷重量を古い週→新しい週の順で返す
+// （表示側で「今週を上に」等の並び替えをしやすいよう、常に時系列順で返す）
+export function weeklyVolumeTrend(
+  points: { date: string; volumeKg: number }[],
+  today: string,
+  weeks = 4,
+): WeeklyVolumeTrendPoint[] {
+  const currentWeekStart = weekStartDate(today)
+  const result: WeeklyVolumeTrendPoint[] = []
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = shiftDate(currentWeekStart, -7 * i)
+    const end = shiftDate(start, 6)
+    const volumeKg = points
+      .filter((p) => p.date >= start && p.date <= end)
+      .reduce((sum, p) => sum + p.volumeKg, 0)
+    result.push({ weekStart: start, label: i === 0 ? '今週' : `${i}週前`, volumeKg })
+  }
+  return result
+}
