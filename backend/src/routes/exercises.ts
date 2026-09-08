@@ -10,6 +10,9 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId
 
   // 公式種目(created_by IS NULL) + 自分が作成したカスタム種目
+  // 削除済み(deleted_at有り)のカスタム種目も含めて返す。過去のworkout_sets/routine_exercisesが
+  // このレスポンスをキャッシュして種目名を解決しているため、ここで除外すると過去記録の表示が
+  // 壊れる(「(不明な種目)」になる)。新規の記録・追加候補からの除外はフロント側でdeletedAtを見て行う
   const exercises = await prisma.exercise.findMany({
     where: { OR: [{ createdBy: null }, { createdBy: userId }] },
   })
@@ -51,6 +54,7 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
       mainMuscle: exercise.mainMuscle,
       relatedMuscles: exercise.relatedMuscles,
       mainZone: exercise.mainZone,
+      deletedAt: exercise.deletedAt,
     })),
   )
 })
@@ -93,5 +97,27 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     mainMuscle: exercise.mainMuscle,
     relatedMuscles: exercise.relatedMuscles,
     mainZone: exercise.mainZone,
+    deletedAt: exercise.deletedAt,
   })
+})
+
+// カスタム種目の削除(ソフトデリート)。作成者本人のみ可能。公式種目・他人の種目・
+// 存在しないID・削除済みはいずれも404(他人・削除済みのリソースは403ではなく404、docs/spec.md参照)
+exercisesRouter.delete('/:id', requireAuth, async (req, res) => {
+  const userId = req.session.userId
+
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: req.params.id, createdBy: userId, deletedAt: null },
+  })
+  if (!exercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  await prisma.exercise.update({
+    where: { id: exercise.id },
+    data: { deletedAt: new Date() },
+  })
+
+  res.status(204).end()
 })

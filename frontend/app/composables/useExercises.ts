@@ -12,6 +12,10 @@ interface Exercise {
   mainMuscle: string | null
   relatedMuscles: string[]
   mainZone: string | null
+  // 削除済み(ソフトデリート)のカスタム種目かどうか。nullなら未削除。
+  // 削除済みでも一覧レスポンス自体には残る(過去記録の種目名解決に使うため。Issue #113)。
+  // 種目選択・追加候補からはこのフィールドを見てフロント側で除外する
+  deletedAt: string | null
 }
 
 interface CreateExercisePayload {
@@ -46,7 +50,16 @@ export function useExercises() {
     return exercise
   }
 
-  return { exercises, pending, error, fetchExercises, createExercise }
+  // カスタム種目の削除(ソフトデリート)。一覧からは消さずdeletedAtだけ立てる
+  // (削除後も同じ画面内で過去記録の種目名解決に使われ続けるため。GET /exercisesと同じ方針)
+  async function deleteExercise(id: string) {
+    await $fetch(`/api/exercises/${id}`, { method: 'DELETE' })
+    exercises.value = (exercises.value ?? []).map((e) =>
+      e.id === id ? { ...e, deletedAt: new Date().toISOString() } : e,
+    )
+  }
+
+  return { exercises, pending, error, fetchExercises, createExercise, deleteExercise }
 }
 
 export type { Exercise }

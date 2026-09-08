@@ -12,6 +12,7 @@ let ownerId: string
 let otherId: string
 let exerciseId: string
 let othersExerciseId: string
+let deletedExerciseId: string
 
 beforeEach(async () => {
   const passwordHash = await bcrypt.hash(testPassword, 12)
@@ -32,6 +33,10 @@ beforeEach(async () => {
     data: { name: '他人の自作種目', muscleGroup: 'legs', createdBy: otherId },
   })
   othersExerciseId = othersExercise.id
+  const deletedExercise = await prisma.exercise.create({
+    data: { name: '削除済み自作種目', muscleGroup: 'arms', createdBy: ownerId, deletedAt: new Date() },
+  })
+  deletedExerciseId = deletedExercise.id
 })
 
 afterEach(async () => {
@@ -39,7 +44,9 @@ afterEach(async () => {
     where: { workout: { userId: { in: [ownerId, otherId] } } },
   })
   await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, otherId] } } })
-  await prisma.exercise.deleteMany({ where: { id: { in: [exerciseId, othersExerciseId] } } })
+  await prisma.exercise.deleteMany({
+    where: { id: { in: [exerciseId, othersExerciseId, deletedExerciseId] } },
+  })
   await prisma.user.deleteMany({ where: { id: { in: [ownerId, otherId] } } })
   // 他ファイルと共有のsessionテーブル全体を消すと並行実行中の他テストのログイン状態を壊すため、
   // ここでは削除しない(セッションはuserId削除に伴い次回アクセス時に無効化される)
@@ -286,6 +293,49 @@ describe('POST /workouts/:id/sets', () => {
     const res = await agent
       .post(`/workouts/${workout.id}/sets`)
       .send({ exerciseId: othersExerciseId, setOrder: 1, reps: 10 })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_exercise' })
+  })
+
+  it('削除済みの自分のカスタム種目は、このworkoutでまだ使っていなければ指定できない(400)', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: deletedExerciseId, setOrder: 1, reps: 10 })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_exercise' })
+  })
+
+  it('削除済みの自分のカスタム種目でも、このworkoutで既に使っていれば追加のセットを記録できる(新規選択を伴わない既存カードへの追加のため。Issue #113)', async () => {
+    const workout = await createWorkout(ownerId)
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: deletedExerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: deletedExerciseId, reps: 8 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ exerciseId: deletedExerciseId, setOrder: 2, reps: 8 })
+  })
+
+  it('削除済みの自分のカスタム種目は、別のworkoutで使っていても指定できない(400)', async () => {
+    const otherWorkout = await createWorkout(ownerId)
+    await prisma.workoutSet.create({
+      data: { workoutId: otherWorkout.id, exerciseId: deletedExerciseId, setOrder: 1, reps: 10 },
+    })
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: deletedExerciseId, setOrder: 1, reps: 10 })
 
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ error: 'invalid_exercise' })

@@ -27,10 +27,13 @@ const SIMILAR_NAME_MIN_LENGTH = 2
 const similarExercises = computed(() => {
   const normalizedInput = normalizeExerciseName(name.value)
   if (normalizedInput.length < SIMILAR_NAME_MIN_LENGTH) return []
-  return (exercises.value ?? []).filter((exercise) => {
-    const normalizedExisting = normalizeExerciseName(exercise.name)
-    return normalizedExisting.includes(normalizedInput) || normalizedInput.includes(normalizedExisting)
-  })
+  return (exercises.value ?? [])
+    // 削除済みの種目は新規記録には選べないため候補から除外する(Issue #113)
+    .filter((exercise) => !exercise.deletedAt)
+    .filter((exercise) => {
+      const normalizedExisting = normalizeExerciseName(exercise.name)
+      return normalizedExisting.includes(normalizedInput) || normalizedInput.includes(normalizedExisting)
+    })
 })
 
 async function selectSimilarExercise(exerciseId: string) {

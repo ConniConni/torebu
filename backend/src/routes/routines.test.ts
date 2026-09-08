@@ -12,6 +12,7 @@ let ownerId: string
 let otherId: string
 let exerciseId: string
 let othersExerciseId: string
+let deletedExerciseId: string
 
 beforeEach(async () => {
   const passwordHash = await bcrypt.hash(testPassword, 12)
@@ -32,6 +33,10 @@ beforeEach(async () => {
     data: { name: '他人の自作種目', muscleGroup: 'legs', createdBy: otherId },
   })
   othersExerciseId = othersExercise.id
+  const deletedExercise = await prisma.exercise.create({
+    data: { name: '削除済み自作種目', muscleGroup: 'arms', createdBy: ownerId, deletedAt: new Date() },
+  })
+  deletedExerciseId = deletedExercise.id
 })
 
 afterEach(async () => {
@@ -39,7 +44,9 @@ afterEach(async () => {
     where: { routine: { userId: { in: [ownerId, otherId] } } },
   })
   await prisma.routine.deleteMany({ where: { userId: { in: [ownerId, otherId] } } })
-  await prisma.exercise.deleteMany({ where: { id: { in: [exerciseId, othersExerciseId] } } })
+  await prisma.exercise.deleteMany({
+    where: { id: { in: [exerciseId, othersExerciseId, deletedExerciseId] } },
+  })
   await prisma.user.deleteMany({ where: { id: { in: [ownerId, otherId] } } })
   // 他ファイルと共有のsessionテーブル全体を消すと並行実行中の他テストのログイン状態を壊すため、
   // ここでは削除しない(セッションはuserId削除に伴い次回アクセス時に無効化される)
@@ -272,6 +279,18 @@ describe('POST /routines/:id/exercises', () => {
     const res = await agent
       .post(`/routines/${routine.id}/exercises`)
       .send({ exerciseId: othersExerciseId, sortOrder: 1 })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_exercise' })
+  })
+
+  it('削除済みの自分のカスタム種目は追加できない(400)', async () => {
+    const routine = await createRoutine(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/routines/${routine.id}/exercises`)
+      .send({ exerciseId: deletedExerciseId, sortOrder: 1 })
 
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ error: 'invalid_exercise' })

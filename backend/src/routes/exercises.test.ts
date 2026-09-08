@@ -196,6 +196,94 @@ describe('POST /exercises', () => {
       mainMuscle: null,
       relatedMuscles: [],
       mainZone: null,
+      deletedAt: null,
     })
+  })
+})
+
+describe('DELETE /exercises/:id', () => {
+  it('未ログインなら401を返す', async () => {
+    const exercise = await createExercise({
+      data: { name: '削除テスト種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const res = await request(app).delete(`/exercises/${exercise.id}`)
+
+    expect(res.status).toBe(401)
+  })
+
+  it('自分のカスタム種目を削除できる(deletedAtが立つ)', async () => {
+    const exercise = await createExercise({
+      data: { name: '削除テスト種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/exercises/${exercise.id}`)
+
+    expect(res.status).toBe(204)
+    const updated = await prisma.exercise.findUniqueOrThrow({ where: { id: exercise.id } })
+    expect(updated.deletedAt).not.toBeNull()
+  })
+
+  it('削除後もGET /exercisesのレスポンスには残る(過去記録の種目名解決のため)', async () => {
+    const exercise = await createExercise({
+      data: { name: '削除テスト種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const agent = await loginAsOwner()
+    await agent.delete(`/exercises/${exercise.id}`)
+    const res = await agent.get('/exercises')
+
+    const found = (res.body as Array<{ id: string; deletedAt: string | null }>).find(
+      (e) => e.id === exercise.id,
+    )
+    expect(found).toBeDefined()
+    expect(found?.deletedAt).not.toBeNull()
+  })
+
+  it('他人のカスタム種目は削除できない(404)', async () => {
+    const othersExercise = await createExercise({
+      data: { name: '他人の種目', muscleGroup: 'chest', createdBy: otherId },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/exercises/${othersExercise.id}`)
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'not_found' })
+    const untouched = await prisma.exercise.findUniqueOrThrow({ where: { id: othersExercise.id } })
+    expect(untouched.deletedAt).toBeNull()
+  })
+
+  it('公式種目は削除できない(404)', async () => {
+    const official = await createExercise({
+      data: { name: '公式種目(削除テスト)', muscleGroup: 'chest' },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/exercises/${official.id}`)
+
+    expect(res.status).toBe(404)
+    const untouched = await prisma.exercise.findUniqueOrThrow({ where: { id: official.id } })
+    expect(untouched.deletedAt).toBeNull()
+  })
+
+  it('存在しない種目IDは404', async () => {
+    const agent = await loginAsOwner()
+    const res = await agent.delete('/exercises/00000000-0000-0000-0000-000000000000')
+
+    expect(res.status).toBe(404)
+  })
+
+  it('既に削除済みの種目を再度削除しようとすると404', async () => {
+    const exercise = await createExercise({
+      data: { name: '削除テスト種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const agent = await loginAsOwner()
+    await agent.delete(`/exercises/${exercise.id}`)
+    const res = await agent.delete(`/exercises/${exercise.id}`)
+
+    expect(res.status).toBe(404)
   })
 })
