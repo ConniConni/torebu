@@ -67,6 +67,15 @@ const weeklyTrainingDays = computed(() =>
   countWeeklyTrainingDays(allRecordedDates.value, today),
 )
 
+// 週別推移（直近4週間、横棒グラフ）。今週を一番上に表示するため表示直前でreverseする
+// （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
+// バーの長さのみで比較させる形をモックで比較して決定、2026-09-08）
+const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(weeklyVolumePoints.value, today))
+const weeklyVolumeTrendDisplay = computed(() => [...weeklyVolumeTrendPoints.value].reverse())
+const weeklyVolumeTrendMax = computed(() =>
+  Math.max(1, ...weeklyVolumeTrendPoints.value.map((p) => p.volumeKg)),
+)
+
 const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
@@ -182,25 +191,60 @@ async function onLogout() {
 
         <!-- 今週のサマリー（Phase3-D）。今月/通算の記録日数帯のすぐ下に置き、「継続」の文脈を
              まとめる。集計元は既存GET /stats/volume（フロントで週集計、weeklySummary.ts参照）で、
-             このAPI呼び出しだけ失敗しても他の表示は妨げないよう独立してエラー処理する -->
-        <div class="rounded-lg border border-gray-200 bg-white p-3">
-          <p class="mb-2 text-xs font-semibold text-gray-500">今週のサマリー</p>
-          <p v-if="weeklyVolumePending" class="text-xs text-gray-400">読み込み中...</p>
-          <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
-            今週のサマリーの取得に失敗しました
-          </p>
-          <div v-else class="flex items-end justify-between">
-            <div>
-              <p class="text-2xl font-extrabold tabular-nums text-blue-700">
-                {{ weeklyVolumeKg.toLocaleString() }}<span class="ml-1 text-sm font-medium text-gray-700">kg</span>
-              </p>
-              <p class="text-xs text-gray-500">合計負荷重量</p>
+             このAPI呼び出しだけ失敗しても他の表示は妨げないよう独立してエラー処理する。
+             2カードを横並びにし、左に今週の数値、右に直近4週間の推移（横棒グラフ）を置く
+             （中身・レイアウト・グラフ形式はモックで複数パターンを比較して決定） -->
+        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">今週のサマリーを読み込み中...</p>
+        <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
+          今週のサマリーの取得に失敗しました
+        </p>
+        <div v-else class="flex gap-3">
+          <div class="flex-1 rounded-lg border border-gray-200 bg-white p-3">
+            <p class="mb-2 text-xs font-semibold text-gray-500">今週のサマリー</p>
+            <div class="flex flex-col gap-2">
+              <div>
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                  {{ weeklyVolumeKg.toLocaleString()
+                  }}<span class="ml-1 text-sm font-medium text-gray-700">kg</span>
+                </p>
+                <p class="mt-1 text-xs text-gray-500">合計負荷重量</p>
+              </div>
+              <div>
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                  {{ weeklyTrainingDays
+                  }}<span class="ml-1 text-sm font-medium text-gray-700">日</span>
+                </p>
+                <p class="mt-1 text-xs text-gray-500">トレ日数</p>
+              </div>
             </div>
-            <div class="text-right">
-              <p class="text-2xl font-extrabold tabular-nums text-blue-700">
-                {{ weeklyTrainingDays }}<span class="ml-1 text-sm font-medium text-gray-700">日</span>
-              </p>
-              <p class="text-xs text-gray-500">トレ日数</p>
+          </div>
+          <div class="flex-1 rounded-lg border border-gray-200 bg-white p-3">
+            <p class="mb-3 text-xs font-semibold text-gray-500">週別推移</p>
+            <div class="flex flex-col gap-2.5">
+              <div
+                v-for="point in weeklyVolumeTrendDisplay"
+                :key="point.weekStart"
+                class="flex items-center gap-2"
+              >
+                <p
+                  class="w-9 shrink-0 text-[10px] leading-none"
+                  :class="point.label === '今週' ? 'font-semibold text-blue-700' : 'text-gray-500'"
+                >
+                  {{ point.label }}
+                </p>
+                <div class="h-3 flex-1 rounded-full bg-blue-50">
+                  <div
+                    class="h-3 rounded-full bg-blue-600"
+                    :class="point.label === '今週' ? '' : 'opacity-40'"
+                    :style="{
+                      width:
+                        point.volumeKg === 0
+                          ? '0%'
+                          : `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
+                    }"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
