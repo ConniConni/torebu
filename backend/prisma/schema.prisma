@@ -50,6 +50,7 @@ model User {
   createdExercises Exercise[]    @relation("ExerciseCreatedBy")
   createdGroups    Group[]       @relation("GroupCreatedBy")
   groupMemberships GroupMember[]
+  reactions        Reaction[]
 
   @@map("users")
 }
@@ -185,4 +186,27 @@ model GroupMember {
   @@id([groupId, userId])
   @@index([userId])
   @@map("group_members")
+}
+
+enum ReactionTargetType {
+  workout
+  workout_set
+  topic_post
+}
+
+// 汎用いいねテーブル。Phase4初弾ではworkout宛のみ発行する(workout_set/topic_postは対象UI未実装のためスコープ外)。
+// docs/schema.mdのPhase4節参照。target_idはFK制約なし(target_typeによって参照先テーブルが変わるため)、
+// 対象が存在するか・対象へのアクセス権があるかはアプリ側(routes/workouts.ts)で検証する
+model Reaction {
+  id         String             @id @default(uuid())
+  targetType ReactionTargetType @map("target_type")
+  targetId   String             @map("target_id")
+  userId     String             @map("user_id")
+  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([targetType, targetId, userId])
+  @@index([targetType, targetId])
+  @@map("reactions")
 }
