@@ -157,7 +157,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
+| `/` | ② | ホーム（カレンダー・記録日数） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -167,6 +167,20 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
+
+**記録日数（今月・通算、Phase3-B）の実装メモ**
+- ②ホーム画面の「＋今日の記録をつける」ボタン・「ルーティン一覧」リンクとカレンダーの間に、
+  薄い青のサマリー帯として「今月N日」「通算N日」を横並びで常時表示（実装の見た目は複数パターンを
+  比較して決めた。比較に使った企画メモ（Artifact）参照）
+- 計算ロジックは[trainingDays.ts](../frontend/app/utils/trainingDays.ts)の
+  `countTrainingDaysInMonth()`（今月分）・`countTotalTrainingDays()`（通算分）。バックエンドAPIは
+  追加していない（`GET /workouts`で既に取得済みの`performedAt`一覧から計算できるため）
+- 「記録がある日」は`hasSets`を問わない（メモのみの日も対象。`workouts.performed_at`の存在だけで
+  判定できる軽量な機能、という`docs/roadmap.md`の前提に合わせた）
+- 当初は連続記録日数（ストリーク）を名前欄の隣にテキストで表示する案で実装したが、「1年後にその
+  数字が良いのか悪いのか意味を持ちづらい」という指摘を受け、期間の区切りが分かりやすい「今月」＋
+  積み上げが伝わる「通算」の組み合わせに変更した。さらに表示の見た目（配置・華やかさ）を6パターン
+  のモックで比較し、CTAとカレンダーの間に帯として置く案を採用した（2026-09-08）
 
 **部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
 - コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)
