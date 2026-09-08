@@ -157,8 +157,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー） | `GET /workouts`, `GET /workouts/:id`, `GET /stats/volume`, `POST /auth/logout` | `auth` |
-| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `POST /auth/logout` | `auth` |
+| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
@@ -242,8 +242,12 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
  │   ※ 常に「今日」固定                              │
  │                                                    │
  ├─ 記録カード（過去日含む）を選ぶ ───> ③（/workouts/new?date=その日）
- │   ※ 記録の見返し・編集・削除もここで行う           │
+ │   ※ 記録の見返し・編集はここで行う                 │
  │      （⑥記録詳細は廃止し③に統合済み）             │
+ │   ※ 各カードの🗑️ボタン→画面内2段階確認で           │
+ │      記録本体を削除できる（`DELETE /workouts/:id`。 │
+ │      Issue #127で③から②へ移設。⑤ルーティン一覧の  │
+ │      本体削除と同じ見た目・方式）                   │
  │                                                    │
  ├─ カレンダーで今日・過去日を選び、その日の記録が0件 ─>│
  │   「＋この日の記録を始める」                      ③（/workouts/new?date=その日）
@@ -344,9 +348,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
    │      ・空欄で保存するとメモをクリアできる
    │
    └─「ホームへ戻る」→ ② ホームへ戻る（旧「今日の記録を完了」と統合済み、下記参照）。
-          「この記録を削除」→ 画面内の2段階確認（削除する／キャンセル）を経て
-          `DELETE /workouts/:id`（論理削除）。削除後は② ホームへ戻る
-          （`window.confirm()`は使わない、理由はbacklog.md参照）
+          記録本体の削除は③には無く、② ホームの記録カード側で行う（上記参照。
+          Issue #127：③画面内で「ホームへ戻る」ボタンと隣り合っているのが紛らわしいという
+          指摘を受けて移設した）
 ```
 
 ③のセット追加・編集・削除・メモ・記録削除は、いずれも操作のたびに即APIへ反映される設計のため、
@@ -403,9 +407,8 @@ APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列�
 **無ければ、この時点ではworkoutを作成しない**（`session.value.workoutId`は`null`のまま）。実際に
 セット記録・メモ保存のいずれかを行うタイミングで`ensureWorkout()`が呼ばれ、そこで初めて
 `POST /workouts`する（Issue #63）。③を開いただけ・種目を選んだだけで何も保存せずに離れた場合、
-workout行自体が作られないため、②ホームに空の記録カードが残ることはない。この間、③側では
-「今日の記録を完了」ボタンと「この記録を削除」セクションを表示しない（`workoutId`が無い＝
-完了・削除するものがまだ無いため）。
+workout行自体が作られないため、②ホームに空の記録カードが残ることはない（何も保存しなければ
+②に削除対象のカード自体が出ない、という形で結果的に同じことが保たれている）。
 
 `startWorkout()` は `session.value.performedAt` と引数の`performedAt`が一致するときだけ
 既存のセッションをそのまま使い回す（③⑥統合ステップ4で追加）。②の記録カードから日付の異なる
