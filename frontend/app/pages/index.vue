@@ -16,6 +16,8 @@ interface ExerciseGroup {
 }
 
 const { user, logout } = useAuth()
+const { unreadCount, fetchUnreadCount } = useNotifications()
+await fetchUnreadCount()
 const { workouts, pending, error, fetchWorkouts, deleteWorkout } = useWorkouts()
 const { exercises, fetchExercises } = useExercises()
 const { fetchVolume } = useStats()
@@ -166,13 +168,28 @@ async function onDeleteWorkout(id: string) {
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-900">{{ user?.displayName }}さん</p>
-        <button
-          type="button"
-          class="rounded bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-300"
-          @click="onLogout"
-        >
-          ログアウト
-        </button>
+        <div class="flex items-center gap-2">
+          <NuxtLink
+            to="/notifications"
+            class="relative flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700"
+            aria-label="通知"
+          >
+            <BellIcon class="h-4.5 w-4.5" />
+            <span
+              v-if="unreadCount > 0"
+              class="absolute -top-1 -right-1 min-w-[1rem] rounded-full border-2 border-gray-50 bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white"
+            >
+              {{ unreadCount > 9 ? '9+' : unreadCount }}
+            </span>
+          </NuxtLink>
+          <button
+            type="button"
+            class="rounded bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-300"
+            @click="onLogout"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
 
       <button
