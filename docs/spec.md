@@ -167,7 +167,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
 | `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
-| `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する | `GET /groups/:id/workouts` | `auth` |
+| `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタンを表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -292,6 +292,26 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   併存させると、Nuxtが`/groups/:id/workouts`のようなネストしたパスを`[id].vue`側にルーティングして
   しまい、URLだけ変わって画面が遷移しない不具合になる**（実装中に発覚。SPA遷移で気づいた。
   `docs/CLAUDE.md`のブラウザ確認方針どおり実際のクリック遷移で検証したことで発見できた）
+
+**グループの記録フィードへのいいね（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）の実装メモ**
+- 記録フィード画面ができたことで、いいねの対象となる「仲間の記録を見る画面」が揃ったため、
+  グループ基盤・記録フィードに続く交流機能として着手した。対象は`workout`のみ
+  （`workout_set`・`topic_post`は対象UIが無いためスコープ外。`docs/schema.md`の`reactions`
+  テーブル定義参照）
+- **エンドポイントは`groups`ではなく`workouts`側に置く**：いいねの対象はworkout単体であり、
+  グループへの所属は認可判定に使うだけのため。`POST/DELETE /workouts/:id/reactions`
+  （[workouts.ts](../backend/src/routes/workouts.ts)）
+- **認可はグループの記録フィードで見える範囲と一致させる**：自分の記録、または
+  いずれかのアクティブなグループで同席しているメンバーの記録にのみいいねできる
+  （`shareActiveGroup`関数）。対象外・削除済み・存在しない場合は`404`（IDOR対策）
+- **冪等に設計**：`POST`は`upsert`、`DELETE`は`deleteMany`を使い、二重いいね・未いいね状態での
+  取り消しのどちらもエラーにせず現在の状態（`reactionCount`/`reactedByMe`）を返す
+- `GET /groups/:id/workouts`のレスポンス各要素に`reactionCount`（いいね数）・`reactedByMe`
+  （自分がいいね済みか）を追加。N+1を避けるため`groupBy`と`findMany`をそれぞれ1回ずつ発行して
+  まとめて引く
+- フロントはハート型のトグルボタンをカード下部に追加（[HeartIcon.vue](../frontend/app/components/HeartIcon.vue)、
+  outline/solidの2種をTrashIcon.vue等と同じ方針でHeroiconsから静的コピー）。連打による二重
+  リクエストを防ぐため、通信中のworkoutIdを持つSetでボタンを無効化する
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -519,6 +539,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/workouts/:id/sets` | 要 | セットを1件追加する |
 | PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する |
 | DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除） |
+| POST | `/workouts/:id/reactions` | 要 | いいねする（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）。**自分の記録、またはいずれかのアクティブなグループで同席しているメンバーの記録のみ**（`404`で存在を隠す）。冪等（`upsert`。既にいいね済みでも`200`） |
+| DELETE | `/workouts/:id/reactions` | 要 | いいねを取り消す。認可は`POST`と同じ。冪等（未いいねの状態で呼んでも`200`） |
 
 ### ルーティン — [routines.ts](../backend/src/routes/routines.ts)
 
@@ -547,7 +569,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
-| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）と種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）) を含む |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）)、いいね情報（`reactionCount`/`reactedByMe`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
@@ -585,12 +607,13 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等） |
 | `POST /groups/:id/leave` | オーナーの退会可否は「そのグループの**アクティブなオーナー数**」で判定する（`role`が`owner`かつ`left_at IS NULL`の行数）。1人なら`400 sole_owner_cannot_leave` |
 | `DELETE /groups/:id` | **ソフトデリート**（`groups.deleted_at`）。`group_members`側は変更しない。削除後は全メンバーが`GET /groups/:id`等で`404`になる |
+| `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している |
 
 ---
 
 ## 5. データモデル（引く章）
 
-正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の8テーブル。
+正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の9テーブル。
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
@@ -602,6 +625,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `routine_exercises` | ルーティンに入っている種目と並び順 | `target_sets`（jsonb、nullable）に目安セット（重量・回数の配列）を持てる。未設定は`null`（APIレスポンスでは`[]`に正規化。§4-2参照） |
 | `groups`（Phase4） | グループ本体 | `invite_code`は英数字約32文字（`crypto.randomBytes`によるbase64url）で`UNIQUE`。`invite_expires_at`は発行/再発行のたびに現在時刻+30日で更新（§3-1「グループ機能の実装メモ」参照）。`member_limit`はデフォルト10（将来課金で拡張、Phase5）。**`deleted_at`を持つ（ソフトデリート）**、削除は`role: owner`のメンバーのみ実行可 |
 | `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
+| `reactions`（Phase4） | いいね | `target_type`（enum：`workout`/`workout_set`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)、`workout_set`/`topic_post`は対象UI未実装）。`target_id`はFK制約なし（対象が`target_type`によって変わるため）、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`UNIQUE(target_type, target_id, user_id)`で1人1いいねを保証 |
 
 **`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
 `connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している
