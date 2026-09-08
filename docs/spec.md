@@ -389,7 +389,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 ## 4. API一覧（引く章）
 
-全22エンドポイント。パスは省略記法（`...`）を使わず毎回フルで書く。
+全24エンドポイント。パスは省略記法（`...`）を使わず毎回フルで書く。
 **リクエスト/レスポンスのフィールド一覧はここには書かない**
 （コードを正とする。2箇所に書くと必ず食い違うため）。実際の形は各ルートファイルを見る。
 
@@ -436,6 +436,13 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | PATCH | `/routines/:id/exercises/:routineExerciseId` | 要 | 並び順・目安セットを変更する（どちらか一方、または両方） |
 | DELETE | `/routines/:id/exercises/:routineExerciseId` | 要 | ルーティンから種目を外す |
 
+### 集計（Phase3-C） — [stats.ts](../backend/src/routes/stats.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| GET | `/stats/volume` | 要 | 日別の合計挙上重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計挙上重量の推移を返す。`range`クエリは`/stats/volume`と同じ |
+
 ※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
 
 ### 4-1. 全エンドポイント共通のルール
@@ -462,6 +469,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 | `routine_exercises` の `targetSets`（目安セット） | `[{ weightKg, reps }, ...]` の配列。`weightKg`・`reps` の制約は`workout_sets`と同じ（上記「重量・回数の制約」参照）。未設定は常に空配列 `[]` で返す（DB上は `null`）。`PATCH .../exercises/:routineExerciseId` は配列を丸ごと置き換える方式（1セットずつの更新APIは無い）。`targetSets: []` を送るとクリアできる |
+| `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
 
 ---
 
