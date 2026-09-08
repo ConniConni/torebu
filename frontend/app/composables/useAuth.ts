@@ -75,6 +75,7 @@ function resetUserState() {
   useState<unknown[] | null>('exercises', () => null).value = null
   useState<unknown[] | null>('workouts', () => null).value = null
   useState<unknown[] | null>('routines', () => null).value = null
+  useState<unknown[] | null>('groups', () => null).value = null
   useState<unknown[]>('pending-exercises', () => []).value = []
   useState<string | null>('picked-exercise-id', () => null).value = null
   useState('workout-session', () => ({
