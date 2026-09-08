@@ -186,17 +186,20 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   のモックで比較し、CTAとカレンダーの間に帯として置く案を採用した（2026-09-08）
 
 **今週のサマリー（Phase3-D）の実装メモ**
-- ②ホーム画面の「今月/通算」記録日数帯の直下に、白背景のカードとして「今週の合計負荷重量」
-  「今週のトレ日数」の2値を表示する。前週比較は分析寄りになりすぎる・先週分の集計や0除算対応の
-  実装コストが見合わないと判断し見送った（中身3パターン×表示場所2パターンをモックで比較して決定、
-  2026-09-08）
+- ②ホーム画面の「今月/通算」記録日数帯の直下に、白背景のカード2枚を横並びで表示する。
+  左カードは「今週の合計負荷重量」「今週のトレ日数」を縦積みで表示（横並びだと数字の桁数差で
+  間延びして見えたため縦積みに変更）。右カードは「週別推移」として直近4週間の合計負荷重量を
+  横棒グラフで表示する（今週の行を一番上、値ラベルは出さずバーの長さのみで比較させる形。
+  複数パターンをモックで比較して決定、2026-09-08）
+- 前週比較（増減%表示）は分析寄りになりすぎる・実装コストが見合わないと判断し見送った
 - 新規バックエンドAPIは作らず、既存`GET /stats/volume`（`range=1m`）のレスポンスをフロントで
   週集計して使う。トレ日数はPhase3-Bと同じ`allRecordedDates`（`GET /workouts`の`performedAt`
   一覧）を流用する。Phase3-Bと同じく「フロント集計のみで完結させる」方針を踏襲した
 - 週の定義は日曜始まり〜土曜（[HomeCalendar.vue](../frontend/app/components/HomeCalendar.vue)の
   曜日表示と揃える）。集計ロジックは[weeklySummary.ts](../frontend/app/utils/weeklySummary.ts)の
-  `weekStartDate()`/`weekEndDate()`/`sumWeeklyVolume()`/`countWeeklyTrainingDays()`（Vitestで
-  テスト済み）
+  `weekStartDate()`/`weekEndDate()`/`sumWeeklyVolume()`/`countWeeklyTrainingDays()`/
+  `weeklyVolumeTrend()`（Vitestでテスト済み）。`weeklyVolumeTrend()`はデータが無い週も0kgとして
+  返す（0埋めしない`/stats/volume`本体とは異なり、4週分を常に揃えて描画するため）
 - `GET /stats/volume`の取得に失敗しても他の表示（カレンダー等）は妨げないよう、このカード内だけで
   独立してエラー表示する
 
