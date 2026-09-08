@@ -137,18 +137,19 @@ async function onLogout() {
 
       <template v-else>
         <div
-          class="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 py-2 text-sm text-blue-900"
+          class="flex items-center justify-around rounded-lg border border-blue-100 bg-blue-50 py-2.5 text-xs text-blue-900"
         >
           <p>
-            今月<span class="font-extrabold tabular-nums text-blue-700"
-              >{{ trainingDaysThisMonth }}日</span
-            >
+            今月<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+              trainingDaysThisMonth
+            }}</span
+            >日
           </p>
-          <span class="text-blue-200">・</span>
           <p>
-            通算<span class="font-extrabold tabular-nums text-blue-700"
-              >{{ totalTrainingDays }}日</span
-            >
+            通算<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+              totalTrainingDays
+            }}</span
+            >日
           </p>
         </div>
 
