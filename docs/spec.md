@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み8ページ）
+### 3-1. 画面一覧（実装済み9ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -163,6 +163,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
+| `/stats` | ⑧ | 統計（合計挙上重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -183,6 +184,21 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   数字が良いのか悪いのか意味を持ちづらい」という指摘を受け、期間の区切りが分かりやすい「今月」＋
   積み上げが伝わる「通算」の組み合わせに変更した。さらに表示の見た目（配置・華やかさ）を6パターン
   のモックで比較し、CTAとカレンダーの間に帯として置く案を採用した（2026-09-08）
+
+**統計画面（⑧、Phase3-C）の実装メモ**
+- 構成：合計挙上重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋最大重量・
+  合計挙上重量の推移、折れ線2本）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
+  共通適用する
+- 種目セレクトの選択肢は集計対象（`GET /stats/exercises/:id/history`）と同じ公式種目のみに絞る
+  （カスタム種目・削除済み種目は候補から除外。渡すと404になるため）
+- グラフ描画は Chart.js + vue-chartjs（新規依存）。SSR時はcanvasを描画できないため`<ClientOnly>`
+  で囲む
+- APIレスポンス（`{date, ...}[]`）→Chart.jsのdataset形式への変換は
+  [statsChart.ts](../frontend/app/utils/statsChart.ts)に切り出し、Vitestでテストしている
+  （フロントのテスト基盤導入もこのタイミングで行った。docs/backlog.mdの保留事項参照）。
+  rangeや選択種目が変わるたびに取り直す一覧のため、`useStats`（コンポーザブル）では
+  `exercises`/`workouts`のようなセッション中キャッシュ（`useState`）は行っていない
+- ホーム画面（②）から「統計」ボタンでSPA遷移する
 
 **部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
 - コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)
