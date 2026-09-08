@@ -197,14 +197,41 @@ describe('POST /groups/:id/invite', () => {
     expect(res.status).toBe(404)
   })
 
-  it('ownerは招待コードを再発行できる', async () => {
-    const group = await createGroup()
+  it('ownerは招待コードを再発行でき、有効期限も延長される', async () => {
+    const nearExpiry = new Date(Date.now() + 60 * 1000) // すぐ期限切れになる値からの延長を確認する
+    const group = await createGroup({ inviteExpiresAt: nearExpiry })
 
     const agent = await loginAs(ownerEmail)
     const res = await agent.post(`/groups/${group.id}/invite`)
 
     expect(res.status).toBe(200)
     expect(res.body.inviteCode).not.toBe(group.inviteCode)
+    expect(new Date(res.body.inviteExpiresAt).getTime()).toBeGreaterThan(nearExpiry.getTime())
+  })
+
+  it('再発行後は古い招待コードでは参加できなくなる', async () => {
+    const group = await createGroup()
+    const oldInviteCode = group.inviteCode
+
+    const ownerAgent = await loginAs(ownerEmail)
+    const reissueRes = await ownerAgent.post(`/groups/${group.id}/invite`)
+    expect(reissueRes.status).toBe(200)
+
+    const outsiderAgent = await loginAs(outsiderEmail)
+    const joinRes = await outsiderAgent.post('/groups/join').send({ inviteCode: oldInviteCode })
+
+    expect(joinRes.status).toBe(404)
+    expect(joinRes.body.error).toBe('invalid_invite_code')
+  })
+
+  it('削除済みグループでは(元)ownerでも404を返す', async () => {
+    const group = await createGroup()
+    await prisma.group.update({ where: { id: group.id }, data: { deletedAt: new Date() } })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.post(`/groups/${group.id}/invite`)
+
+    expect(res.status).toBe(404)
   })
 })
 
