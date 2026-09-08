@@ -122,6 +122,69 @@ groupsRouter.get('/:id', requireAuth, async (req, res) => {
   })
 })
 
+groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    // 未所属者には存在の有無も返さない(IDOR対策)
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  // このグループのアクティブなメンバー全員(本人含む)のworkoutを対象にする
+  const memberIds = (
+    await prisma.groupMember.findMany({
+      where: { groupId, leftAt: null },
+      select: { userId: true },
+    })
+  ).map((m) => m.userId)
+
+  const workouts = await prisma.workout.findMany({
+    where: { userId: { in: memberIds }, deletedAt: null },
+    orderBy: { performedAt: 'desc' },
+    include: {
+      user: { select: { displayName: true } },
+      sets: { include: { exercise: { select: { name: true } } } },
+    },
+  })
+
+  res.status(200).json(
+    workouts.map((w) => {
+      // 種目ごとにセットをグルーピングして返す(②ホームの記録カードと同じ構造。frontend/app/pages/index.vueの
+      // workoutGroups参照)。フィードではアコーディオン展開でセットの重量・回数まで見せるため、
+      // サマリー(件数)だけでなく個々のセットを含める
+      const setsByExercise = new Map<string, { name: string; sets: (typeof w.sets)[number][] }>()
+      for (const set of w.sets) {
+        const entry = setsByExercise.get(set.exerciseId) ?? { name: set.exercise.name, sets: [] }
+        entry.sets.push(set)
+        setsByExercise.set(set.exerciseId, entry)
+      }
+      return {
+        id: w.id,
+        userId: w.userId,
+        displayName: w.user.displayName,
+        performedAt: w.performedAt.toISOString().slice(0, 10),
+        memo: w.memo,
+        hasSets: w.sets.length > 0,
+        exercises: [...setsByExercise.entries()].map(([exerciseId, { name, sets }]) => ({
+          exerciseId,
+          name,
+          sets: sets
+            .sort((a, b) => a.setOrder - b.setOrder)
+            .map((s) => ({
+              id: s.id,
+              setOrder: s.setOrder,
+              weightKg: s.weightKg === null ? null : Number(s.weightKg),
+              reps: s.reps,
+            })),
+        })),
+      }
+    }),
+  )
+})
+
 groupsRouter.post('/:id/invite', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const groupId = req.params.id as string

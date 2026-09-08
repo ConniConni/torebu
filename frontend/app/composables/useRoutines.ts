@@ -63,9 +63,12 @@ export function useRoutines() {
     routines.value = (routines.value ?? []).filter((r) => r.id !== id)
   }
 
-  // ③記録作成でルーティンを適用する際、種目一式（名前・部位込み）を取得するために使う
+  // ③記録作成でルーティンを適用する際、種目一式（名前・部位込み）を取得するために使う。
+  // 現状はクリック操作からしか呼ばれずSSR実行されないため実害は出ていないが、他のGET系と
+  // 同様にrequestFetchへ統一しておく（fetchGroupDetail等で見つかったのと同じ落とし穴を
+  // 将来ここで踏まないようにするため。2026-09-08）
   async function fetchRoutineDetail(id: string) {
-    return await $fetch<RoutineDetail>(`/api/routines/${id}`)
+    return await requestFetch<RoutineDetail>(`/api/routines/${id}`)
   }
 
   return {

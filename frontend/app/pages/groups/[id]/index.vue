@@ -118,6 +118,12 @@ async function onDelete() {
           <p class="mt-1 text-xs text-gray-500">
             メンバー {{ group.members.length }} / {{ group.memberLimit }}人
           </p>
+          <NuxtLink
+            :to="`/groups/${groupId}/workouts`"
+            class="mt-3 block rounded border border-brand-600 py-1.5 text-center text-sm font-semibold text-brand-600"
+          >
+            みんなの記録を見る
+          </NuxtLink>
         </div>
 
         <div class="rounded-lg bg-white p-4 shadow">

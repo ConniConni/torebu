@@ -177,6 +177,110 @@ describe('GET /groups/:id', () => {
   })
 })
 
+describe('GET /groups/:id/workouts', () => {
+  let exerciseId: string
+
+  beforeEach(async () => {
+    const exercise = await prisma.exercise.create({
+      data: { name: 'ベンチプレス', muscleGroup: 'chest' },
+    })
+    exerciseId = exercise.id
+  })
+
+  afterEach(async () => {
+    // workout_setsがexercisesを参照しているため、先にworkouts(cascadeでsetsも消える)を全削除してから消す
+    await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
+    await prisma.exercise.deleteMany({ where: { id: exerciseId } })
+  })
+
+  it('未所属者には404を返す(IDOR対策)', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(outsiderEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('退会済みメンバーには404を返す', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId, { leftAt: new Date() })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('アクティブな全メンバー(本人含む)の記録を投稿者情報付きで新しい順に返す', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10'), memo: 'オーナーの記録' },
+    })
+    const ownerSet = await prisma.workoutSet.create({
+      data: { workoutId: ownerWorkout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },
+    })
+    const memberWorkout = await prisma.workout.create({
+      data: { userId: memberId, performedAt: new Date('2026-01-11') },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([
+      expect.objectContaining({
+        id: memberWorkout.id,
+        userId: memberId,
+        displayName: 'グループテストメンバー',
+        performedAt: '2026-01-11',
+        memo: null,
+        hasSets: false,
+        exercises: [],
+      }),
+      expect.objectContaining({
+        id: ownerWorkout.id,
+        userId: ownerId,
+        displayName: 'グループテストオーナー',
+        performedAt: '2026-01-10',
+        memo: 'オーナーの記録',
+        hasSets: true,
+        exercises: [
+          {
+            exerciseId,
+            name: 'ベンチプレス',
+            sets: [{ id: ownerSet.id, setOrder: 1, weightKg: 60, reps: 10 }],
+          },
+        ],
+      }),
+    ])
+  })
+
+  it('未所属者(退会済み含む)の記録・ソフトデリート済みの記録は含めない', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId, { leftAt: new Date() })
+
+    await prisma.workout.create({
+      data: { userId: memberId, performedAt: new Date('2026-01-10') },
+    })
+    await prisma.workout.create({
+      data: { userId: outsiderId, performedAt: new Date('2026-01-10') },
+    })
+    const deletedWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-09'), deletedAt: new Date() },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.map((w: { id: string }) => w.id)).not.toContain(deletedWorkout.id)
+    expect(res.body).toEqual([])
+  })
+})
+
 describe('POST /groups/:id/invite', () => {
   it('owner以外は403を返す(IDOR対策)', async () => {
     const group = await createGroup()

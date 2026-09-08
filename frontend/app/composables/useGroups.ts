@@ -20,6 +20,29 @@ interface GroupDetail extends Group {
   members: GroupMember[]
 }
 
+interface GroupWorkoutSet {
+  id: string
+  setOrder: number
+  weightKg: number | null
+  reps: number
+}
+
+interface GroupWorkoutExercise {
+  exerciseId: string
+  name: string
+  sets: GroupWorkoutSet[]
+}
+
+interface GroupWorkout {
+  id: string
+  userId: string
+  displayName: string
+  performedAt: string
+  memo: string | null
+  hasSets: boolean
+  exercises: GroupWorkoutExercise[]
+}
+
 // バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
 // （エラーコード自体は backend/src/routes/groups.ts 参照）
 const ERROR_MESSAGES: Record<string, string> = {
@@ -65,7 +88,14 @@ export function useGroups() {
   }
 
   async function fetchGroupDetail(id: string) {
-    return await $fetch<GroupDetail>(`/api/groups/${id}`)
+    // 一覧(fetchGroups)と同じ理由でrequestFetchを使う。$fetchのままだとSSR時にCookieが
+    // 転送されず401になり、クライアント再取得後の内容とSSRの内容がずれてハイドレーション
+    // ミスマッチを起こす（2026-09-08、コンソールエラーの調査で発覚）
+    return await requestFetch<GroupDetail>(`/api/groups/${id}`)
+  }
+
+  async function fetchGroupWorkouts(id: string) {
+    return await requestFetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
   }
 
   async function reissueInvite(id: string) {
@@ -97,6 +127,7 @@ export function useGroups() {
     fetchGroups,
     createGroup,
     fetchGroupDetail,
+    fetchGroupWorkouts,
     reissueInvite,
     joinGroup,
     leaveGroup,
@@ -104,4 +135,4 @@ export function useGroups() {
   }
 }
 
-export type { Group, GroupDetail, GroupMember }
+export type { Group, GroupDetail, GroupMember, GroupWorkout, GroupWorkoutExercise, GroupWorkoutSet }

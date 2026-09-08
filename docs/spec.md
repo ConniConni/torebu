@@ -167,6 +167,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
 | `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
+| `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する | `GET /groups/:id/workouts` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -256,6 +257,41 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - グループ一覧・詳細は`useGroups`（[useGroups.ts](../frontend/app/composables/useGroups.ts)）で
   取得。`groups`一覧は`useState`でセッション中キャッシュし、ログアウト時に`useAuth.ts`の
   `resetUserState()`でリセットする（他のuseState一覧と同じ理由。Issue #111参照）
+- **バグ修正（2026-09-08、Issue #138の作業中に発覚）**：`fetchGroupDetail`/`fetchGroupWorkouts`が
+  素の`$fetch`を使っていたため、SSR時にブラウザのCookieが転送されず`401`になり、SSRは
+  「グループの取得に失敗しました」のエラー表示を返す一方、ハイドレーション後のクライアント側
+  再取得は成功して正常な内容に描き変わる、という**ハイドレーションミスマッチ**を起こしていた
+  （コンソールに`Hydration node mismatch`と`401`が出る。グループ詳細・記録フィード双方の画面遷移で
+  再現）。`fetchGroups`が既にしていた通り`useRequestFetch()`に統一して解消した。
+  グロッサリー（§1「SSR」）に載っている既知の落とし穴だが、新しいAPI呼び出しを追加するたびに
+  同じミスが起きうるため、`useGroups.ts`にコメントを追記した
+
+**グループの記録フィード（Phase4、[Issue #138](https://github.com/ConniConni/torebu/issues/138)）の実装メモ**
+- いいね・コメント機能の対象となる「仲間の記録を見る画面」が無いことに気づき、グループ基盤の次に
+  先行して実装した。グループ詳細画面（`/groups/[id]`）の「みんなの記録を見る」から遷移する
+  `/groups/[id]/workouts`画面
+- バックエンドは`GET /groups/:id/workouts`を追加。そのグループのアクティブなメンバー全員
+  （本人含む）の記録（ソフトデリート除く）を`performedAt`降順で返す。各要素に種目ごとの
+  セット一覧（`exercises`：`exerciseId`/`name`/`sets`）を含める
+- **カードの見せ方**は企画メモ（Artifact）で複数案を比較した上で決定した：
+  - まずカード全体の構成は「SNSタイムライン型」（アバター＋名前＋日付のヘッダー、種目はチップ表示、
+    下部にいいね・コメント欄の置き場を確保）を採用。「日にちごとに時系列で並べる」「種目ごとに
+    横断して並べる」の他候補は、次のIssue（いいね・コメント）の対象が`workout`単位という
+    既存設計（schema.mdの`reactions`/`comments`）に噛み合わないため見送った
+    （メンバー別カレンダー表示・種目横断表示は`docs/backlog.md`の判断保留に記録済み）
+  - 種目チップの先（重量・回数の中身）は**アコーディオン展開**にした：初期状態は種目名＋セット数の
+    チップのみで、タップした種目だけその場でセット表（②ホームの記録カードと同じグリッド表形式、
+    [index.vue](../frontend/app/pages/index.vue)参照）を展開する。他の代替案
+    （常時全展開・先頭数セットのみ表示・メイン種目だけ全展開）は「複数人分を並べたときにカードの
+    縦幅が人によってバラつく」問題を抱えており、アコーディオンは畳んだ状態でカードの高さが揃う点を
+    決め手に選んだ（2026-09-08、企画メモで比較）
+  - 開閉状態は`${workoutId}:${exerciseId}`をキーにしたSetで管理し、種目ごとに独立して開閉できる
+    （[workouts.vue](../frontend/app/pages/groups/[id]/workouts.vue)参照）
+- ページ実装は`pages/groups/[id].vue`を`pages/groups/[id]/index.vue`に移動した上で
+  `pages/groups/[id]/workouts.vue`を追加する形にした。**同名の`[id].vue`と`[id]/`ディレクトリを
+  併存させると、Nuxtが`/groups/:id/workouts`のようなネストしたパスを`[id].vue`側にルーティングして
+  しまい、URLだけ変わって画面が遷移しない不具合になる**（実装中に発覚。SPA遷移で気づいた。
+  `docs/CLAUDE.md`のブラウザ確認方針どおり実際のクリック遷移で検証したことで発見できた）
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -511,6 +547,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）と種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）) を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
@@ -543,7 +580,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 | `routine_exercises` の `targetSets`（目安セット） | `[{ weightKg, reps }, ...]` の配列。`weightKg`・`reps` の制約は`workout_sets`と同じ（上記「重量・回数の制約」参照）。未設定は常に空配列 `[]` で返す（DB上は `null`）。`PATCH .../exercises/:routineExerciseId` は配列を丸ごと置き換える方式（1セットずつの更新APIは無い）。`targetSets: []` を送るとクリアできる |
 | `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
-| `GET /groups`<br>`GET /groups/:id` | 「所属している」は`group_members`が**アクティブ**（`left_at IS NULL`）であること。退会済み（`left_at`あり）は未所属として扱う（`GET /groups/:id`は`404`） |
+| `GET /groups`<br>`GET /groups/:id`<br>`GET /groups/:id/workouts` | 「所属している」は`group_members`が**アクティブ**（`left_at IS NULL`）であること。退会済み（`left_at`あり）は未所属として扱う（`404`） |
+| `GET /groups/:id/workouts` | 件数の絞り込み（ページネーション・期間指定）は行わない。既存の`GET /workouts`と同じく件数が増えたら対応する技術的負債として`docs/backlog.md`に記載済み |
 | `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等） |
 | `POST /groups/:id/leave` | オーナーの退会可否は「そのグループの**アクティブなオーナー数**」で判定する（`role`が`owner`かつ`left_at IS NULL`の行数）。1人なら`400 sole_owner_cannot_leave` |
 | `DELETE /groups/:id` | **ソフトデリート**（`groups.deleted_at`）。`group_members`側は変更しない。削除後は全メンバーが`GET /groups/:id`等で`404`になる |
