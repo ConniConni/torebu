@@ -182,7 +182,7 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
     expect(res.status).toBe(404)
   })
 
-  it('日ごとの最大重量・合計挙上重量を返す', async () => {
+  it('日ごとの最大重量・合計負荷重量を返す', async () => {
     const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
     await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },

@@ -81,12 +81,12 @@
       対応済み、2026-09-08）。実装中に「連続記録日数（ストリーク）は数字の良し悪しが分かりにくい」
       という指摘を受け、**「今月の記録日数」＋「通算の記録日数」の表示に変更した**（定義・実装場所は
       `docs/spec.md`参照）
-- [ ] **C. 個人の合計挙上重量・種目別推移（集計・グラフ）**：Phase3の本丸。バックエンド（集計API）と
+- [x] **C. 個人の合計負荷重量・種目別推移（集計・グラフ）**：Phase3の本丸。バックエンド（集計API）と
       フロント（Vitest導入＋統計画面＋グラフ）の2 Issueに分割して進める
       - カスタム種目を集計対象に含めるか：**当面は現状維持（公式種目のみ集計）**で小さく始め、
         必要になったら格上げを検討する（2026-09-08決定、詳細は`docs/backlog.md`参照）
       - [x] バックエンド：`GET /stats/volume`・`GET /stats/exercises/:id/history`（[Issue #120](https://github.com/ConniConni/torebu/issues/120)で対応済み、2026-09-08）。自重セット（`weightKg`が`null`）は集計から完全に除外する方針もあわせて決定（詳細は`docs/spec.md`§4-2参照）
-      - [ ] フロント：Vitest導入＋⑧統計画面＋グラフ描画（Chart.js + vue-chartjsを予定）。未着手
+      - [x] フロント：Vitest導入＋⑧統計画面＋グラフ描画（Chart.js + vue-chartjs、[Issue #122](https://github.com/ConniConni/torebu/issues/122)で対応済み、2026-09-08）
 - [ ] **D. 週間サマリー**：Cの集計ロジックの応用。Cに依存するため後続
 - [ ] **E. 部位別の分析・可視化**：Cの集計＋Phase2の`main_muscle`データを利用。Cに依存
 - [ ] **F. 年代・性別・職業別の分析**：`birth_date`/`gender`/`occupation`の入力UIを登録・設定画面に
