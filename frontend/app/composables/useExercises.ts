@@ -16,6 +16,8 @@ interface Exercise {
   // 削除済みでも一覧レスポンス自体には残る(過去記録の種目名解決に使うため。Issue #113)。
   // 種目選択・追加候補からはこのフィールドを見てフロント側で除外する
   deletedAt: string | null
+  // 直近の実績セット(前回記録の自動反映用、Issue #116)。記録が無ければnull
+  lastSet: { weightKg: number | null; reps: number } | null
 }
 
 interface CreateExercisePayload {
