@@ -16,7 +16,7 @@ interface ExerciseGroup {
 }
 
 const { user, logout } = useAuth()
-const { workouts, pending, error, fetchWorkouts } = useWorkouts()
+const { workouts, pending, error, fetchWorkouts, deleteWorkout } = useWorkouts()
 const { exercises, fetchExercises } = useExercises()
 const { fetchVolume } = useStats()
 const requestFetch = useRequestFetch()
@@ -55,17 +55,21 @@ const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates
 const weeklyVolumePoints = ref<{ date: string; volumeKg: number }[]>([])
 const weeklyVolumePending = ref(true)
 const weeklyVolumeError = ref(false)
-try {
-  weeklyVolumePoints.value = await fetchVolume('1m')
-} catch {
-  weeklyVolumeError.value = true
-} finally {
-  weeklyVolumePending.value = false
+
+async function loadWeeklyVolume() {
+  weeklyVolumePending.value = true
+  weeklyVolumeError.value = false
+  try {
+    weeklyVolumePoints.value = await fetchVolume('1m')
+  } catch {
+    weeklyVolumeError.value = true
+  } finally {
+    weeklyVolumePending.value = false
+  }
 }
+await loadWeeklyVolume()
 const weeklyVolumeKg = computed(() => sumWeeklyVolume(weeklyVolumePoints.value, today))
-const weeklyTrainingDays = computed(() =>
-  countWeeklyTrainingDays(allRecordedDates.value, today),
-)
+const weeklyTrainingDays = computed(() => countWeeklyTrainingDays(allRecordedDates.value, today))
 
 // 週別推移（直近4週間、横棒グラフ）。今週を一番上に表示するため表示直前でreverseする
 // （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
@@ -128,6 +132,33 @@ async function onLogout() {
   await logout()
   await navigateTo('/login')
 }
+
+// 記録本体の削除（Issue #127で③記録本体画面から移設）。③の画面内で見た目上「ホームへ戻る」と
+// 隣り合っていたのが紛らわしいという指摘を受け、削除操作自体を②の記録カード側に寄せた。
+// 削除UIの見た目は⑤ルーティン一覧の本体削除（Issue #93）に合わせる：一覧の行内で
+// 2段階確認（キャンセル／削除するボタン）をその場に展開する方式
+const confirmingDeleteId = ref<string | null>(null)
+const deletingId = ref<string | null>(null)
+const deleteError = ref('')
+
+async function onDeleteWorkout(id: string) {
+  deletingId.value = id
+  deleteError.value = ''
+  try {
+    await deleteWorkout(id)
+    confirmingDeleteId.value = null
+    // 以前は③記録本体画面から削除すると必ずホームへ遷移し、その際のページ再マウントで
+    // 今週のサマリー（weeklyVolumePoints、GET /stats/volume由来）も自然に取り直されていた。
+    // ②に移設して画面遷移を伴わなくなった分、ここで明示的に再取得しないと削除前の古いkg値が
+    // 残ってしまう（trainingDaysThisMonth等はworkoutsから直接computedしているため対象外。
+    // Issue #116と同種のキャッシュ更新漏れパターン、CLAUDE.mdのセルフチェック項目参照）
+    await loadWeeklyVolume()
+  } catch {
+    deleteError.value = '記録の削除に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    deletingId.value = null
+  }
+}
 </script>
 
 <template>
@@ -146,25 +177,29 @@ async function onLogout() {
 
       <button
         type="button"
-        class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white"
+        class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white"
         @click="navigateTo('/workouts/new')"
       >
         ＋今日の記録をつける
       </button>
 
-      <NuxtLink
-        to="/routines"
-        class="w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
-      >
-        ルーティン一覧
-      </NuxtLink>
+      <!-- 「ルーティン一覧」「統計」は元は縦積みの全幅ボタン2つだったが、スマホでカレンダーまでの
+           距離が遠い問題（2026-09-08指摘、Issue #127）を受けて横並びの2分割に圧縮した -->
+      <div class="flex gap-2">
+        <NuxtLink
+          to="/routines"
+          class="flex-1 rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          ルーティン一覧
+        </NuxtLink>
 
-      <NuxtLink
-        to="/stats"
-        class="w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
-      >
-        統計
-      </NuxtLink>
+        <NuxtLink
+          to="/stats"
+          class="flex-1 rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          統計
+        </NuxtLink>
+      </div>
 
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
       <p v-else-if="error" class="text-center text-sm text-red-600">
@@ -173,16 +208,16 @@ async function onLogout() {
 
       <template v-else>
         <div
-          class="flex items-center justify-around rounded-lg border border-blue-100 bg-blue-50 py-2.5 text-xs text-blue-900"
+          class="flex items-center justify-around rounded-lg border border-brand-100 bg-brand-50 py-2.5 text-xs text-brand-900"
         >
           <p>
-            今月<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+            今月<span class="text-base font-extrabold tabular-nums text-brand-700">{{
               trainingDaysThisMonth
             }}</span
             >日
           </p>
           <p>
-            通算<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+            通算<span class="text-base font-extrabold tabular-nums text-brand-700">{{
               totalTrainingDays
             }}</span
             >日
@@ -194,7 +229,9 @@ async function onLogout() {
              このAPI呼び出しだけ失敗しても他の表示は妨げないよう独立してエラー処理する。
              2カードを横並びにし、左に今週の数値、右に直近4週間の推移（横棒グラフ）を置く
              （中身・レイアウト・グラフ形式はモックで複数パターンを比較して決定） -->
-        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">今週のサマリーを読み込み中...</p>
+        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">
+          今週のサマリーを読み込み中...
+        </p>
         <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
           今週のサマリーの取得に失敗しました
         </p>
@@ -203,14 +240,14 @@ async function onLogout() {
             <p class="mb-2 text-xs font-semibold text-gray-500">今週のサマリー</p>
             <div class="flex flex-col gap-2">
               <div>
-                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-brand-700">
                   {{ weeklyVolumeKg.toLocaleString()
                   }}<span class="ml-1 text-sm font-medium text-gray-700">kg</span>
                 </p>
                 <p class="mt-1 text-xs text-gray-500">合計負荷重量</p>
               </div>
               <div>
-                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-brand-700">
                   {{ weeklyTrainingDays
                   }}<span class="ml-1 text-sm font-medium text-gray-700">日</span>
                 </p>
@@ -228,7 +265,7 @@ async function onLogout() {
               >
                 <p
                   class="w-9 shrink-0 text-[10px] leading-none"
-                  :class="point.label === '今週' ? 'font-semibold text-blue-700' : 'text-gray-500'"
+                  :class="point.label === '今週' ? 'font-semibold text-brand-700' : 'text-gray-500'"
                 >
                   {{ point.label }}
                 </p>
@@ -237,7 +274,7 @@ async function onLogout() {
                 <div class="h-3 flex-1">
                   <div
                     v-if="point.volumeKg > 0"
-                    class="h-3 rounded-full bg-blue-600"
+                    class="h-3 rounded-full bg-brand-600"
                     :class="point.label === '今週' ? '' : 'opacity-40'"
                     :style="{
                       width: `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
@@ -263,7 +300,7 @@ async function onLogout() {
             <NuxtLink
               v-if="isTodayOrPastDate"
               :to="`/workouts/new?date=${selectedDate}`"
-              class="mt-2 block w-full rounded border border-blue-600 py-2 text-center text-sm font-semibold text-blue-600"
+              class="mt-2 block w-full rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
             >
               ＋この日の記録を始める
             </NuxtLink>
@@ -274,24 +311,49 @@ async function onLogout() {
               :key="workout.id"
               class="rounded border border-gray-200 px-3 py-2"
             >
-              <NuxtLink
-                :to="`/workouts/new?date=${workout.performedAt}`"
-                class="block hover:text-blue-600"
-              >
-                <p v-if="workout.memo" class="mb-1 text-xs text-gray-500">{{ workout.memo }}</p>
+              <template v-if="confirmingDeleteId === workout.id">
+                <p class="text-sm text-gray-700">この記録を削除しますか？元に戻せません。</p>
+                <div class="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    :disabled="deletingId === workout.id"
+                    class="flex-1 rounded border border-gray-300 py-1.5 text-sm text-gray-700 disabled:opacity-50"
+                    @click="confirmingDeleteId = null"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="deletingId === workout.id"
+                    class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    @click="onDeleteWorkout(workout.id)"
+                  >
+                    {{ deletingId === workout.id ? '削除中...' : '削除する' }}
+                  </button>
+                </div>
+                <p v-if="deleteError" class="mt-2 text-sm text-red-600">{{ deleteError }}</p>
+              </template>
+              <div v-else class="flex items-start gap-2">
+                <NuxtLink
+                  :to="`/workouts/new?date=${workout.performedAt}`"
+                  class="block flex-1 hover:text-brand-600"
+                >
+                  <p v-if="workout.memo" class="mb-1 text-xs text-gray-500">{{ workout.memo }}</p>
 
-                <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">読み込み中...</p>
-                <!-- セット0件（メモのみ）の記録は、カード自体が③記録作成へのリンクになっている
+                  <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">
+                    読み込み中...
+                  </p>
+                  <!-- セット0件（メモのみ）の記録は、カード自体が③記録作成へのリンクになっている
                      ことを踏まえ、「＋この日の記録を始める」等の既存の能動的な文言と語彙を揃えた
                      表現にする（Issue #99。以前の「種目未登録」は受動的で分かりにくいという指摘） -->
-                <p
-                  v-else-if="!workoutGroups[workout.id]?.length"
-                  class="text-sm font-medium text-blue-600"
-                >
-                  ＋種目を記録する
-                </p>
-                <div v-else class="space-y-2">
-                  <!-- ③記録作成・⑤ルーティンのセット表示と見た目を揃えたヘッダー帯付き表形式
+                  <p
+                    v-else-if="!workoutGroups[workout.id]?.length"
+                    class="text-sm font-medium text-brand-600"
+                  >
+                    ＋種目を記録する
+                  </p>
+                  <div v-else class="space-y-2">
+                    <!-- ③記録作成・⑤ルーティンのセット表示と見た目を揃えたヘッダー帯付き表形式
                        （ユーザー指摘、2026-09-05）。ここは読み取り専用のプレビューのため
                        入力欄は持たず、値をそのままテキストで表示する。列の下限・横スクロールの
                        考え方は③・⑤と同じ（Issue #95）。値と単位（kg・回）を別要素に分けているのも
@@ -300,50 +362,60 @@ async function onLogout() {
                        なお自重（weightKg===null）のときは「自重kg」という不自然な表記になるのを
                        避けるため単位（kg）自体を表示しない（③・⑤は入力欄＋固定の単位ラベルという
                        別のUIのためこの対応は不要、ユーザー指摘2026-09-06） -->
-                  <div v-for="group in workoutGroups[workout.id]" :key="group.exerciseId">
-                    <p class="mb-1 text-sm font-medium text-gray-900">{{ group.name }}</p>
-                    <div class="overflow-x-auto">
-                      <div class="min-w-[15rem] overflow-hidden rounded-lg">
-                        <div
-                          class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 px-3 py-1"
-                        >
-                          <span class="text-xs font-semibold text-gray-500">セット</span>
-                          <span class="text-xs font-semibold text-gray-500">重量</span>
-                          <span class="text-xs font-semibold text-gray-500">回数</span>
-                        </div>
-                        <div
-                          v-for="(set, i) in group.sets"
-                          :key="set.id"
-                          class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
-                          :class="i % 2 === 1 ? 'bg-gray-50' : ''"
-                        >
-                          <span class="text-center text-sm font-bold tabular-nums text-gray-900">{{
-                            set.setOrder
-                          }}</span>
-                          <span class="flex min-w-0 items-baseline justify-end gap-1">
+                    <div v-for="group in workoutGroups[workout.id]" :key="group.exerciseId">
+                      <p class="mb-1 text-sm font-medium text-gray-900">{{ group.name }}</p>
+                      <div class="overflow-x-auto">
+                        <div class="min-w-[15rem] overflow-hidden rounded-lg">
+                          <div
+                            class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 px-3 py-1"
+                          >
+                            <span class="text-xs font-semibold text-gray-500">セット</span>
+                            <span class="text-xs font-semibold text-gray-500">重量</span>
+                            <span class="text-xs font-semibold text-gray-500">回数</span>
+                          </div>
+                          <div
+                            v-for="(set, i) in group.sets"
+                            :key="set.id"
+                            class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
+                            :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+                          >
                             <span
-                              class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
-                              >{{ set.weightKg ?? '自重' }}</span
+                              class="text-center text-sm font-bold tabular-nums text-gray-900"
+                              >{{ set.setOrder }}</span
                             >
-                            <span
-                              v-if="set.weightKg !== null"
-                              class="shrink-0 text-xs text-gray-500"
-                              >kg</span
-                            >
-                          </span>
-                          <span class="flex min-w-0 items-baseline justify-end gap-1">
-                            <span
-                              class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
-                              >{{ set.reps }}</span
-                            >
-                            <span class="shrink-0 text-xs text-gray-500">回</span>
-                          </span>
+                            <span class="flex min-w-0 items-baseline justify-end gap-1">
+                              <span
+                                class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
+                                >{{ set.weightKg ?? '自重' }}</span
+                              >
+                              <span
+                                v-if="set.weightKg !== null"
+                                class="shrink-0 text-xs text-gray-500"
+                                >kg</span
+                              >
+                            </span>
+                            <span class="flex min-w-0 items-baseline justify-end gap-1">
+                              <span
+                                class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
+                                >{{ set.reps }}</span
+                              >
+                              <span class="shrink-0 text-xs text-gray-500">回</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </NuxtLink>
+                </NuxtLink>
+                <button
+                  type="button"
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  aria-label="この記録を削除する"
+                  @click="confirmingDeleteId = workout.id"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </button>
+              </div>
             </li>
           </ul>
         </div>

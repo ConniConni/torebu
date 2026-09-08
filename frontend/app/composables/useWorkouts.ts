@@ -29,7 +29,15 @@ export function useWorkouts() {
     }
   }
 
-  return { workouts, pending, error, fetchWorkouts }
+  // ②ホームの記録カードからの削除用（Issue #127で③記録本体画面から移設）。
+  // useWorkoutSession.deleteWorkout()とは別物：あちらは③で進行中のセッション（session.workoutId）
+  // を前提にするが、②はworkouts一覧の各行を直接指定して消すだけなのでセッション状態を持たない
+  async function deleteWorkout(id: string) {
+    await $fetch(`/api/workouts/${id}`, { method: 'DELETE' })
+    workouts.value = (workouts.value ?? []).filter((w) => w.id !== id)
+  }
+
+  return { workouts, pending, error, fetchWorkouts, deleteWorkout }
 }
 
 export type { Workout }
