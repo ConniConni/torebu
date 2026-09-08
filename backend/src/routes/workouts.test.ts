@@ -6,10 +6,12 @@ import { prisma } from '../prisma.js'
 
 const ownerEmail = 'workouts-owner-test@example.com'
 const otherEmail = 'workouts-other-test@example.com'
+const outsiderEmail = 'workouts-outsider-test@example.com'
 const testPassword = 'password123'
 
 let ownerId: string
 let otherId: string
+let outsiderId: string
 let exerciseId: string
 let othersExerciseId: string
 let deletedExerciseId: string
@@ -22,8 +24,12 @@ beforeEach(async () => {
   const other = await prisma.user.create({
     data: { email: otherEmail, passwordHash, displayName: '記録テスト別ユーザー' },
   })
+  const outsider = await prisma.user.create({
+    data: { email: outsiderEmail, passwordHash, displayName: '記録テスト部外者' },
+  })
   ownerId = owner.id
   otherId = other.id
+  outsiderId = outsider.id
 
   const exercise = await prisma.exercise.create({
     data: { name: 'ベンチプレス', muscleGroup: 'chest' },
@@ -40,6 +46,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await prisma.reaction.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
+  await prisma.groupMember.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
+  await prisma.group.deleteMany({ where: { createdBy: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.workoutSet.deleteMany({
     where: { workout: { userId: { in: [ownerId, otherId] } } },
   })
@@ -47,7 +56,7 @@ afterEach(async () => {
   await prisma.exercise.deleteMany({
     where: { id: { in: [exerciseId, othersExerciseId, deletedExerciseId] } },
   })
-  await prisma.user.deleteMany({ where: { id: { in: [ownerId, otherId] } } })
+  await prisma.user.deleteMany({ where: { id: { in: [ownerId, otherId, outsiderId] } } })
   // 他ファイルと共有のsessionテーブル全体を消すと並行実行中の他テストのログイン状態を壊すため、
   // ここでは削除しない(セッションはuserId削除に伴い次回アクセス時に無効化される)
 })
@@ -62,6 +71,22 @@ async function loginAsOther() {
   const agent = request.agent(app)
   await agent.post('/auth/login').send({ email: otherEmail, password: testPassword })
   return agent
+}
+
+async function loginAsOutsider() {
+  const agent = request.agent(app)
+  await agent.post('/auth/login').send({ email: outsiderEmail, password: testPassword })
+  return agent
+}
+
+// ownerとotherが同じグループに所属する状態を作る(いいねの許可範囲テスト用)
+async function createSharedGroup() {
+  const group = await prisma.group.create({
+    data: { name: 'いいねテストグループ', createdBy: ownerId, inviteCode: `invite-${Math.random()}` },
+  })
+  await prisma.groupMember.create({ data: { groupId: group.id, userId: ownerId, role: 'owner' } })
+  await prisma.groupMember.create({ data: { groupId: group.id, userId: otherId, role: 'member' } })
+  return group
 }
 
 async function createWorkout(
@@ -544,6 +569,107 @@ describe('別ユーザーからの操作', () => {
 
     const agent = await loginAsOther()
     const res = await agent.get(`/workouts/${workout.id}`)
+
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /workouts/:id/reactions', () => {
+  it('未ログインなら401を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const res = await request(app).post(`/workouts/${workout.id}/reactions`)
+    expect(res.status).toBe(401)
+  })
+
+  it('自分のworkoutにいいねできる', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
+  })
+
+  it('同じグループのメンバーの記録にいいねできる', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOther()
+    const res = await agent.post(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
+  })
+
+  it('所属していないグループのメンバーの記録にはいいねできない(404)', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOutsider()
+    const res = await agent.post(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(404)
+    const count = await prisma.reaction.count({ where: { targetType: 'workout', targetId: workout.id } })
+    expect(count).toBe(0)
+  })
+
+  it('削除済みworkoutにはいいねできない(404)', async () => {
+    const workout = await createWorkout(ownerId)
+    await prisma.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('2回押しても冪等(件数は1のまま)', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    await agent.post(`/workouts/${workout.id}/reactions`)
+    const res = await agent.post(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
+  })
+})
+
+describe('DELETE /workouts/:id/reactions', () => {
+  it('未ログインなら401を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const res = await request(app).delete(`/workouts/${workout.id}/reactions`)
+    expect(res.status).toBe(401)
+  })
+
+  it('いいねを取り消せる', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+    await agent.post(`/workouts/${workout.id}/reactions`)
+
+    const res = await agent.delete(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 0, reactedByMe: false })
+  })
+
+  it('いいねしていない状態で呼んでも冪等に200を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    const res = await agent.delete(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 0, reactedByMe: false })
+  })
+
+  it('所属していないグループのメンバーの記録には404を返す', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOutsider()
+    const res = await agent.delete(`/workouts/${workout.id}/reactions`)
 
     expect(res.status).toBe(404)
   })
