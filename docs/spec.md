@@ -263,9 +263,22 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   先行して実装した。グループ詳細画面（`/groups/[id]`）の「みんなの記録を見る」から遷移する
   `/groups/[id]/workouts`画面
 - バックエンドは`GET /groups/:id/workouts`を追加。そのグループのアクティブなメンバー全員
-  （本人含む）の記録（ソフトデリート除く）を`performedAt`降順で返す。各要素にセット内容の
-  サマリー（`exerciseSummaries`：種目名ごとのセット件数）を含めるが、重量・回数の詳細はこの
-  一覧では返さない（一覧としての情報量を絞る意図。詳細を見せる場合は別途検討）
+  （本人含む）の記録（ソフトデリート除く）を`performedAt`降順で返す。各要素に種目ごとの
+  セット一覧（`exercises`：`exerciseId`/`name`/`sets`）を含める
+- **カードの見せ方**は企画メモ（Artifact）で複数案を比較した上で決定した：
+  - まずカード全体の構成は「SNSタイムライン型」（アバター＋名前＋日付のヘッダー、種目はチップ表示、
+    下部にいいね・コメント欄の置き場を確保）を採用。「日にちごとに時系列で並べる」「種目ごとに
+    横断して並べる」の他候補は、次のIssue（いいね・コメント）の対象が`workout`単位という
+    既存設計（schema.mdの`reactions`/`comments`）に噛み合わないため見送った
+    （メンバー別カレンダー表示・種目横断表示は`docs/backlog.md`の判断保留に記録済み）
+  - 種目チップの先（重量・回数の中身）は**アコーディオン展開**にした：初期状態は種目名＋セット数の
+    チップのみで、タップした種目だけその場でセット表（②ホームの記録カードと同じグリッド表形式、
+    [index.vue](../frontend/app/pages/index.vue)参照）を展開する。他の代替案
+    （常時全展開・先頭数セットのみ表示・メイン種目だけ全展開）は「複数人分を並べたときにカードの
+    縦幅が人によってバラつく」問題を抱えており、アコーディオンは畳んだ状態でカードの高さが揃う点を
+    決め手に選んだ（2026-09-08、企画メモで比較）
+  - 開閉状態は`${workoutId}:${exerciseId}`をキーにしたSetで管理し、種目ごとに独立して開閉できる
+    （[workouts.vue](../frontend/app/pages/groups/[id]/workouts.vue)参照）
 - ページ実装は`pages/groups/[id].vue`を`pages/groups/[id]/index.vue`に移動した上で
   `pages/groups/[id]/workouts.vue`を追加する形にした。**同名の`[id].vue`と`[id]/`ディレクトリを
   併存させると、Nuxtが`/groups/:id/workouts`のようなネストしたパスを`[id].vue`側にルーティングして
@@ -526,7 +539,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
-| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）とセット内容のサマリー（`exerciseSummaries`：種目名ごとのセット件数）を含む |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）と種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）) を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
