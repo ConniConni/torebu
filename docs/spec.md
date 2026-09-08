@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み13ページ）
+### 3-1. 画面一覧（実装済み14ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -157,7 +157,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `POST /auth/logout` | `auth` |
+| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | `auth` |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -168,6 +168,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
+| `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」の通知を新しい順に表示する。開いた時点で全件既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -336,6 +337,30 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   挟まない
 - 吹き出しアイコンは[CommentIcon.vue](../frontend/app/components/CommentIcon.vue)を新規追加
   （HeartIcon.vue・TrashIcon.vue等と同じ方針でHeroiconsのSVGパスを静的コピー）
+
+**通知（Phase4、[Issue #144](https://github.com/ConniConni/torebu/issues/144)）の実装メモ**
+- いいね・コメントに反応する側の体験は揃ったが、反応された側（記録の投稿者）に知らせる手段が
+  無かったため着手。事前にUIモックで合意した上で実装した
+- **通知を作るAPIは無い**：`POST /workouts/:id/reactions`・`POST /workouts/:id/comments`
+  （[workouts.ts](../backend/src/routes/workouts.ts)）の内部で`notifyWorkoutOwner`関数を呼び、
+  副作用として`notifications`を作る。対象は常に**自分の記録**（通知の宛先＝記録の投稿者）なので、
+  グループIDのような追加の紐付けは不要
+- **自分の記録への自分の操作では作らない**（`recipientId === actorId`ならスキップ）
+- いいねは`upsert`で冪等だが、**通知は新規いいね時のみ**作る（2回目以降の押下で複製しないよう、
+  `upsert`実行前に既存いいねの有無を確認している）。いいね取り消し（`DELETE`）時に通知を削除する
+  仕組みは無い（作成済みの通知はそのまま残る）
+- **配信方式はポーリング無し**：`docs/schema.md`「Phase4の検討結果」の決定通り、画面遷移・
+  読み込み時にAPIを叩くだけ。②ホームは`GET /notifications/unread-count`のみを呼びバッジ表示、
+  通知一覧（`/notifications`）を開いたときだけ`GET /notifications`で本体を取得する
+- **既読化は開いた時点で自動的に一括**（`POST /notifications/read`）。個別の既読トグルは設けない。
+  フロントは**一覧取得→既読化の順で呼ぶ**ことで、開いた瞬間の未読/既読の見た目（背景色・ドット）を
+  取得時点のスナップショットで出せるようにしている（先に既読化すると全件既読の見た目になり、
+  どれが新着だったか分からなくなるため）
+- 通知一覧の各項目は自分の記録（`/workouts/new?date=YYYY-MM-DD`、③記録作成・見返し画面）への
+  リンクになっている。③⑥統合（[roadmap.md](./roadmap.md)参照）により、日付を指定するだけで
+  対象の記録に直接遷移できる
+- ベルアイコンは[BellIcon.vue](../frontend/app/components/BellIcon.vue)を新規追加
+  （HeartIcon.vue・CommentIcon.vue等と同じ方針でHeroiconsのSVGパスを静的コピー）
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -602,6 +627,14 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
 | DELETE | `/groups/:id` | 要 | グループを削除する（**ソフトデリート**）。**オーナー限定**（オーナー以外は`403`） |
 
+### 通知（Phase4） — [notifications.ts](../backend/src/routes/notifications.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| GET | `/notifications` | 要 | 自分宛の通知を`createdAt`降順（直近50件）で返す（[Issue #144](https://github.com/ConniConni/torebu/issues/144)）。既読化は行わない。対象の記録が削除済み（ソフトデリート含む）の通知は一覧から除外する |
+| GET | `/notifications/unread-count` | 要 | 自分宛の未読件数のみを返す（②ホームのバッジ用。一覧取得より軽量にするため分離） |
+| POST | `/notifications/read` | 要 | 自分宛の未読通知を一括既読化する。個別の既読トグルAPIは無い（通知一覧を開いたタイミングでフロントから呼ぶ想定） |
+
 ※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
 
 ### 4-1. 全エンドポイント共通のルール
@@ -636,12 +669,14 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `DELETE /groups/:id` | **ソフトデリート**（`groups.deleted_at`）。`group_members`側は変更しない。削除後は全メンバーが`GET /groups/:id`等で`404`になる |
 | `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している |
 | `GET/POST /workouts/:id/comments`<br>`DELETE /workouts/:id/comments/:commentId` | 認可は`reactions`と同じ`shareActiveGroup`関数を再利用。削除は`userId`一致も条件に加えるため、自分のコメント以外は`404` |
+| いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる |
+| `GET /notifications` | 対象は常に**自分の記録**（`notifyWorkoutOwner`が`recipientId = workout.userId`で作るため）。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）を含める。この要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
 
 ---
 
 ## 5. データモデル（引く章）
 
-正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の10テーブル。
+正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の11テーブル。
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
@@ -655,6 +690,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
 | `reactions`（Phase4） | いいね | `target_type`（enum：`workout`/`workout_set`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)、`workout_set`/`topic_post`は対象UI未実装）。`target_id`はFK制約なし（対象が`target_type`によって変わるため）、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`UNIQUE(target_type, target_id, user_id)`で1人1いいねを保証 |
 | `comments`（Phase4） | コメント | `target_type`（enum：`workout`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #142](https://github.com/ConniConni/torebu/issues/142)、`topic_post`は対象UI未実装）。`target_id`はFK制約なし、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`reactions`と異なり1人が複数回投稿できるため`UNIQUE`制約は無い |
+| `notifications`（Phase4） | 通知 | `recipient_id`（誰宛）／`actor_id`（誰が起こしたか、nullable）／`type`（enum：`reaction`/`comment`/`topic`/`ranking`/`exercise_promoted`）／`target_type`（enum：`workout`/`workout_set`/`topic_post`/`topic`/`exercise`/`group`）＋`target_id`の汎用テーブル。**現状発行されるのは`type: reaction`/`comment`、`target_type: workout`のみ**（[Issue #144](https://github.com/ConniConni/torebu/issues/144)。残りの`type`/`target_type`はランキング・イチオシこだわり共有・種目昇格が未実装のため発行しない、docs/schema.mdの設計をそのまま反映）。`target_id`はFK制約なし、対象の存在確認はアプリ側（`notifications.ts`）で行う。`recipient_id`は`onDelete: Cascade`（受信者退会でまとめて消える）、`actor_id`は`onDelete: SetNull`（行為者が退会しても通知自体は残る） |
 
 **`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
 `connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している
