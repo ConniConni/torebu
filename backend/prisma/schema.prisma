@@ -47,7 +47,9 @@ model User {
 
   workouts         Workout[]
   routines         Routine[]
-  createdExercises Exercise[] @relation("ExerciseCreatedBy")
+  createdExercises Exercise[]    @relation("ExerciseCreatedBy")
+  createdGroups    Group[]       @relation("GroupCreatedBy")
+  groupMemberships GroupMember[]
 
   @@map("users")
 }
@@ -142,4 +144,45 @@ model RoutineExercise {
   @@index([routineId])
   @@index([exerciseId])
   @@map("routine_exercises")
+}
+
+enum GroupMemberRole {
+  owner
+  member
+}
+
+// Phase4（交流とランキング）の土台。docs/schema.mdのPhase4節・「Phase4の検討結果」参照
+model Group {
+  id               String    @id @default(uuid())
+  name             String
+  createdBy        String    @map("created_by") // 作成者の記録用。権限判定はGroupMember.roleを見る
+  inviteCode       String    @unique @map("invite_code") // 暗号学的乱数の英数字32文字程度
+  inviteExpiresAt  DateTime? @map("invite_expires_at") @db.Timestamptz(3) // 再発行のたびに更新
+  memberLimit      Int       @default(10) @map("member_limit") // 課金で拡張(Phase5)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。ownerのみ実行可
+
+  creator User          @relation("GroupCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  members GroupMember[]
+
+  @@index([createdBy])
+  @@map("groups")
+}
+
+// 退会してもleft_atで論理管理し、行は物理削除しない(退会後も過去の記録・カスタム種目が仲間から見え続けるため。
+// docs/schema.md「設計方針メモ」参照)。再参加はINSERTではなくこの行のUPDATE(left_atをNULLに戻す)で行う
+model GroupMember {
+  groupId  String          @map("group_id")
+  userId   String          @map("user_id")
+  role     GroupMemberRole @default(member)
+  joinedAt DateTime        @default(now()) @map("joined_at") @db.Timestamptz(3)
+  leftAt   DateTime?       @map("left_at") @db.Timestamptz(3)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
 }

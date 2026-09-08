@@ -1,0 +1,107 @@
+interface Group {
+  id: string
+  name: string
+  memberLimit: number
+  inviteCode: string
+  inviteExpiresAt: string | null
+  createdAt: string
+  updatedAt: string
+  role: 'owner' | 'member'
+}
+
+interface GroupMember {
+  userId: string
+  displayName: string
+  role: 'owner' | 'member'
+  joinedAt: string
+}
+
+interface GroupDetail extends Group {
+  members: GroupMember[]
+}
+
+// バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
+// （エラーコード自体は backend/src/routes/groups.ts 参照）
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid_request: '入力内容を確認してください',
+  invalid_invite_code: '招待コードが正しくありません',
+  invite_expired: 'この招待コードは有効期限が切れています。オーナーに再発行を依頼してください',
+  member_limit_exceeded: 'このグループは定員に達しています',
+  sole_owner_cannot_leave: 'オーナーが自分だけのグループは退会できません。先に他のメンバーをオーナーにするか、グループを削除してください',
+  forbidden: 'この操作はオーナーのみ行えます',
+  not_found: 'グループが見つかりませんでした',
+}
+
+export function groupErrorMessage(error: unknown): string {
+  const code = (error as { data?: { error?: string } })?.data?.error
+  return (code && ERROR_MESSAGES[code]) || '通信に失敗しました。時間をおいて再度お試しください'
+}
+
+// Phase4: グループ一覧・作成・招待コード参加・メンバー管理
+export function useGroups() {
+  const groups = useState<Group[] | null>('groups', () => null)
+  const pending = ref(false)
+  const error = ref(false)
+  // SSR時、素の$fetchだとブラウザから来たCookieが転送されずログイン判定を誤る
+  // （useAuth.tsのfetchMeと同じ理由。frontend/app/composables/useAuth.ts参照）
+  const requestFetch = useRequestFetch()
+
+  async function fetchGroups() {
+    pending.value = true
+    error.value = false
+    try {
+      groups.value = await requestFetch<Group[]>('/api/groups')
+    } catch {
+      error.value = true
+    } finally {
+      pending.value = false
+    }
+  }
+
+  async function createGroup(name: string) {
+    const group = await $fetch<Group>('/api/groups', { method: 'POST', body: { name } })
+    groups.value = [group, ...(groups.value ?? [])]
+    return group
+  }
+
+  async function fetchGroupDetail(id: string) {
+    return await $fetch<GroupDetail>(`/api/groups/${id}`)
+  }
+
+  async function reissueInvite(id: string) {
+    return await $fetch<Group>(`/api/groups/${id}/invite`, { method: 'POST' })
+  }
+
+  async function joinGroup(inviteCode: string) {
+    const group = await $fetch<Group>('/api/groups/join', { method: 'POST', body: { inviteCode } })
+    // 既に一覧に無ければ追加する（退会後の再参加等で既に持っていた場合は上書き）
+    const others = (groups.value ?? []).filter((g) => g.id !== group.id)
+    groups.value = [group, ...others]
+    return group
+  }
+
+  async function leaveGroup(id: string) {
+    await $fetch(`/api/groups/${id}/leave`, { method: 'POST' })
+    groups.value = (groups.value ?? []).filter((g) => g.id !== id)
+  }
+
+  async function deleteGroup(id: string) {
+    await $fetch(`/api/groups/${id}`, { method: 'DELETE' })
+    groups.value = (groups.value ?? []).filter((g) => g.id !== id)
+  }
+
+  return {
+    groups,
+    pending,
+    error,
+    fetchGroups,
+    createGroup,
+    fetchGroupDetail,
+    reissueInvite,
+    joinGroup,
+    leaveGroup,
+    deleteGroup,
+  }
+}
+
+export type { Group, GroupDetail, GroupMember }

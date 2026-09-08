@@ -184,20 +184,28 @@ async function onDeleteWorkout(id: string) {
       </button>
 
       <!-- 「ルーティン一覧」「統計」は元は縦積みの全幅ボタン2つだったが、スマホでカレンダーまでの
-           距離が遠い問題（2026-09-08指摘、Issue #127）を受けて横並びの2分割に圧縮した -->
-      <div class="flex gap-2">
+           距離が遠い問題（2026-09-08指摘、Issue #127）を受けて横並びの2分割に圧縮した。
+           Phase4で「グループ」を追加し3分割にする（タブバー化はdocs/backlog.mdの通りまだ見送り） -->
+      <div class="grid grid-cols-3 gap-2">
         <NuxtLink
           to="/routines"
-          class="flex-1 rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
         >
-          ルーティン一覧
+          ルーティン
         </NuxtLink>
 
         <NuxtLink
           to="/stats"
-          class="flex-1 rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
         >
           統計
+        </NuxtLink>
+
+        <NuxtLink
+          to="/groups"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          グループ
         </NuxtLink>
       </div>
 

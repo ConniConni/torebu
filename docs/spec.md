@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み9ページ）
+### 3-1. 画面一覧（実装済み13ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -164,6 +164,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
 | `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
+| `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
+| `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
+| `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -232,6 +235,27 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   「この面に光る部位はありません」を表示する（選択肢は隠さない）
 - 「関連筋も見る」トグルは初期状態オフ（主働筋のみ表示）。関連筋が無い種目ではボタン自体を出さない
 - 女性図・ダーク/ライトテーマ切替はプロトタイプには存在するがtorebuでは未実装（理由はdocs/backlog.md参照）
+
+**グループ機能（Phase4初弾、グループ基盤）の実装メモ**
+- スコープはグループの作成・招待コード発行/再発行・招待コードでの参加・メンバー一覧・退会・
+  削除〈オーナー限定〉まで。いいね・コメント・通知・ランキング・「イチオシこだわり共有」は
+  別Issueで後続実装する（docs/schema.mdの「Phase4の検討結果」参照）
+- ②ホーム画面の「ルーティン」「統計」の並びに「グループ」を追加し3分割にした
+  （タブバー化はdocs/backlog.mdの判断保留の通りまだ見送り）
+- 招待コードは`GET /groups/:id`のレスポンスに含め、**所属メンバー全員が閲覧できる**
+  （表示は誰でもよいが、再発行のみオーナー限定という区別。docs/schema.mdのPhase4 API一覧の
+  書き方に合わせた）。有効期限は`POST /groups/:id/invite`（発行/再発行）のたびに
+  現在時刻+30日で更新する（`INVITE_CODE_EXPIRY_DAYS`、[groups.ts](../backend/src/routes/groups.ts)）。
+  期限は`member_limit`による人数制限を補う保険という位置づけで、具体的な日数はdocs/schema.mdに
+  明記が無かったため実装時に決定した
+- 退会・グループ削除のボタンはルーティン一覧の削除確認と同じ「ボタン→画面内2段階確認」の
+  パターンに揃えた
+- 唯一のオーナーが退会しようとすると`400 sole_owner_cannot_leave`。エラーメッセージで
+  「先に他のメンバーをオーナーにするか、グループを削除してください」と案内するが、
+  他メンバーをオーナーに任命するUIはこのIssueのスコープ外（次のIssue以降）
+- グループ一覧・詳細は`useGroups`（[useGroups.ts](../frontend/app/composables/useGroups.ts)）で
+  取得。`groups`一覧は`useState`でセッション中キャッシュし、ログアウト時に`useAuth.ts`の
+  `resetUserState()`でリセットする（他のuseState一覧と同じ理由。Issue #111参照）
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -426,7 +450,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 ## 4. API一覧（引く章）
 
-全24エンドポイント。パスは省略記法（`...`）を使わず毎回フルで書く。
+全31エンドポイント。パスは省略記法（`...`）を使わず毎回フルで書く。
 **リクエスト/レスポンスのフィールド一覧はここには書かない**
 （コードを正とする。2箇所に書くと必ず食い違うため）。実際の形は各ルートファイルを見る。
 
@@ -480,6 +504,18 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
 | GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。`range`クエリは`/stats/volume`と同じ |
 
+### グループ（Phase4） — [groups.ts](../backend/src/routes/groups.ts)
+
+| メソッド | パス | 認証 | 役割 |
+|---|---|---|---|
+| POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
+| GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
+| GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
+| POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
+| POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
+| POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
+| DELETE | `/groups/:id` | 要 | グループを削除する（**ソフトデリート**）。**オーナー限定**（オーナー以外は`403`） |
+
 ※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
 
 ### 4-1. 全エンドポイント共通のルール
@@ -507,12 +543,16 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 | `routine_exercises` の `targetSets`（目安セット） | `[{ weightKg, reps }, ...]` の配列。`weightKg`・`reps` の制約は`workout_sets`と同じ（上記「重量・回数の制約」参照）。未設定は常に空配列 `[]` で返す（DB上は `null`）。`PATCH .../exercises/:routineExerciseId` は配列を丸ごと置き換える方式（1セットずつの更新APIは無い）。`targetSets: []` を送るとクリアできる |
 | `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
+| `GET /groups`<br>`GET /groups/:id` | 「所属している」は`group_members`が**アクティブ**（`left_at IS NULL`）であること。退会済み（`left_at`あり）は未所属として扱う（`GET /groups/:id`は`404`） |
+| `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等） |
+| `POST /groups/:id/leave` | オーナーの退会可否は「そのグループの**アクティブなオーナー数**」で判定する（`role`が`owner`かつ`left_at IS NULL`の行数）。1人なら`400 sole_owner_cannot_leave` |
+| `DELETE /groups/:id` | **ソフトデリート**（`groups.deleted_at`）。`group_members`側は変更しない。削除後は全メンバーが`GET /groups/:id`等で`404`になる |
 
 ---
 
 ## 5. データモデル（引く章）
 
-正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の6テーブル。
+正は [schema.prisma](../backend/prisma/schema.prisma)。実装済みは以下の8テーブル。
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
@@ -522,6 +562,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |
 | `routine_exercises` | ルーティンに入っている種目と並び順 | `target_sets`（jsonb、nullable）に目安セット（重量・回数の配列）を持てる。未設定は`null`（APIレスポンスでは`[]`に正規化。§4-2参照） |
+| `groups`（Phase4） | グループ本体 | `invite_code`は英数字約32文字（`crypto.randomBytes`によるbase64url）で`UNIQUE`。`invite_expires_at`は発行/再発行のたびに現在時刻+30日で更新（§3-1「グループ機能の実装メモ」参照）。`member_limit`はデフォルト10（将来課金で拡張、Phase5）。**`deleted_at`を持つ（ソフトデリート）**、削除は`role: owner`のメンバーのみ実行可 |
+| `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
 
 **`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
 `connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している
