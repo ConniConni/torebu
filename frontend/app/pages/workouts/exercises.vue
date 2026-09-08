@@ -11,10 +11,11 @@ const returnTo = computed(() =>
   typeof route.query.returnTo === 'string' ? route.query.returnTo : '/workouts/new',
 )
 
-const { exercises, pending, error, fetchExercises } = useExercises()
+const { exercises, pending, error, fetchExercises, deleteExercise } = useExercises()
 if (!exercises.value) {
   await fetchExercises()
 }
+const { user } = useAuth()
 
 const SECTION_PREVIEW_COUNT = 5
 const expandedGroups = ref<Set<MuscleGroup>>(new Set())
@@ -23,7 +24,8 @@ const sections = computed(() =>
   MUSCLE_GROUPS.map((group) => ({
     group,
     label: muscleGroupLabel(group),
-    exercises: (exercises.value ?? []).filter((e) => e.muscleGroup === group),
+    // 削除済み(ソフトデリート)の種目は新規の記録には選べないため一覧から除外する(Issue #113)
+    exercises: (exercises.value ?? []).filter((e) => e.muscleGroup === group && !e.deletedAt),
   })),
 )
 
@@ -50,6 +52,28 @@ async function selectExercise(exerciseId: string) {
 
 // 部位ハイライトシート(Issue #106)。選択中はnull以外になり、シートを表示する
 const highlightExercise = ref<Exercise | null>(null)
+
+// カスタム種目の削除(Issue #113)。作成者本人の行にのみ削除ボタンを出す。
+// ⑤ルーティン一覧の本体削除(routines/index.vue)と同じ「アイコンで確認へ切替→2段階確認」UI
+function canDelete(exercise: Exercise) {
+  return exercise.createdBy !== null && exercise.createdBy === user.value?.id
+}
+const confirmingDeleteId = ref<string | null>(null)
+const deletingId = ref<string | null>(null)
+const deleteError = ref('')
+
+async function onDeleteExercise(id: string) {
+  deletingId.value = id
+  deleteError.value = ''
+  try {
+    await deleteExercise(id)
+    confirmingDeleteId.value = null
+  } catch {
+    deleteError.value = '削除に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    deletingId.value = null
+  }
+}
 </script>
 
 <template>
@@ -77,22 +101,55 @@ const highlightExercise = ref<Exercise | null>(null)
 
           <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">種目がありません</p>
           <ul v-else class="space-y-1">
-            <li v-for="exercise in visibleExercises(section)" :key="exercise.id" class="flex items-center gap-1">
-              <button
-                type="button"
-                class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
-                @click="selectExercise(exercise.id)"
-              >
-                {{ exercise.name }}
-              </button>
-              <button
-                type="button"
-                class="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                aria-label="この種目が効く部位を見る"
-                @click="highlightExercise = exercise"
-              >
-                <InfoIcon class="h-4 w-4" />
-              </button>
+            <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
+              <div v-if="confirmingDeleteId === exercise.id" class="flex flex-col gap-2 rounded bg-gray-50 p-2">
+                <p class="text-sm text-gray-700">「{{ exercise.name }}」を削除しますか？（元に戻せません）</p>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    :disabled="deletingId === exercise.id"
+                    class="flex-1 rounded border border-gray-300 py-1.5 text-sm text-gray-700 disabled:opacity-50"
+                    @click="confirmingDeleteId = null"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="deletingId === exercise.id"
+                    class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    @click="onDeleteExercise(exercise.id)"
+                  >
+                    {{ deletingId === exercise.id ? '削除中...' : '削除する' }}
+                  </button>
+                </div>
+                <p v-if="deleteError" class="text-sm text-red-600">{{ deleteError }}</p>
+              </div>
+              <div v-else class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+                  @click="selectExercise(exercise.id)"
+                >
+                  {{ exercise.name }}
+                </button>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  aria-label="この種目が効く部位を見る"
+                  @click="highlightExercise = exercise"
+                >
+                  <InfoIcon class="h-4 w-4" />
+                </button>
+                <button
+                  v-if="canDelete(exercise)"
+                  type="button"
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  aria-label="この種目を削除する"
+                  @click="confirmingDeleteId = exercise.id"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </button>
+              </div>
             </li>
           </ul>
 
