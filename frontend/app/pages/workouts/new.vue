@@ -172,6 +172,12 @@ async function onApplyRoutine(routineId: string) {
 const setInputs = reactive<Record<string, { weight: string | number; reps: string | number }>>({})
 const setSaving = reactive<Record<string, boolean>>({})
 const setErrors = reactive<Record<string, string>>({})
+// 保存中のPromiseをsetIdごとに追跡する（onAddSetのデフォルト値決定用、Issue #116）。
+// blur保存は非同期のため、blur直後に「＋セット追加」を押すと、まだsession.value.setsに
+// 反映されていない編集前の値をデフォルトに使ってしまうレースが起きうる。updateMemoの
+// pendingMemoSaveと同じ「待ち合わせる」方式で防ぐ。値そのもの(Promise)は追跡できればよく
+// 表示に使わないためreactiveにしない
+const pendingSetSaves = new Map<string, Promise<void>>()
 
 function ensureSetInput(set: { id: string; weightKg: number | null; reps: number }) {
   if (setInputs[set.id]) return
@@ -195,7 +201,16 @@ watch(
 // 値が不正な間（回数が空・0以下等）は保存をスキップする。
 // Vue 3.4以降、type="number"のv-modelは有効な数値が入るとStringではなくNumberとして
 // 保持されるため（自重で空欄のときはStringのまま）、trim()の前にString()で揃える
+// 同じセットに対するblur保存が短時間に連続すると（例：重量欄→回数欄と続けてblurする）、
+// 2つのPATCHがほぼ同時に飛び、レスポンスが送信順と逆に返ってくることがある。
+// 素朴にそれぞれのthenでsession.value.sets/lastSetキャッシュを更新すると、後から返ってきた方が
+// 「新しい値」として上書きしてしまい、実際は先勝ちしたはずの古い値が残ってしまう
+// （updateSet自体は毎回サーバーの最新状態を返すので個々の呼び出しは正しいが、順序が問題になる）。
+// これを避けるため、同じsetIdへの保存は直前の保存が終わるまで待ってから始める(直列化する)
 async function onSetFieldBlur(setId: string) {
+  const previous = pendingSetSaves.get(setId)
+  if (previous) await previous
+
   const inputs = setInputs[setId]
   if (!inputs) return
   const reps = Number(inputs.reps)
@@ -205,20 +220,45 @@ async function onSetFieldBlur(setId: string) {
 
   setSaving[setId] = true
   setErrors[setId] = ''
-  try {
-    await updateSet(setId, weightKg, reps)
-  } catch {
-    setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
-  } finally {
-    setSaving[setId] = false
-  }
+  const promise = updateSet(setId, weightKg, reps)
+    .then(() => {})
+    .catch(() => {
+      setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
+    })
+    .finally(() => {
+      setSaving[setId] = false
+      pendingSetSaves.delete(setId)
+    })
+  pendingSetSaves.set(setId, promise)
+  return promise
 }
 
 // --- セット追加（Issue #91：自動保存方式への統一） ---
-// ⑤ルーティン編集の「＋目安セットを追加」と同じ方針：デフォルト値（自重・10回）で
-// その場でAPIに登録し、常時表示の入力欄でその場で重量・回数を手直ししてもらう
+// ⑤ルーティン編集の「＋目安セットを追加」と同じ方針：デフォルト値でその場でAPIに登録し、
+// 常時表示の入力欄でその場で重量・回数を手直ししてもらう
 const DEFAULT_SET_REPS = 10
 const addSetError = ref('')
+
+// デフォルト値の優先順位（Issue #116、Phase3-A「前回記録の自動反映」）：
+// 1. 今回のworkout内でこの種目に既に記録済みのセットがあれば、その最後（＝直近）のセット
+//    （⑤の目安セットが即登録された分も含む。「同じ種目のセットを続けて積む」操作なので、
+//    古い前回記録より今回すでに入力した値の方が参考になる）
+// 2. 前回実際に記録したセット（`GET /exercises`の`lastSet`）
+// 3. どちらも無ければ従来どおり自重・10回
+function defaultSetValuesFor(exerciseId: string): { reps: number; weightKg?: number } {
+  const existing = groupedSets.value.find((g) => g.exerciseId === exerciseId)
+  const lastInThisWorkout = existing?.sets.at(-1)
+  if (lastInThisWorkout) {
+    return { reps: lastInThisWorkout.reps, weightKg: lastInThisWorkout.weightKg ?? undefined }
+  }
+
+  const lastSet = exercises.value?.find((e) => e.id === exerciseId)?.lastSet
+  if (lastSet) {
+    return { reps: lastSet.reps, weightKg: lastSet.weightKg ?? undefined }
+  }
+
+  return { reps: DEFAULT_SET_REPS }
+}
 
 // invalid_exercise(削除済み種目への新規追加など)は「時間をおいて再度お試しください」と
 // 案内しても解決しない恒久的な失敗のため、他の失敗(通信エラー等)と分けて案内する(Issue #113)
@@ -232,8 +272,20 @@ function addSetErrorMessage(error: unknown): string {
 
 async function onAddSet(exerciseId: string) {
   addSetError.value = ''
+  // この種目のセットがまさにblur保存中の場合、その保存を待ってからデフォルト値を決める
+  // （defaultSetValuesForはPromiseではなく確定済みのsession.value.setsを見るため。上記参照）
+  const existing = groupedSets.value.find((g) => g.exerciseId === exerciseId)
+  if (existing) {
+    await Promise.all(
+      existing.sets.flatMap((s) => {
+        const pending = pendingSetSaves.get(s.id)
+        return pending ? [pending] : []
+      }),
+    )
+  }
   try {
-    const set = await addSet(exerciseId, DEFAULT_SET_REPS)
+    const { reps, weightKg } = defaultSetValuesFor(exerciseId)
+    const set = await addSet(exerciseId, reps, weightKg)
     ensureSetInput(set)
   } catch (error) {
     addSetError.value = addSetErrorMessage(error)
@@ -257,14 +309,29 @@ if (initialPickedExerciseId) {
 // セッション状態をリセットする」だけの処理（workoutが未作成なら再取得もしない）。
 // 「今日の記録を完了」だけがこの再取得をしていて、「ホームへ戻る」は素のリンクだったため
 // 遷移直後の②ホームに今回の変更が反映されないことがあった。実質同じ操作なので1つに統合する。
-// メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる
+// メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる。
+// セットの重量・回数も同様：フィールドのblurは離脱ボタンのclickより先に発火する
+// （ブラウザのイベント順序上、blur→clickの順になる）ため、この時点でpendingSetSavesには
+// 直前の編集の保存Promiseが積まれているはずだが、それを待たずに遷移すると
+// 直前の入力が保存されないまま失われる(気づいたことをその場で修正。Issue #116の動作確認中に発覚)
 async function onLeaveWorkout() {
   await (pendingMemoSave ?? saveMemoIfChanged())
+  await Promise.all(pendingSetSaves.values())
   await finishWorkout()
   // 入力待ちの種目もworkout単位の状態のため、離脱と合わせてリセットする
   // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）
   pendingExercises.value = []
   await navigateTo('/')
+}
+
+// 「＋種目を追加」も④への画面遷移(離脱)を伴うため、onLeaveWorkoutと同じ理由で
+// 保存中のセット編集を待ってから遷移する
+async function onGoToExercisePicker() {
+  await Promise.all(pendingSetSaves.values())
+  await navigateTo({
+    path: '/workouts/exercises',
+    query: { returnTo: `/workouts/new?date=${targetDate}` },
+  })
 }
 
 // --- 記録全体の削除（⑥記録詳細のconfirmingDelete/onDeleteWorkout相当を移植） ---
@@ -465,7 +532,7 @@ async function onDeleteWorkout() {
         <button
           type="button"
           class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
-          @click="navigateTo({ path: '/workouts/exercises', query: { returnTo: `/workouts/new?date=${targetDate}` } })"
+          @click="onGoToExercisePicker"
         >
           ＋種目を追加
         </button>
