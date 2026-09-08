@@ -15,7 +15,15 @@ import type { StatsRange } from '~/composables/useStats'
 definePageMeta({ middleware: 'auth' })
 
 // Chart.js is tree-shakeable: 使う要素だけ明示的に登録する必要がある
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, LineController, Tooltip, Legend)
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  LineController,
+  Tooltip,
+  Legend,
+)
 
 const RANGES: { value: StatsRange; label: string }[] = [
   { value: '1m', label: '1ヶ月' },
@@ -102,19 +110,20 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-blue-600">← ホームに戻る</NuxtLink>
-        <p class="text-sm font-semibold text-gray-900">統計</p>
-        <span class="w-16" />
+        <NuxtLink to="/" class="text-sm text-gray-500">← ホームに戻る</NuxtLink>
+        <h1 class="text-base font-semibold text-gray-900">統計</h1>
       </div>
 
-      <div class="flex overflow-hidden rounded-lg border border-blue-600">
+      <div class="flex overflow-hidden rounded-lg border border-brand-600">
         <button
           v-for="r in RANGES"
           :key="r.value"
           type="button"
           class="flex-1 py-1.5 text-sm font-semibold"
           :class="
-            range === r.value ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 hover:bg-blue-50'
+            range === r.value
+              ? 'bg-brand-600 text-white'
+              : 'bg-white text-brand-600 hover:bg-brand-50'
           "
           @click="range = r.value"
         >
