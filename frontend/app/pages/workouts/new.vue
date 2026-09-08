@@ -8,7 +8,7 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout, deleteWorkout } =
+const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
   useWorkoutSession()
 
 // ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
@@ -333,26 +333,6 @@ async function onGoToExercisePicker() {
     query: { returnTo: `/workouts/new?date=${targetDate}` },
   })
 }
-
-// --- 記録全体の削除（⑥記録詳細のconfirmingDelete/onDeleteWorkout相当を移植） ---
-// window.confirm()は「このページに追加のダイアログを表示させない」でブラウザ側から無効化されうる
-// (docs/backlog.md参照)ため、画面内の2段階確認(確認表示→実行ボタン)にする
-const confirmingDelete = ref(false)
-const deleting = ref(false)
-const deleteError = ref('')
-
-async function onDeleteWorkout() {
-  deleting.value = true
-  deleteError.value = ''
-  try {
-    await deleteWorkout()
-    pendingExercises.value = []
-    await navigateTo('/')
-  } catch {
-    deleteError.value = '記録の削除に失敗しました。時間をおいて再度お試しください'
-    deleting.value = false
-  }
-}
 </script>
 
 <template>
@@ -388,7 +368,7 @@ async function onDeleteWorkout() {
       >
         <div class="mb-2 flex items-center justify-between">
           <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
-          <button type="button" class="text-xs text-blue-600" @click="onAddSet(group.exerciseId)">
+          <button type="button" class="text-xs text-brand-600" @click="onAddSet(group.exerciseId)">
             ＋セット追加
           </button>
         </div>
@@ -402,7 +382,9 @@ async function onDeleteWorkout() {
              巻き込んで崩れないようにする -->
         <div class="overflow-x-auto">
           <div class="min-w-[17rem] overflow-hidden rounded-lg">
-            <div class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
+            <div
+              class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5"
+            >
               <span class="text-xs font-semibold text-gray-500">セット</span>
               <span class="text-xs font-semibold text-gray-500">重量</span>
               <span class="text-xs font-semibold text-gray-500">回数</span>
@@ -414,7 +396,9 @@ async function onDeleteWorkout() {
                 class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
                 :class="i % 2 === 1 ? 'bg-gray-50' : ''"
               >
-                <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ set.setOrder }}</span>
+                <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
+                  set.setOrder
+                }}</span>
                 <span class="flex min-w-0 items-baseline gap-1.5">
                   <input
                     v-model="setInputs[set.id]!.weight"
@@ -513,7 +497,7 @@ async function onDeleteWorkout() {
         </template>
         <p v-else class="text-sm text-gray-500">
           ルーティンがまだ登録されていません。
-          <NuxtLink to="/routines" class="text-blue-600">ルーティンを登録する</NuxtLink>
+          <NuxtLink to="/routines" class="text-brand-600">ルーティンを登録する</NuxtLink>
         </p>
         <p v-if="routineApplyError" class="mt-2 text-sm text-red-600">{{ routineApplyError }}</p>
         <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600">{{ routineApplyNotice }}</p>
@@ -531,52 +515,19 @@ async function onDeleteWorkout() {
       <div class="flex gap-2">
         <button
           type="button"
-          class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
+          class="flex-1 rounded border border-brand-600 py-2 text-sm font-semibold text-brand-600"
           @click="onGoToExercisePicker"
         >
           ＋種目を追加
         </button>
         <button
           type="button"
-          class="flex-1 rounded border border-blue-600 py-2 text-sm font-semibold text-blue-600"
+          class="flex-1 rounded border border-brand-600 py-2 text-sm font-semibold text-brand-600"
           @click="onOpenRoutinePicker"
         >
           ＋ルーティンから選ぶ
         </button>
       </div>
-
-      <section v-if="session.workoutId" class="rounded-lg bg-white p-4 shadow">
-        <template v-if="confirmingDelete">
-          <p class="text-sm text-gray-700">この記録を削除しますか？元に戻せません。</p>
-          <div class="mt-2 flex gap-2">
-            <button
-              type="button"
-              :disabled="deleting"
-              class="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-              @click="onDeleteWorkout"
-            >
-              {{ deleting ? '削除中...' : '削除する' }}
-            </button>
-            <button
-              type="button"
-              :disabled="deleting"
-              class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 disabled:opacity-50"
-              @click="confirmingDelete = false"
-            >
-              キャンセル
-            </button>
-          </div>
-        </template>
-        <button
-          v-else
-          type="button"
-          class="flex w-full items-center justify-center gap-1.5 rounded border border-red-600 py-2 text-sm font-semibold text-red-600"
-          @click="confirmingDelete = true"
-        >
-          <TrashIcon class="h-4 w-4" />この記録を削除
-        </button>
-        <p v-if="deleteError" class="mt-2 text-sm text-red-600">{{ deleteError }}</p>
-      </section>
     </div>
   </div>
 </template>

@@ -70,7 +70,7 @@ async function onDeleteRoutine(id: string) {
         <button
           type="submit"
           :disabled="!newName.trim() || submitting"
-          class="shrink-0 whitespace-nowrap rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          class="shrink-0 whitespace-nowrap rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           追加
         </button>
@@ -89,7 +89,9 @@ async function onDeleteRoutine(id: string) {
         <li v-for="routine in routines" :key="routine.id" class="rounded-lg bg-white shadow">
           <template v-if="confirmingDeleteId === routine.id">
             <div class="flex flex-col gap-2 p-4">
-              <p class="text-sm text-gray-700">「{{ routine.name }}」を削除しますか？（元に戻せません）</p>
+              <p class="text-sm text-gray-700">
+                「{{ routine.name }}」を削除しますか？（元に戻せません）
+              </p>
               <div class="flex gap-2">
                 <button
                   type="button"
@@ -112,7 +114,10 @@ async function onDeleteRoutine(id: string) {
             </div>
           </template>
           <div v-else class="flex items-center gap-2 p-4">
-            <NuxtLink :to="`/routines/${routine.id}`" class="flex-1 text-sm font-semibold text-gray-900">
+            <NuxtLink
+              :to="`/routines/${routine.id}`"
+              class="flex-1 text-sm font-semibold text-gray-900"
+            >
               {{ routine.name }}
             </NuxtLink>
             <button

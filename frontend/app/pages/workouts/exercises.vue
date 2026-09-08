@@ -88,23 +88,37 @@ async function onDeleteExercise(id: string) {
       </p>
 
       <template v-else>
-        <section v-for="section in sections" :key="section.group" class="rounded-lg bg-white p-4 shadow">
+        <section
+          v-for="section in sections"
+          :key="section.group"
+          class="rounded-lg bg-white p-4 shadow"
+        >
           <div class="mb-2 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-900">{{ section.label }}</h2>
             <NuxtLink
-              :to="{ path: '/workouts/exercises-new', query: { muscleGroup: section.group, returnTo } }"
-              class="text-xs text-blue-600"
+              :to="{
+                path: '/workouts/exercises-new',
+                query: { muscleGroup: section.group, returnTo },
+              }"
+              class="text-xs text-brand-600"
             >
               ＋種目を追加
             </NuxtLink>
           </div>
 
-          <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">種目がありません</p>
+          <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">
+            種目がありません
+          </p>
           <ul v-else class="space-y-1">
             <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
-              <div v-if="confirmingDeleteId === exercise.id" class="flex flex-col gap-2 rounded bg-gray-50 p-2">
+              <div
+                v-if="confirmingDeleteId === exercise.id"
+                class="flex flex-col gap-2 rounded bg-gray-50 p-2"
+              >
                 <p class="text-sm text-gray-700">
-                  「{{ exercise.name }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
+                  「{{
+                    exercise.name
+                  }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
                 </p>
                 <div class="flex gap-2">
                   <button
@@ -161,7 +175,11 @@ async function onDeleteExercise(id: string) {
             class="mt-1 flex items-center gap-1 text-xs text-gray-500"
             @click="toggleExpanded(section.group)"
           >
-            {{ expandedGroups.has(section.group) ? '閉じる' : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件）` }}
+            {{
+              expandedGroups.has(section.group)
+                ? '閉じる'
+                : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件）`
+            }}
             <ChevronDownIcon
               class="h-3.5 w-3.5 transition-transform"
               :class="expandedGroups.has(section.group) ? 'rotate-180' : ''"

@@ -38,7 +38,7 @@ async function onSubmit() {
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
@@ -52,7 +52,7 @@ async function onSubmit() {
             type="password"
             required
             autocomplete="current-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
@@ -61,7 +61,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           ログイン
         </button>
@@ -69,7 +69,7 @@ async function onSubmit() {
 
       <p class="mt-4 text-center text-sm text-gray-600">
         アカウントをお持ちでない方は
-        <NuxtLink to="/register" class="text-blue-600 hover:underline">新規登録</NuxtLink>
+        <NuxtLink to="/register" class="text-brand-600 hover:underline">新規登録</NuxtLink>
       </p>
     </div>
   </div>

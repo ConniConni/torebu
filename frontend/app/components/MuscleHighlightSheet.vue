@@ -55,7 +55,9 @@ const highlight = computed(() =>
 
 type Side = 'front' | 'back'
 // 発光がある面を初期表示にする(両方無ければfront)。以後は手動トグルに従う
-const side = ref<Side>(highlight.value.back.active && !highlight.value.front.active ? 'back' : 'front')
+const side = ref<Side>(
+  highlight.value.back.active && !highlight.value.front.active ? 'back' : 'front',
+)
 
 const currentSide = computed(() => highlight.value[side.value])
 
@@ -68,7 +70,14 @@ const mainZoneLabel = computed(() => {
 <template>
   <div class="fixed inset-0 z-50 flex flex-col bg-white">
     <div class="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
-      <button type="button" class="text-lg text-gray-500" aria-label="閉じる" @click="emit('close')">✕</button>
+      <button
+        type="button"
+        class="text-lg text-gray-500"
+        aria-label="閉じる"
+        @click="emit('close')"
+      >
+        ✕
+      </button>
       <h2 class="truncate text-sm font-semibold text-gray-900">{{ exerciseName }}</h2>
     </div>
 
@@ -81,7 +90,7 @@ const mainZoneLabel = computed(() => {
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'front' ? 'bg-blue-600 text-white' : 'text-gray-600'"
+          :class="side === 'front' ? 'bg-brand-600 text-white' : 'text-gray-600'"
           @click="side = 'front'"
         >
           前面
@@ -89,7 +98,7 @@ const mainZoneLabel = computed(() => {
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'back' ? 'bg-blue-600 text-white' : 'text-gray-600'"
+          :class="side === 'back' ? 'bg-brand-600 text-white' : 'text-gray-600'"
           @click="side = 'back'"
         >
           背面
@@ -115,16 +124,18 @@ const mainZoneLabel = computed(() => {
           :label-map="currentSide.labelMap"
           class="max-h-full"
         />
-        <p v-if="!currentSide.active" class="mt-2 text-xs text-gray-400">この面に光る部位はありません</p>
+        <p v-if="!currentSide.active" class="mt-2 text-xs text-gray-400">
+          この面に光る部位はありません
+        </p>
       </div>
 
       <div class="border-t border-gray-200 px-4 py-3 text-sm text-gray-700">
         <p>
-          <span class="font-semibold text-blue-700">主働筋</span>：{{ mainMuscle
+          <span class="font-semibold text-brand-700">主働筋</span>：{{ mainMuscle
           }}<template v-if="mainZoneLabel">（{{ mainZoneLabel }}に効きやすい）</template>
         </p>
         <p v-if="relatedMuscles.length" class="mt-1" :class="{ invisible: !showRelated }">
-          <span class="font-semibold text-blue-400">関連筋</span>：{{ relatedMuscles.join('、') }}
+          <span class="font-semibold text-brand-400">関連筋</span>：{{ relatedMuscles.join('、') }}
         </p>
       </div>
     </template>

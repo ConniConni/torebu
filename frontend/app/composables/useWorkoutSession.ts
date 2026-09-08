@@ -146,15 +146,6 @@ export function useWorkoutSession() {
     session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
   }
 
-  // 記録全体の削除（⑥記録詳細のonDeleteWorkout相当）。finishWorkoutと同様、
-  // ②ホーム側に反映させるため一覧を再取得してからセッション状態をリセットする
-  async function deleteWorkout() {
-    if (!session.value.workoutId) return
-    await requestFetch(`/api/workouts/${session.value.workoutId}`, { method: 'DELETE' })
-    await fetchWorkouts()
-    session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
-  }
-
   return {
     session,
     startWorkout,
@@ -164,7 +155,6 @@ export function useWorkoutSession() {
     updateSet,
     updateMemo,
     finishWorkout,
-    deleteWorkout,
   }
 }
 
