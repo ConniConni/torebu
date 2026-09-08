@@ -150,6 +150,23 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
     },
   })
 
+  // いいね(reactions)は件数と「自分がいいね済みか」をworkoutごとにまとめて引く。
+  // 件数はgroupBy、自分のいいねはfindMany(userId固定)でそれぞれ1クエリに抑える(N+1回避)
+  const workoutIds = workouts.map((w) => w.id)
+  const [reactionCounts, myReactions] = await Promise.all([
+    prisma.reaction.groupBy({
+      by: ['targetId'],
+      where: { targetType: 'workout', targetId: { in: workoutIds } },
+      _count: { _all: true },
+    }),
+    prisma.reaction.findMany({
+      where: { targetType: 'workout', targetId: { in: workoutIds }, userId },
+      select: { targetId: true },
+    }),
+  ])
+  const reactionCountByWorkoutId = new Map(reactionCounts.map((r) => [r.targetId, r._count._all]))
+  const myReactedWorkoutIds = new Set(myReactions.map((r) => r.targetId))
+
   res.status(200).json(
     workouts.map((w) => {
       // 種目ごとにセットをグルーピングして返す(②ホームの記録カードと同じ構造。frontend/app/pages/index.vueの
@@ -168,6 +185,8 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         performedAt: w.performedAt.toISOString().slice(0, 10),
         memo: w.memo,
         hasSets: w.sets.length > 0,
+        reactionCount: reactionCountByWorkoutId.get(w.id) ?? 0,
+        reactedByMe: myReactedWorkoutIds.has(w.id),
         exercises: [...setsByExercise.entries()].map(([exerciseId, { name, sets }]) => ({
           exerciseId,
           name,

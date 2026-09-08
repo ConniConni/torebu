@@ -40,6 +40,8 @@ interface GroupWorkout {
   performedAt: string
   memo: string | null
   hasSets: boolean
+  reactionCount: number
+  reactedByMe: boolean
   exercises: GroupWorkoutExercise[]
 }
 
@@ -50,7 +52,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_invite_code: '招待コードが正しくありません',
   invite_expired: 'この招待コードは有効期限が切れています。オーナーに再発行を依頼してください',
   member_limit_exceeded: 'このグループは定員に達しています',
-  sole_owner_cannot_leave: 'オーナーが自分だけのグループは退会できません。先に他のメンバーをオーナーにするか、グループを削除してください',
+  sole_owner_cannot_leave:
+    'オーナーが自分だけのグループは退会できません。先に他のメンバーをオーナーにするか、グループを削除してください',
   forbidden: 'この操作はオーナーのみ行えます',
   not_found: 'グループが見つかりませんでした',
 }
@@ -98,6 +101,22 @@ export function useGroups() {
     return await requestFetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
   }
 
+  // いいね(Phase4)。対象はworkout単体のためgroupsではなくworkoutsのエンドポイントを叩く
+  // （backend/src/routes/workouts.ts参照。認可は「所属グループで同席しているか」で判定される）
+  async function likeWorkout(workoutId: string) {
+    return await $fetch<{ reactionCount: number; reactedByMe: boolean }>(
+      `/api/workouts/${workoutId}/reactions`,
+      { method: 'POST' },
+    )
+  }
+
+  async function unlikeWorkout(workoutId: string) {
+    return await $fetch<{ reactionCount: number; reactedByMe: boolean }>(
+      `/api/workouts/${workoutId}/reactions`,
+      { method: 'DELETE' },
+    )
+  }
+
   async function reissueInvite(id: string) {
     return await $fetch<Group>(`/api/groups/${id}/invite`, { method: 'POST' })
   }
@@ -128,6 +147,8 @@ export function useGroups() {
     createGroup,
     fetchGroupDetail,
     fetchGroupWorkouts,
+    likeWorkout,
+    unlikeWorkout,
     reissueInvite,
     joinGroup,
     leaveGroup,

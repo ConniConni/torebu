@@ -188,6 +188,8 @@ describe('GET /groups/:id/workouts', () => {
   })
 
   afterEach(async () => {
+    // reactionsはworkoutへのFKを持たない汎用テーブルのため、workout削除より先に明示的に消す
+    await prisma.reaction.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
     // workout_setsがexercisesを参照しているため、先にworkouts(cascadeでsetsも消える)を全削除してから消す
     await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
     await prisma.exercise.deleteMany({ where: { id: exerciseId } })
@@ -255,6 +257,29 @@ describe('GET /groups/:id/workouts', () => {
           },
         ],
       }),
+    ])
+  })
+
+  it('いいねの件数と自分がいいね済みかを含める', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10') },
+    })
+    await prisma.reaction.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: ownerId },
+    })
+    await prisma.reaction.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: memberId },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([
+      expect.objectContaining({ id: ownerWorkout.id, reactionCount: 2, reactedByMe: true }),
     ])
   })
 

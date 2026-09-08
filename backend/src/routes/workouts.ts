@@ -34,6 +34,38 @@ async function findOwnWorkout(userId: string, workoutId: string) {
   return prisma.workout.findFirst({ where: { id: workoutId, userId, deletedAt: null } })
 }
 
+// viewerIdとownerIdが、いずれかのグループでアクティブなメンバーとして同席しているか(自分自身も含む)。
+// いいねの対象範囲は「グループの記録フィードで見える記録」と一致させる(docs/schema.md「記録の公開範囲」参照)
+async function shareActiveGroup(viewerId: string, ownerId: string) {
+  if (viewerId === ownerId) return true
+
+  const viewerGroupIds = (
+    await prisma.groupMember.findMany({
+      where: { userId: viewerId, leftAt: null, group: { deletedAt: null } },
+      select: { groupId: true },
+    })
+  ).map((m) => m.groupId)
+  if (viewerGroupIds.length === 0) return false
+
+  const shared = await prisma.groupMember.findFirst({
+    where: { userId: ownerId, leftAt: null, groupId: { in: viewerGroupIds } },
+  })
+  return shared !== null
+}
+
+// いいねの対象にできるworkoutか(=自分の記録、または所属グループで同席しているメンバーの記録)。
+// 対象外・削除済み・存在しない場合はnull(404でIDOR対策)
+async function findAccessibleWorkout(viewerId: string, workoutId: string) {
+  const workout = await prisma.workout.findFirst({ where: { id: workoutId, deletedAt: null } })
+  if (!workout) return null
+  const accessible = await shareActiveGroup(viewerId, workout.userId)
+  return accessible ? workout : null
+}
+
+async function countReactions(targetId: string) {
+  return prisma.reaction.count({ where: { targetType: 'workout', targetId } })
+}
+
 // GET /exercisesと同じ基準(公式 or 自分のカスタム)で、記録に使ってよい種目かを確認する。
 // 削除済み(ソフトデリート済み)のカスタム種目は、新規にこの種目を選ぶ操作(④種目選択・⑦種目追加)
 // では選べない。一方、このworkoutに既にその種目のセットがある場合(=このカードは削除前から
@@ -257,4 +289,39 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   await prisma.workoutSet.delete({ where: { id: set.id } })
 
   res.status(204).send()
+})
+
+// いいね(Phase4)。対象は自分の記録、または所属グループで同席しているメンバーの記録(docs/schema.md参照)
+workoutsRouter.post('/:id/reactions', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  // 既にいいね済みでも冪等に200を返す(UNIQUE制約違反はここで吸収する)
+  await prisma.reaction.upsert({
+    where: { targetType_targetId_userId: { targetType: 'workout', targetId: workout.id, userId } },
+    create: { targetType: 'workout', targetId: workout.id, userId },
+    update: {},
+  })
+
+  res.status(200).json({ reactionCount: await countReactions(workout.id), reactedByMe: true })
+})
+
+workoutsRouter.delete('/:id/reactions', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  // 未いいねの状態から呼ばれても冪等に扱う(deleteManyは対象0件でもエラーにならない)
+  await prisma.reaction.deleteMany({
+    where: { targetType: 'workout', targetId: workout.id, userId },
+  })
+
+  res.status(200).json({ reactionCount: await countReactions(workout.id), reactedByMe: false })
 })
