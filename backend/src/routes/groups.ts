@@ -122,6 +122,57 @@ groupsRouter.get('/:id', requireAuth, async (req, res) => {
   })
 })
 
+groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    // 未所属者には存在の有無も返さない(IDOR対策)
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  // このグループのアクティブなメンバー全員(本人含む)のworkoutを対象にする
+  const memberIds = (
+    await prisma.groupMember.findMany({
+      where: { groupId, leftAt: null },
+      select: { userId: true },
+    })
+  ).map((m) => m.userId)
+
+  const workouts = await prisma.workout.findMany({
+    where: { userId: { in: memberIds }, deletedAt: null },
+    orderBy: { performedAt: 'desc' },
+    include: {
+      user: { select: { displayName: true } },
+      sets: { include: { exercise: { select: { name: true } } } },
+    },
+  })
+
+  res.status(200).json(
+    workouts.map((w) => {
+      // セット内容は種目名ごとにまとめたサマリーのみ返す(重量・回数の詳細はこの一覧では出さない)
+      const setCountByExercise = new Map<string, number>()
+      for (const set of w.sets) {
+        setCountByExercise.set(set.exercise.name, (setCountByExercise.get(set.exercise.name) ?? 0) + 1)
+      }
+      return {
+        id: w.id,
+        userId: w.userId,
+        displayName: w.user.displayName,
+        performedAt: w.performedAt.toISOString().slice(0, 10),
+        memo: w.memo,
+        hasSets: w.sets.length > 0,
+        exerciseSummaries: [...setCountByExercise.entries()].map(([name, setCount]) => ({
+          name,
+          setCount,
+        })),
+      }
+    }),
+  )
+})
+
 groupsRouter.post('/:id/invite', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const groupId = req.params.id as string
