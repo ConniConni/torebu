@@ -152,10 +152,14 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
 
   res.status(200).json(
     workouts.map((w) => {
-      // セット内容は種目名ごとにまとめたサマリーのみ返す(重量・回数の詳細はこの一覧では出さない)
-      const setCountByExercise = new Map<string, number>()
+      // 種目ごとにセットをグルーピングして返す(②ホームの記録カードと同じ構造。frontend/app/pages/index.vueの
+      // workoutGroups参照)。フィードではアコーディオン展開でセットの重量・回数まで見せるため、
+      // サマリー(件数)だけでなく個々のセットを含める
+      const setsByExercise = new Map<string, { name: string; sets: (typeof w.sets)[number][] }>()
       for (const set of w.sets) {
-        setCountByExercise.set(set.exercise.name, (setCountByExercise.get(set.exercise.name) ?? 0) + 1)
+        const entry = setsByExercise.get(set.exerciseId) ?? { name: set.exercise.name, sets: [] }
+        entry.sets.push(set)
+        setsByExercise.set(set.exerciseId, entry)
       }
       return {
         id: w.id,
@@ -164,9 +168,17 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         performedAt: w.performedAt.toISOString().slice(0, 10),
         memo: w.memo,
         hasSets: w.sets.length > 0,
-        exerciseSummaries: [...setCountByExercise.entries()].map(([name, setCount]) => ({
+        exercises: [...setsByExercise.entries()].map(([exerciseId, { name, sets }]) => ({
+          exerciseId,
           name,
-          setCount,
+          sets: sets
+            .sort((a, b) => a.setOrder - b.setOrder)
+            .map((s) => ({
+              id: s.id,
+              setOrder: s.setOrder,
+              weightKg: s.weightKg === null ? null : Number(s.weightKg),
+              reps: s.reps,
+            })),
         })),
       }
     }),

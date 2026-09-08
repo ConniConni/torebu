@@ -219,7 +219,7 @@ describe('GET /groups/:id/workouts', () => {
     const ownerWorkout = await prisma.workout.create({
       data: { userId: ownerId, performedAt: new Date('2026-01-10'), memo: 'オーナーの記録' },
     })
-    await prisma.workoutSet.create({
+    const ownerSet = await prisma.workoutSet.create({
       data: { workoutId: ownerWorkout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },
     })
     const memberWorkout = await prisma.workout.create({
@@ -238,7 +238,7 @@ describe('GET /groups/:id/workouts', () => {
         performedAt: '2026-01-11',
         memo: null,
         hasSets: false,
-        exerciseSummaries: [],
+        exercises: [],
       }),
       expect.objectContaining({
         id: ownerWorkout.id,
@@ -247,7 +247,13 @@ describe('GET /groups/:id/workouts', () => {
         performedAt: '2026-01-10',
         memo: 'オーナーの記録',
         hasSets: true,
-        exerciseSummaries: [{ name: 'ベンチプレス', setCount: 1 }],
+        exercises: [
+          {
+            exerciseId,
+            name: 'ベンチプレス',
+            sets: [{ id: ownerSet.id, setOrder: 1, weightKg: 60, reps: 10 }],
+          },
+        ],
       }),
     ])
   })
