@@ -87,7 +87,10 @@
         必要になったら格上げを検討する（2026-09-08決定、詳細は`docs/backlog.md`参照）
       - [x] バックエンド：`GET /stats/volume`・`GET /stats/exercises/:id/history`（[Issue #120](https://github.com/ConniConni/torebu/issues/120)で対応済み、2026-09-08）。自重セット（`weightKg`が`null`）は集計から完全に除外する方針もあわせて決定（詳細は`docs/spec.md`§4-2参照）
       - [x] フロント：Vitest導入＋⑧統計画面＋グラフ描画（Chart.js + vue-chartjs、[Issue #122](https://github.com/ConniConni/torebu/issues/122)で対応済み、2026-09-08）
-- [ ] **D. 週間サマリー**：Cの集計ロジックの応用。Cに依存するため後続
+- [x] **D. 週間サマリー**：Cの集計ロジックの応用。②ホーム画面に「今週の合計負荷重量」「今週の
+      トレ日数」を表示（[Issue #124](https://github.com/ConniConni/torebu/issues/124)で対応済み、
+      2026-09-08）。新規バックエンドAPIは作らず`GET /stats/volume`をフロントで週集計する方式。
+      前週比較は分析寄りになりすぎるためスコープ外にした（詳細は`docs/spec.md`参照）
 - [ ] **E. 部位別の分析・可視化**：Cの集計＋Phase2の`main_muscle`データを利用。Cに依存
 - [ ] **F. 年代・性別・職業別の分析**：`birth_date`/`gender`/`occupation`の入力UIを登録・設定画面に
       追加した上でCの集計に軸を足す。一番後回し（単体の価値が薄く、Cの集計に慣れてからでよい）

@@ -157,7 +157,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー・記録日数） | `GET /workouts`, `GET /workouts/:id`, `POST /auth/logout` | `auth` |
+| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー） | `GET /workouts`, `GET /workouts/:id`, `GET /stats/volume`, `POST /auth/logout` | `auth` |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集・削除も1画面で担う） | `POST /workouts`, `PATCH /workouts/:id`, `DELETE /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -184,6 +184,21 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   数字が良いのか悪いのか意味を持ちづらい」という指摘を受け、期間の区切りが分かりやすい「今月」＋
   積み上げが伝わる「通算」の組み合わせに変更した。さらに表示の見た目（配置・華やかさ）を6パターン
   のモックで比較し、CTAとカレンダーの間に帯として置く案を採用した（2026-09-08）
+
+**今週のサマリー（Phase3-D）の実装メモ**
+- ②ホーム画面の「今月/通算」記録日数帯の直下に、白背景のカードとして「今週の合計負荷重量」
+  「今週のトレ日数」の2値を表示する。前週比較は分析寄りになりすぎる・先週分の集計や0除算対応の
+  実装コストが見合わないと判断し見送った（中身3パターン×表示場所2パターンをモックで比較して決定、
+  2026-09-08）
+- 新規バックエンドAPIは作らず、既存`GET /stats/volume`（`range=1m`）のレスポンスをフロントで
+  週集計して使う。トレ日数はPhase3-Bと同じ`allRecordedDates`（`GET /workouts`の`performedAt`
+  一覧）を流用する。Phase3-Bと同じく「フロント集計のみで完結させる」方針を踏襲した
+- 週の定義は日曜始まり〜土曜（[HomeCalendar.vue](../frontend/app/components/HomeCalendar.vue)の
+  曜日表示と揃える）。集計ロジックは[weeklySummary.ts](../frontend/app/utils/weeklySummary.ts)の
+  `weekStartDate()`/`weekEndDate()`/`sumWeeklyVolume()`/`countWeeklyTrainingDays()`（Vitestで
+  テスト済み）
+- `GET /stats/volume`の取得に失敗しても他の表示（カレンダー等）は妨げないよう、このカード内だけで
+  独立してエラー表示する
 
 **統計画面（⑧、Phase3-C）の実装メモ**
 - 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋最大重量・
