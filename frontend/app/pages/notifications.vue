@@ -38,6 +38,16 @@ function targetSummary(n: AppNotification) {
   const rest = exerciseCount - 1
   return rest > 0 ? `${exerciseName} 他${rest}種目` : exerciseName
 }
+
+// いいね・コメントはグループの記録フィード上でのみ見える(自分の記録画面には表示されない)ため、
+// 遷移先はフィード側を優先する。actorが既に共通のグループを退会している等でgroupIdが無い場合のみ、
+// 自分の記録画面（/workouts/new）にフォールバックする
+function targetLink(n: AppNotification) {
+  if (n.target.groupId) {
+    return `/groups/${n.target.groupId}/workouts?workout=${n.target.workoutId}`
+  }
+  return `/workouts/new?date=${n.target.performedAt}`
+}
 </script>
 
 <template>
@@ -62,7 +72,7 @@ function targetSummary(n: AppNotification) {
       <ul v-else class="flex flex-col gap-2">
         <li v-for="n in notifications" :key="n.id">
           <NuxtLink
-            :to="`/workouts/new?date=${n.target.performedAt}`"
+            :to="targetLink(n)"
             class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
             :class="n.isRead ? 'bg-white' : 'bg-brand-50'"
           >

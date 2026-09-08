@@ -11,6 +11,7 @@ const testPassword = 'password123'
 let ownerId: string
 let actorId: string
 let exerciseId: string
+let groupId: string
 
 beforeEach(async () => {
   const passwordHash = await bcrypt.hash(testPassword, 12)
@@ -33,6 +34,7 @@ beforeEach(async () => {
   const group = await prisma.group.create({
     data: { name: '通知テストグループ', createdBy: ownerId, inviteCode: `invite-${Math.random()}` },
   })
+  groupId = group.id
   await prisma.groupMember.create({ data: { groupId: group.id, userId: ownerId, role: 'owner' } })
   await prisma.groupMember.create({ data: { groupId: group.id, userId: actorId, role: 'member' } })
 })
@@ -100,11 +102,26 @@ describe('GET /notifications', () => {
       target: {
         type: 'workout',
         workoutId: workout.id,
+        groupId,
         exerciseName: 'ベンチプレス',
         exerciseCount: 1,
       },
     })
     expect(res.body[1]).toMatchObject({ type: 'reaction' })
+  })
+
+  it('actorが既に共通のグループを退会している場合、groupIdはnullになる', async () => {
+    const workout = await createWorkoutWithSet(ownerId)
+    await reactAsActor(workout.id)
+    await prisma.groupMember.update({
+      where: { groupId_userId: { groupId, userId: actorId } },
+      data: { leftAt: new Date() },
+    })
+
+    const res = await loginAsOwner().then((agent) => agent.get('/notifications'))
+
+    expect(res.status).toBe(200)
+    expect(res.body[0].target.groupId).toBeNull()
   })
 
   it('他人宛の通知は返らない', async () => {

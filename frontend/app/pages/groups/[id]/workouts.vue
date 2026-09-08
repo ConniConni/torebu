@@ -8,8 +8,14 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const groupId = route.params.id as string
 
-const { fetchGroupWorkouts, likeWorkout, unlikeWorkout, fetchComments, postComment, deleteComment } =
-  useGroups()
+const {
+  fetchGroupWorkouts,
+  likeWorkout,
+  unlikeWorkout,
+  fetchComments,
+  postComment,
+  deleteComment,
+} = useGroups()
 const { user } = useAuth()
 
 type WorkoutComment = Awaited<ReturnType<typeof fetchComments>>[number]
@@ -30,6 +36,10 @@ async function load() {
   }
 }
 await load()
+
+// 通知一覧（/notifications）からの遷移(?workout=<id>)で使う対象workoutId。
+// コメント欄を開く・カードをハイライトする実処理は、それらに必要な状態・関数が揃うスクリプト末尾で行う
+const highlightWorkoutId = route.query.workout as string | undefined
 
 // 展開中の種目を`${workoutId}:${exerciseId}`のキーで管理する。初期状態は全て閉じている
 const openExercises = ref(new Set<string>())
@@ -91,6 +101,13 @@ function onCommentInput(workoutId: string, value: string) {
   const next = new Map(commentInputs.value)
   next.set(workoutId, value)
   commentInputs.value = next
+}
+
+// 日本語入力の変換確定Enterで誤送信しないよう、IME変換中(isComposing)のEnterは無視する。
+// 変換確定後、改めてEnterを押したときだけ送信される（一般的なチャットアプリと同じ挙動）
+function onCommentEnter(event: KeyboardEvent, workout: NonNullable<typeof workouts.value>[number]) {
+  if (event.isComposing) return
+  onPostComment(workout)
 }
 
 async function toggleComments(workoutId: string) {
@@ -156,7 +173,10 @@ async function onDeleteComment(
   try {
     await deleteComment(workout.id, comment.id)
     const map = new Map(commentsByWorkoutId.value)
-    map.set(workout.id, (map.get(workout.id) ?? []).filter((c) => c.id !== comment.id))
+    map.set(
+      workout.id,
+      (map.get(workout.id) ?? []).filter((c) => c.id !== comment.id),
+    )
     commentsByWorkoutId.value = map
     workout.commentCount = Math.max(0, workout.commentCount - 1)
   } catch {
@@ -166,6 +186,15 @@ async function onDeleteComment(
     next.delete(comment.id)
     commentDeleting.value = next
   }
+}
+
+// 通知一覧（/notifications）からの遷移(?workout=<id>)は、対象カードまでスクロールし
+// コメント欄を開いた状態で表示する。読み込み後に一度だけ行う（一覧の並びは変わらないため）
+if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutId)) {
+  await toggleComments(highlightWorkoutId)
+  nextTick(() => {
+    document.getElementById(`workout-${highlightWorkoutId}`)?.scrollIntoView({ block: 'center' })
+  })
 }
 </script>
 
@@ -188,7 +217,13 @@ async function onDeleteComment(
       </p>
 
       <ul v-else class="flex flex-col gap-3">
-        <li v-for="workout in workouts" :key="workout.id" class="rounded-lg bg-white p-4 shadow">
+        <li
+          v-for="workout in workouts"
+          :id="`workout-${workout.id}`"
+          :key="workout.id"
+          class="rounded-lg bg-white p-4 shadow"
+          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400' : ''"
+        >
           <div class="flex items-center gap-2.5">
             <span
               class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700"
@@ -298,10 +333,7 @@ async function onDeleteComment(
             <p v-if="commentLoadError.has(workout.id)" class="text-xs text-red-600">
               コメントの取得に失敗しました。時間をおいて再度お試しください
             </p>
-            <p
-              v-else-if="!commentsByWorkoutId.has(workout.id)"
-              class="text-xs text-gray-500"
-            >
+            <p v-else-if="!commentsByWorkoutId.has(workout.id)" class="text-xs text-gray-500">
               読み込み中...
             </p>
             <ul v-else class="flex flex-col gap-2">
@@ -342,7 +374,10 @@ async function onDeleteComment(
                   <TrashIcon class="h-3 w-3" />
                 </button>
               </li>
-              <li v-if="commentsByWorkoutId.get(workout.id)?.length === 0" class="text-xs text-gray-500">
+              <li
+                v-if="commentsByWorkoutId.get(workout.id)?.length === 0"
+                class="text-xs text-gray-500"
+              >
                 まだコメントがありません
               </li>
             </ul>
@@ -355,12 +390,14 @@ async function onDeleteComment(
                 maxlength="500"
                 class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 px-3 text-sm"
                 @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
-                @keydown.enter="onPostComment(workout)"
+                @keydown.enter="onCommentEnter($event, workout)"
               />
               <button
                 type="button"
                 class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50"
-                :disabled="commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()"
+                :disabled="
+                  commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()
+                "
                 @click="onPostComment(workout)"
               >
                 送信

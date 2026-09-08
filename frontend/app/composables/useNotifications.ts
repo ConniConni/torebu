@@ -6,6 +6,9 @@ interface NotificationActor {
 interface NotificationTarget {
   type: 'workout'
   workoutId: string
+  // いいね・コメントが見えるグループの記録フィードへのリンク用。actorと自分が現在も同席している
+  // アクティブなグループが無ければnull(その場合フロントは自分の記録画面へフォールバックする)
+  groupId: string | null
   performedAt: string
   exerciseName: string | null
   exerciseCount: number

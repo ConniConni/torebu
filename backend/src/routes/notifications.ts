@@ -35,6 +35,31 @@ async function summarizeWorkoutTargets(workoutIds: string[]) {
   return summaryByWorkoutId
 }
 
+// 通知を開いたときの遷移先をグループの記録フィード(いいね・コメントが見える画面)にするため、
+// 各actorと自分(recipient)が現在も同席しているアクティブなグループを1つ引く(無ければnull)。
+// workouts.tsのshareActiveGroupと同じ判定基準(leftAt/group.deletedAt)をactor複数分まとめて引く形
+async function findSharedGroupIds(recipientId: string, actorIds: string[]) {
+  const map = new Map<string, string>()
+  if (actorIds.length === 0) return map
+
+  const recipientGroupIds = (
+    await prisma.groupMember.findMany({
+      where: { userId: recipientId, leftAt: null, group: { deletedAt: null } },
+      select: { groupId: true },
+    })
+  ).map((g) => g.groupId)
+  if (recipientGroupIds.length === 0) return map
+
+  const rows = await prisma.groupMember.findMany({
+    where: { userId: { in: actorIds }, leftAt: null, groupId: { in: recipientGroupIds } },
+    select: { userId: true, groupId: true },
+  })
+  for (const row of rows) {
+    if (!map.has(row.userId)) map.set(row.userId, row.groupId)
+  }
+  return map
+}
+
 // 通知一覧を取得(既読化は行わない。既読化はPOST /notifications/readで別途行う)
 notificationsRouter.get('/', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
@@ -48,6 +73,8 @@ notificationsRouter.get('/', requireAuth, async (req, res) => {
 
   // 対象のworkoutが削除済み・存在しない通知は表示から除外する(#144のスコープでは通知自体の掃除は行わない)
   const summaryByWorkoutId = await summarizeWorkoutTargets(notifications.map((n) => n.targetId))
+  const actorIds = [...new Set(notifications.map((n) => n.actorId).filter((id) => id !== null))]
+  const sharedGroupIdByActorId = await findSharedGroupIds(userId, actorIds)
 
   const items = notifications
     .filter((n) => summaryByWorkoutId.has(n.targetId))
@@ -60,6 +87,10 @@ notificationsRouter.get('/', requireAuth, async (req, res) => {
       target: {
         type: 'workout' as const,
         workoutId: n.targetId,
+        // いいね・コメントが見えるグループの記録フィードへ遷移するためのgroupId。
+        // actorが既に全ての共通グループを退会している等でnullになることがあり、
+        // その場合フロント側は自分の記録画面(/workouts/new)へフォールバックする
+        groupId: (n.actorId && sharedGroupIdByActorId.get(n.actorId)) ?? null,
         ...summaryByWorkoutId.get(n.targetId)!,
       },
     }))
