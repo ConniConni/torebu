@@ -18,6 +18,7 @@ interface ExerciseGroup {
 const { user, logout } = useAuth()
 const { workouts, pending, error, fetchWorkouts } = useWorkouts()
 const { exercises, fetchExercises } = useExercises()
+const { fetchVolume } = useStats()
 const requestFetch = useRequestFetch()
 
 await fetchWorkouts()
@@ -47,6 +48,34 @@ const trainingDaysThisMonth = computed(() =>
   countTrainingDaysInMonth(allRecordedDates.value, today),
 )
 const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates.value))
+
+// 今週のサマリー（合計負荷重量・トレ日数、Phase3-D）。新規バックエンドAPIは作らず、
+// 既存GET /stats/volume（range=1mで直近4〜5週をカバー）をフロントで週集計する。
+// トレ日数は今月/通算と同じallRecordedDatesを流用する（frontend/app/utils/weeklySummary.ts参照）
+const weeklyVolumePoints = ref<{ date: string; volumeKg: number }[]>([])
+const weeklyVolumePending = ref(true)
+const weeklyVolumeError = ref(false)
+try {
+  weeklyVolumePoints.value = await fetchVolume('1m')
+} catch {
+  weeklyVolumeError.value = true
+} finally {
+  weeklyVolumePending.value = false
+}
+const weeklyVolumeKg = computed(() => sumWeeklyVolume(weeklyVolumePoints.value, today))
+const weeklyTrainingDays = computed(() =>
+  countWeeklyTrainingDays(allRecordedDates.value, today),
+)
+
+// 週別推移（直近4週間、横棒グラフ）。今週を一番上に表示するため表示直前でreverseする
+// （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
+// バーの長さのみで比較させる形をモックで比較して決定、2026-09-08）
+const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(weeklyVolumePoints.value, today))
+const weeklyVolumeTrendDisplay = computed(() => [...weeklyVolumeTrendPoints.value].reverse())
+const weeklyVolumeTrendMax = computed(() =>
+  Math.max(1, ...weeklyVolumeTrendPoints.value.map((p) => p.volumeKg)),
+)
+
 const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
@@ -158,6 +187,66 @@ async function onLogout() {
             }}</span
             >日
           </p>
+        </div>
+
+        <!-- 今週のサマリー（Phase3-D）。今月/通算の記録日数帯のすぐ下に置き、「継続」の文脈を
+             まとめる。集計元は既存GET /stats/volume（フロントで週集計、weeklySummary.ts参照）で、
+             このAPI呼び出しだけ失敗しても他の表示は妨げないよう独立してエラー処理する。
+             2カードを横並びにし、左に今週の数値、右に直近4週間の推移（横棒グラフ）を置く
+             （中身・レイアウト・グラフ形式はモックで複数パターンを比較して決定） -->
+        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">今週のサマリーを読み込み中...</p>
+        <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
+          今週のサマリーの取得に失敗しました
+        </p>
+        <div v-else class="flex gap-3">
+          <div class="flex-1 rounded-lg border border-gray-200 bg-white p-3">
+            <p class="mb-2 text-xs font-semibold text-gray-500">今週のサマリー</p>
+            <div class="flex flex-col gap-2">
+              <div>
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                  {{ weeklyVolumeKg.toLocaleString()
+                  }}<span class="ml-1 text-sm font-medium text-gray-700">kg</span>
+                </p>
+                <p class="mt-1 text-xs text-gray-500">合計負荷重量</p>
+              </div>
+              <div>
+                <p class="text-2xl font-extrabold leading-none tabular-nums text-blue-700">
+                  {{ weeklyTrainingDays
+                  }}<span class="ml-1 text-sm font-medium text-gray-700">日</span>
+                </p>
+                <p class="mt-1 text-xs text-gray-500">トレ日数</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex-1 rounded-lg border border-gray-200 bg-white p-3">
+            <p class="mb-3 text-xs font-semibold text-gray-500">週別推移</p>
+            <div class="flex flex-col gap-2.5">
+              <div
+                v-for="point in weeklyVolumeTrendDisplay"
+                :key="point.weekStart"
+                class="flex items-center gap-2"
+              >
+                <p
+                  class="w-9 shrink-0 text-[10px] leading-none"
+                  :class="point.label === '今週' ? 'font-semibold text-blue-700' : 'text-gray-500'"
+                >
+                  {{ point.label }}
+                </p>
+                <!-- 空トラック（背景の薄いバー）は出さず、実際の値がある分だけ棒を描く
+                     （ユーザー指摘、2026-09-08：記録の有無を問わず薄い表示は不要） -->
+                <div class="h-3 flex-1">
+                  <div
+                    v-if="point.volumeKg > 0"
+                    class="h-3 rounded-full bg-blue-600"
+                    :class="point.label === '今週' ? '' : 'opacity-40'"
+                    :style="{
+                      width: `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
+                    }"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <HomeCalendar
