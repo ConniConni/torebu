@@ -135,7 +135,10 @@ async function addExercise(exerciseId: string) {
     exerciseId: string
     sortOrder: number
     targetSets: TargetSet[]
-  }>(`/api/routines/${routineId}/exercises`, { method: 'POST', body: { exerciseId, sortOrder: nextSortOrder } })
+  }>(`/api/routines/${routineId}/exercises`, {
+    method: 'POST',
+    body: { exerciseId, sortOrder: nextSortOrder },
+  })
   // POSTのレスポンスには種目名・部位が含まれないため、選択直前まで持っていたexercise一覧から補う
   const { exercises } = useExercises()
   const exercise = exercises.value?.find((e) => e.id === exerciseId)
@@ -289,7 +292,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
             <p class="text-sm font-semibold text-gray-900">種目</p>
             <NuxtLink
               :to="{ path: '/workouts/exercises', query: { returnTo: `/routines/${routineId}` } }"
-              class="text-xs text-blue-600"
+              class="text-xs text-brand-600"
             >
               ＋種目を追加
             </NuxtLink>
@@ -311,7 +314,9 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                   <span class="flex items-center gap-2">
                     <span class="drag-handle cursor-grab text-gray-400">⠿</span>
                     {{ element.exercise.name }}
-                    <span class="text-xs text-gray-400">（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span>
+                    <span class="text-xs text-gray-400"
+                      >（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span
+                    >
                   </span>
 
                   <div class="mt-1 pl-6">
@@ -323,7 +328,9 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                          ほど狭い場合は個別にoverflow-x-autoで横スクロールさせる -->
                     <div v-if="element.targetSets.length > 0" class="overflow-x-auto">
                       <div class="min-w-[17rem] overflow-hidden rounded-lg">
-                        <div class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5">
+                        <div
+                          class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5"
+                        >
                           <span class="text-xs font-semibold text-gray-500">セット</span>
                           <span class="text-xs font-semibold text-gray-500">重量</span>
                           <span class="text-xs font-semibold text-gray-500">回数</span>
@@ -335,7 +342,9 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                           class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
                           :class="Number(index) % 2 === 1 ? 'bg-gray-50' : ''"
                         >
-                          <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{ Number(index) + 1 }}</span>
+                          <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
+                            Number(index) + 1
+                          }}</span>
                           <span class="flex min-w-0 items-baseline gap-1.5">
                             <input
                               v-model="set.weightKg"
@@ -373,12 +382,14 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                     </div>
                     <button
                       type="button"
-                      class="mt-1 text-xs text-blue-600"
+                      class="mt-1 text-xs text-brand-600"
                       @click="addTargetSet(element)"
                     >
                       ＋目安セットを追加
                     </button>
-                    <p v-if="targetSetsSaving[element.id]" class="mt-1 text-xs text-gray-400">保存中...</p>
+                    <p v-if="targetSetsSaving[element.id]" class="mt-1 text-xs text-gray-400">
+                      保存中...
+                    </p>
                     <p v-if="targetSetsErrors[element.id]" class="mt-1 text-xs text-red-600">
                       {{ targetSetsErrors[element.id] }}
                     </p>

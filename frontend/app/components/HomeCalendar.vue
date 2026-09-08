@@ -113,11 +113,11 @@ function nextMonth() {
           class="flex h-6 w-6 items-center justify-center rounded-full"
           :class="[
             cell.date === selectedDate
-              ? 'bg-blue-600 text-white'
+              ? 'bg-brand-600 text-white'
               : cell.hasSets
-                ? 'bg-blue-100 font-semibold text-blue-700'
+                ? 'bg-brand-100 font-semibold text-brand-700'
                 : '',
-            cell.isToday && cell.date !== selectedDate ? 'ring-2 ring-blue-600' : '',
+            cell.isToday && cell.date !== selectedDate ? 'ring-2 ring-brand-600' : '',
           ]"
         >
           {{ cell.day }}
@@ -127,7 +127,13 @@ function nextMonth() {
              bg-transparentで高さを確保し、行によって縦位置がずれないようにする -->
         <span
           class="mt-0.5 h-1 w-1 rounded-full"
-          :class="cell.memoOnly ? (cell.date === selectedDate ? 'bg-white' : 'bg-blue-600') : 'bg-transparent'"
+          :class="
+            cell.memoOnly
+              ? cell.date === selectedDate
+                ? 'bg-white'
+                : 'bg-brand-600'
+              : 'bg-transparent'
+          "
         />
       </button>
     </div>

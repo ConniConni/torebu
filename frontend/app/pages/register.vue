@@ -47,7 +47,7 @@ async function onSubmit() {
             required
             maxlength="50"
             autocomplete="nickname"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
@@ -61,7 +61,7 @@ async function onSubmit() {
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
@@ -77,7 +77,7 @@ async function onSubmit() {
             minlength="8"
             maxlength="72"
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
           <p class="mt-1 text-xs text-gray-500">8文字以上で入力してください</p>
         </div>
@@ -92,7 +92,7 @@ async function onSubmit() {
             type="password"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
@@ -101,7 +101,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           登録する
         </button>
@@ -109,7 +109,7 @@ async function onSubmit() {
 
       <p class="mt-4 text-center text-sm text-gray-600">
         アカウントをお持ちの方は
-        <NuxtLink to="/login" class="text-blue-600 hover:underline">ログイン</NuxtLink>
+        <NuxtLink to="/login" class="text-brand-600 hover:underline">ログイン</NuxtLink>
       </p>
     </div>
   </div>

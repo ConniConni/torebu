@@ -27,13 +27,18 @@ const SIMILAR_NAME_MIN_LENGTH = 2
 const similarExercises = computed(() => {
   const normalizedInput = normalizeExerciseName(name.value)
   if (normalizedInput.length < SIMILAR_NAME_MIN_LENGTH) return []
-  return (exercises.value ?? [])
-    // 削除済みの種目は新規記録には選べないため候補から除外する(Issue #113)
-    .filter((exercise) => !exercise.deletedAt)
-    .filter((exercise) => {
-      const normalizedExisting = normalizeExerciseName(exercise.name)
-      return normalizedExisting.includes(normalizedInput) || normalizedInput.includes(normalizedExisting)
-    })
+  return (
+    (exercises.value ?? [])
+      // 削除済みの種目は新規記録には選べないため候補から除外する(Issue #113)
+      .filter((exercise) => !exercise.deletedAt)
+      .filter((exercise) => {
+        const normalizedExisting = normalizeExerciseName(exercise.name)
+        return (
+          normalizedExisting.includes(normalizedInput) ||
+          normalizedInput.includes(normalizedExisting)
+        )
+      })
+  )
 })
 
 async function selectSimilarExercise(exerciseId: string) {
@@ -47,7 +52,10 @@ async function onSubmit() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const exercise = await createExercise({ name: name.value.trim(), muscleGroup: muscleGroup.value })
+    const exercise = await createExercise({
+      name: name.value.trim(),
+      muscleGroup: muscleGroup.value,
+    })
     // 追加した種目をそのまま選択済みにしてreturnTo(③記録作成・⑤ルーティン編集など)へ戻る(④を経由し直させない)
     usePickedExerciseId().value = exercise.id
     await navigateTo(returnTo.value)
@@ -91,7 +99,10 @@ async function onSubmit() {
           />
         </label>
 
-        <div v-if="similarExercises.length > 0" class="rounded border border-amber-300 bg-amber-50 p-3">
+        <div
+          v-if="similarExercises.length > 0"
+          class="rounded border border-amber-300 bg-amber-50 p-3"
+        >
           <p class="text-xs text-amber-800">似た名前の種目がすでにあります</p>
           <ul class="mt-1 space-y-1">
             <li v-for="exercise in similarExercises" :key="exercise.id">
@@ -111,7 +122,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="!name.trim() || submitting"
-          class="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           追加する
         </button>

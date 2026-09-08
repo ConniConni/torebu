@@ -1,1 +1,14 @@
 @import 'tailwindcss';
+
+/* ブランドカラー（方向性A「熱量系」、2026-09-08 Issue #127で導入）。
+   blue-*を上書きするのではなくbrand-*として独立させ、後から色調整・
+   ダークモード対応をする際に既定のTailwindパレットと混同しないようにしている。 */
+@theme {
+  --color-brand-50: #fdf4ec;
+  --color-brand-100: #fbe6d2;
+  --color-brand-400: #e8875a;
+  --color-brand-500: #de6a38;
+  --color-brand-600: #d8531f;
+  --color-brand-700: #b8431a;
+  --color-brand-900: #3a2013;
+}
