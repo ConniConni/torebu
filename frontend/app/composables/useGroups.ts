@@ -20,9 +20,17 @@ interface GroupDetail extends Group {
   members: GroupMember[]
 }
 
-interface GroupWorkoutExerciseSummary {
+interface GroupWorkoutSet {
+  id: string
+  setOrder: number
+  weightKg: number | null
+  reps: number
+}
+
+interface GroupWorkoutExercise {
+  exerciseId: string
   name: string
-  setCount: number
+  sets: GroupWorkoutSet[]
 }
 
 interface GroupWorkout {
@@ -32,7 +40,7 @@ interface GroupWorkout {
   performedAt: string
   memo: string | null
   hasSets: boolean
-  exerciseSummaries: GroupWorkoutExerciseSummary[]
+  exercises: GroupWorkoutExercise[]
 }
 
 // バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
@@ -124,4 +132,4 @@ export function useGroups() {
   }
 }
 
-export type { Group, GroupDetail, GroupMember, GroupWorkout, GroupWorkoutExerciseSummary }
+export type { Group, GroupDetail, GroupMember, GroupWorkout, GroupWorkoutExercise, GroupWorkoutSet }
