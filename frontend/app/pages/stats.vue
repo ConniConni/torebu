@@ -44,7 +44,7 @@ watchEffect(() => {
 
 const volumePending = ref(false)
 const volumeError = ref(false)
-const volumeChartData = ref(toLineChartData([], '合計挙上重量(kg)'))
+const volumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 
 async function loadVolume() {
   volumePending.value = true
@@ -53,7 +53,7 @@ async function loadVolume() {
     const points = await fetchVolume(range.value)
     volumeChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.volumeKg })),
-      '合計挙上重量(kg)',
+      '合計負荷重量(kg)',
     )
   } catch {
     volumeError.value = true
@@ -65,7 +65,7 @@ async function loadVolume() {
 const historyPending = ref(false)
 const historyError = ref(false)
 const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
-const historyVolumeChartData = ref(toLineChartData([], '合計挙上重量(kg)'))
+const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 
 async function loadHistory() {
   if (!selectedExerciseId.value) return
@@ -79,7 +79,7 @@ async function loadHistory() {
     )
     historyVolumeChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.volumeKg })),
-      '合計挙上重量(kg)',
+      '合計負荷重量(kg)',
     )
   } catch {
     historyError.value = true
@@ -123,7 +123,7 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
       </div>
 
       <div class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">合計挙上重量の推移</p>
+        <p class="mb-2 text-sm font-semibold text-gray-900">合計負荷重量の推移</p>
         <p v-if="volumePending" class="text-center text-sm text-gray-500">読み込み中...</p>
         <p v-else-if="volumeError" class="text-center text-sm text-red-600">
           データの取得に失敗しました。時間をおいて再度お試しください
@@ -170,7 +170,7 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
               </div>
             </div>
             <div>
-              <p class="mb-1 text-xs font-semibold text-gray-500">合計挙上重量</p>
+              <p class="mb-1 text-xs font-semibold text-gray-500">合計負荷重量</p>
               <div class="h-48">
                 <Line :data="historyVolumeChartData" :options="chartOptions" />
               </div>

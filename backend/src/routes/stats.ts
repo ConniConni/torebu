@@ -34,7 +34,7 @@ function toDateKey(date: Date): string {
 }
 
 // GET /stats/volume?range=1m|3m|all
-// 日別の合計挙上重量(Σ weightKg * reps)を返す。
+// 日別の合計負荷重量(Σ weightKg * reps)を返す。
 // 自重種目のセット(weightKg IS NULL)は重量を定義できないため集計から完全に除外する
 // (2026-09-08決定)。データが無い日は結果に含めない(0埋めはしない)
 statsRouter.get('/volume', requireAuth, async (req, res) => {
@@ -75,7 +75,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
 })
 
 // GET /stats/exercises/:exerciseId/history?range=1m|3m|all
-// 指定した種目の、実施日ごとの最大重量・合計挙上重量の推移を返す。
+// 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。
 // /stats/volumeと同じ理由で自重セットは除外する。公式種目以外(カスタム種目・存在しない種目)は404
 statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) => {
   const parsed = rangeSchema.safeParse(req.query)

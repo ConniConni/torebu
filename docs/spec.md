@@ -163,7 +163,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
-| `/stats` | ⑧ | 統計（合計挙上重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
+| `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -186,8 +186,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   のモックで比較し、CTAとカレンダーの間に帯として置く案を採用した（2026-09-08）
 
 **統計画面（⑧、Phase3-C）の実装メモ**
-- 構成：合計挙上重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋最大重量・
-  合計挙上重量の推移、折れ線2本）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
+- 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋最大重量・
+  合計負荷重量の推移、折れ線2本）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
   共通適用する
 - 種目セレクトの選択肢は集計対象（`GET /stats/exercises/:id/history`）と同じ公式種目のみに絞る
   （カスタム種目・削除済み種目は候補から除外。渡すと404になるため）
@@ -456,8 +456,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
-| GET | `/stats/volume` | 要 | 日別の合計挙上重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
-| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計挙上重量の推移を返す。`range`クエリは`/stats/volume`と同じ |
+| GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。`range`クエリは`/stats/volume`と同じ |
 
 ※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
 

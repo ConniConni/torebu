@@ -11,16 +11,16 @@ describe('formatDateLabel', () => {
 
 describe('toLineChartData', () => {
   it('空配列なら空のlabels/dataになる（データが無い期間の表示）', () => {
-    expect(toLineChartData([], '合計挙上重量(kg)')).toEqual({
+    expect(toLineChartData([], '合計負荷重量(kg)')).toEqual({
       labels: [],
-      datasets: [{ label: '合計挙上重量(kg)', data: [] }],
+      datasets: [{ label: '合計負荷重量(kg)', data: [] }],
     })
   })
 
   it('1件のみでも配列として扱う', () => {
-    expect(toLineChartData([{ date: '2026-09-08', value: 120 }], '合計挙上重量(kg)')).toEqual({
+    expect(toLineChartData([{ date: '2026-09-08', value: 120 }], '合計負荷重量(kg)')).toEqual({
       labels: ['9/8'],
-      datasets: [{ label: '合計挙上重量(kg)', data: [120] }],
+      datasets: [{ label: '合計負荷重量(kg)', data: [120] }],
     })
   })
 
