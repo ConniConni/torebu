@@ -68,6 +68,7 @@ model Exercise {
   equipment        String?
   createdBy        String?     @map("created_by") // null=公式、値ありならカスタム種目
   defaultSortOrder Int?        @map("default_sort_order") // 運営が定番種目に設定。使用履歴が無い時のフォールバック順
+  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。カスタム種目のみ、作成者本人が削除可能（公式種目は対象外）
   updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   // 公式種目名(created_by IS NULL)の重複防止は、DB制約ではなくアプリ側の重複サジェスト表示のみで運用する
   // （経緯はdocs/schema.mdの「設計方針メモ」参照。運営操作が複数人・同時実行になるタイミングで再検討）

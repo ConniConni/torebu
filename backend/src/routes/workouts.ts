@@ -35,9 +35,10 @@ async function findOwnWorkout(userId: string, workoutId: string) {
 }
 
 // GET /exercisesと同じ基準(公式 or 自分のカスタム)で、記録に使ってよい種目かを確認する
+// 削除済み(ソフトデリート済み)のカスタム種目は新規の記録には使えない(Issue #113)
 async function isExerciseVisible(userId: string, exerciseId: string) {
   const exercise = await prisma.exercise.findFirst({
-    where: { id: exerciseId, OR: [{ createdBy: null }, { createdBy: userId }] },
+    where: { id: exerciseId, deletedAt: null, OR: [{ createdBy: null }, { createdBy: userId }] },
   })
   return exercise !== null
 }
