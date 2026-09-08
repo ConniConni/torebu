@@ -66,10 +66,6 @@ async function countReactions(targetId: string) {
   return prisma.reaction.count({ where: { targetType: 'workout', targetId } })
 }
 
-async function countComments(targetId: string) {
-  return prisma.comment.count({ where: { targetType: 'workout', targetId } })
-}
-
 // 通知(Phase4、#144)。自分の記録への自分の操作では作成しない(actorId === recipientIdの場合はスキップ)
 async function notifyWorkoutOwner(
   type: 'reaction' | 'comment',
