@@ -292,15 +292,15 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
 
 > グループ基盤（[Issue #135](https://github.com/ConniConni/torebu/issues/135)）・グループの記録フィード
 > （[Issue #138](https://github.com/ConniConni/torebu/issues/138)）・記録へのいいね
-> （[Issue #140](https://github.com/ConniConni/torebu/issues/140)）は実装済み。以下のroadmap.md・
+> （[Issue #140](https://github.com/ConniConni/torebu/issues/140)）・記録へのコメント
+> （[Issue #142](https://github.com/ConniConni/torebu/issues/142)）は実装済み。以下のroadmap.md・
 > このファイルの記載が実装より古いままになっていたため、2026-09-09に棚卸しして更新した
 > （このセクション自体もIssue化せず随時追記する運用に留める）
 
-- **未着手**：コメント・通知・ランキング・「イチオシこだわり共有」投稿・一覧画面。設計の方向性は
+- **未着手**：通知・ランキング・「イチオシこだわり共有」投稿・一覧画面。設計の方向性は
   [concept.md](./concept.md)・[schema.md](./schema.md)に記載済みだが、画面単位の詳細設計は未着手
   - **再検討のタイミング**：次のPhase4 Issueに着手するとき。`docs/schema.md`「Phase4の検討結果」の
-    分割方針に沿って1 Issueずつ積み上げる（次点はコメント機能が有力。いいねと同じ`workout`単位・
-    同じ認可ロジックを再利用できるため）
+    分割方針に沿って1 Issueずつ積み上げる
 - **いいねしたユーザーの表示**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)の
   作業中に検討、2026-09-09）：現状は件数（`reactionCount`）と自分がいいね済みか（`reactedByMe`）
   のみを返し、「誰がいいねしたか」の一覧は無い。あえてスコープを広げず、必要になったら別Issueで

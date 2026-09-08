@@ -51,6 +51,7 @@ model User {
   createdGroups    Group[]       @relation("GroupCreatedBy")
   groupMemberships GroupMember[]
   reactions        Reaction[]
+  comments         Comment[]
 
   @@map("users")
 }
@@ -209,4 +210,27 @@ model Reaction {
   @@unique([targetType, targetId, userId])
   @@index([targetType, targetId])
   @@map("reactions")
+}
+
+enum CommentTargetType {
+  workout
+  topic_post
+}
+
+// 汎用コメントテーブル。Phase4初弾ではworkout宛のみ発行する(topic_postは対象UI未実装のためスコープ外)。
+// docs/schema.mdのPhase4節参照。target_idはFK制約なし(target_typeによって参照先テーブルが変わるため)、
+// 対象が存在するか・対象へのアクセス権があるかはアプリ側(routes/workouts.ts)で検証する。
+// reactionsと違い1人複数回投稿できるためUNIQUE制約は無い
+model Comment {
+  id         String            @id @default(uuid())
+  targetType CommentTargetType @map("target_type")
+  targetId   String            @map("target_id")
+  userId     String            @map("user_id")
+  body       String
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@map("comments")
 }

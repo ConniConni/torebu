@@ -47,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await prisma.reaction.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
+  await prisma.comment.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.groupMember.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.group.deleteMany({ where: { createdBy: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.workoutSet.deleteMany({
@@ -670,6 +671,148 @@ describe('DELETE /workouts/:id/reactions', () => {
 
     const agent = await loginAsOutsider()
     const res = await agent.delete(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /workouts/:id/comments', () => {
+  it('未ログインなら401を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const res = await request(app).get(`/workouts/${workout.id}/comments`)
+    expect(res.status).toBe(401)
+  })
+
+  it('コメントを作成日時昇順で返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+    await agent.post(`/workouts/${workout.id}/comments`).send({ body: '1件目' })
+    await agent.post(`/workouts/${workout.id}/comments`).send({ body: '2件目' })
+
+    const res = await agent.get(`/workouts/${workout.id}/comments`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.map((c: { body: string }) => c.body)).toEqual(['1件目', '2件目'])
+    expect(res.body[0]).toMatchObject({ userId: ownerId, displayName: '記録テストユーザー' })
+  })
+
+  it('所属していないグループのメンバーの記録には404を返す', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOutsider()
+    const res = await agent.get(`/workouts/${workout.id}/comments`)
+
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /workouts/:id/comments', () => {
+  it('未ログインなら401を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const res = await request(app).post(`/workouts/${workout.id}/comments`).send({ body: 'テスト' })
+    expect(res.status).toBe(401)
+  })
+
+  it('自分のworkoutにコメントできる', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'ナイスです' })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ userId: ownerId, body: 'ナイスです' })
+  })
+
+  it('同じグループのメンバーの記録にコメントできる', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOther()
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'いいね！' })
+
+    expect(res.status).toBe(201)
+  })
+
+  it('所属していないグループのメンバーの記録にはコメントできない(404)', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOutsider()
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'テスト' })
+
+    expect(res.status).toBe(404)
+    const count = await prisma.comment.count({ where: { targetType: 'workout', targetId: workout.id } })
+    expect(count).toBe(0)
+  })
+
+  it('削除済みworkoutにはコメントできない(404)', async () => {
+    const workout = await createWorkout(ownerId)
+    await prisma.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+
+    const agent = await loginAsOwner()
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'テスト' })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('空文字は400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: '' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('501文字は400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'あ'.repeat(501) })
+
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('DELETE /workouts/:id/comments/:commentId', () => {
+  it('未ログインなら401を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const res = await request(app).delete(`/workouts/${workout.id}/comments/dummy`)
+    expect(res.status).toBe(401)
+  })
+
+  it('自分のコメントを削除できる', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+    const created = await agent.post(`/workouts/${workout.id}/comments`).send({ body: '消す予定' })
+
+    const res = await agent.delete(`/workouts/${workout.id}/comments/${created.body.id}`)
+
+    expect(res.status).toBe(204)
+    const count = await prisma.comment.count({ where: { id: created.body.id } })
+    expect(count).toBe(0)
+  })
+
+  it('他人のコメントは削除できない(404)', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+    const ownerAgent = await loginAsOwner()
+    const created = await ownerAgent.post(`/workouts/${workout.id}/comments`).send({ body: '他人のコメント' })
+
+    const otherAgent = await loginAsOther()
+    const res = await otherAgent.delete(`/workouts/${workout.id}/comments/${created.body.id}`)
+
+    expect(res.status).toBe(404)
+    const count = await prisma.comment.count({ where: { id: created.body.id } })
+    expect(count).toBe(1)
+  })
+
+  it('存在しないコメントIDには404を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    const res = await agent.delete(`/workouts/${workout.id}/comments/00000000-0000-0000-0000-000000000000`)
 
     expect(res.status).toBe(404)
   })

@@ -66,6 +66,20 @@ async function countReactions(targetId: string) {
   return prisma.reaction.count({ where: { targetType: 'workout', targetId } })
 }
 
+async function countComments(targetId: string) {
+  return prisma.comment.count({ where: { targetType: 'workout', targetId } })
+}
+
+function serializeComment(comment: { id: string; userId: string; body: string; createdAt: Date }, displayName: string) {
+  return {
+    id: comment.id,
+    userId: comment.userId,
+    displayName,
+    body: comment.body,
+    createdAt: comment.createdAt,
+  }
+}
+
 // GET /exercisesと同じ基準(公式 or 自分のカスタム)で、記録に使ってよい種目かを確認する。
 // 削除済み(ソフトデリート済み)のカスタム種目は、新規にこの種目を選ぶ操作(④種目選択・⑦種目追加)
 // では選べない。一方、このworkoutに既にその種目のセットがある場合(=このカードは削除前から
@@ -82,6 +96,11 @@ async function isExerciseVisible(userId: string, exerciseId: string, workoutId?:
   const existingSet = await prisma.workoutSet.findFirst({ where: { workoutId, exerciseId } })
   return existingSet !== null
 }
+
+// workouts.memoと同じ上限(1〜500文字)に揃える
+const createCommentSchema = z.object({
+  body: z.string().trim().min(1).max(500),
+})
 
 const createWorkoutSchema = z.object({
   performedAt: z.coerce.date(),
@@ -324,4 +343,66 @@ workoutsRouter.delete('/:id/reactions', requireAuth, async (req, res) => {
   })
 
   res.status(200).json({ reactionCount: await countReactions(workout.id), reactedByMe: false })
+})
+
+// コメント(Phase4)。認可はいいねと同じ(自分の記録、または所属グループで同席しているメンバーの記録)
+workoutsRouter.get('/:id/comments', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const comments = await prisma.comment.findMany({
+    where: { targetType: 'workout', targetId: workout.id },
+    orderBy: { createdAt: 'asc' },
+    include: { user: { select: { displayName: true } } },
+  })
+
+  res.status(200).json(comments.map((c) => serializeComment(c, c.user.displayName)))
+})
+
+workoutsRouter.post('/:id/comments', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const parsed = createCommentSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+
+  const comment = await prisma.comment.create({
+    data: { targetType: 'workout', targetId: workout.id, userId, body: parsed.data.body },
+    include: { user: { select: { displayName: true } } },
+  })
+
+  res.status(201).json(serializeComment(comment, comment.user.displayName))
+})
+
+// 自分のコメントのみ削除可(グループオーナーによる削除は今回のスコープ外)
+workoutsRouter.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const comment = await prisma.comment.findFirst({
+    where: { id: req.params.commentId as string, targetType: 'workout', targetId: workout.id, userId },
+  })
+  if (!comment) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  await prisma.comment.delete({ where: { id: comment.id } })
+
+  res.status(204).send()
 })

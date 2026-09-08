@@ -42,7 +42,16 @@ interface GroupWorkout {
   hasSets: boolean
   reactionCount: number
   reactedByMe: boolean
+  commentCount: number
   exercises: GroupWorkoutExercise[]
+}
+
+interface WorkoutComment {
+  id: string
+  userId: string
+  displayName: string
+  body: string
+  createdAt: string
 }
 
 // バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
@@ -117,6 +126,22 @@ export function useGroups() {
     )
   }
 
+  // コメント(Phase4)。いいねと同様workoutsのエンドポイントを叩く
+  async function fetchComments(workoutId: string) {
+    return await $fetch<WorkoutComment[]>(`/api/workouts/${workoutId}/comments`)
+  }
+
+  async function postComment(workoutId: string, body: string) {
+    return await $fetch<WorkoutComment>(`/api/workouts/${workoutId}/comments`, {
+      method: 'POST',
+      body: { body },
+    })
+  }
+
+  async function deleteComment(workoutId: string, commentId: string) {
+    await $fetch(`/api/workouts/${workoutId}/comments/${commentId}`, { method: 'DELETE' })
+  }
+
   async function reissueInvite(id: string) {
     return await $fetch<Group>(`/api/groups/${id}/invite`, { method: 'POST' })
   }
@@ -149,6 +174,9 @@ export function useGroups() {
     fetchGroupWorkouts,
     likeWorkout,
     unlikeWorkout,
+    fetchComments,
+    postComment,
+    deleteComment,
     reissueInvite,
     joinGroup,
     leaveGroup,
@@ -156,4 +184,12 @@ export function useGroups() {
   }
 }
 
-export type { Group, GroupDetail, GroupMember, GroupWorkout, GroupWorkoutExercise, GroupWorkoutSet }
+export type {
+  Group,
+  GroupDetail,
+  GroupMember,
+  GroupWorkout,
+  GroupWorkoutExercise,
+  GroupWorkoutSet,
+  WorkoutComment,
+}

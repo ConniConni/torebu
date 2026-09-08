@@ -8,7 +8,11 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const groupId = route.params.id as string
 
-const { fetchGroupWorkouts, likeWorkout, unlikeWorkout } = useGroups()
+const { fetchGroupWorkouts, likeWorkout, unlikeWorkout, fetchComments, postComment, deleteComment } =
+  useGroups()
+const { user } = useAuth()
+
+type WorkoutComment = Awaited<ReturnType<typeof fetchComments>>[number]
 
 const workouts = ref<Awaited<ReturnType<typeof fetchGroupWorkouts>> | null>(null)
 const pending = ref(true)
@@ -68,6 +72,99 @@ async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
     const next = new Set(likePending.value)
     next.delete(workout.id)
     likePending.value = next
+  }
+}
+
+// コメント(Phase4)。展開時に遅延取得する(一覧APIには件数のみ含まれる)
+const openCommentWorkoutIds = ref(new Set<string>())
+const commentsByWorkoutId = ref(new Map<string, WorkoutComment[]>())
+const commentLoadError = ref(new Set<string>())
+const commentInputs = ref(new Map<string, string>())
+const commentPosting = ref(new Set<string>())
+const commentDeleting = ref(new Set<string>())
+
+function isCommentsOpen(workoutId: string) {
+  return openCommentWorkoutIds.value.has(workoutId)
+}
+
+function onCommentInput(workoutId: string, value: string) {
+  const next = new Map(commentInputs.value)
+  next.set(workoutId, value)
+  commentInputs.value = next
+}
+
+async function toggleComments(workoutId: string) {
+  const next = new Set(openCommentWorkoutIds.value)
+  if (next.has(workoutId)) {
+    next.delete(workoutId)
+    openCommentWorkoutIds.value = next
+    return
+  }
+  next.add(workoutId)
+  openCommentWorkoutIds.value = next
+
+  if (commentsByWorkoutId.value.has(workoutId)) return
+  const errors = new Set(commentLoadError.value)
+  errors.delete(workoutId)
+  commentLoadError.value = errors
+  try {
+    const comments = await fetchComments(workoutId)
+    const map = new Map(commentsByWorkoutId.value)
+    map.set(workoutId, comments)
+    commentsByWorkoutId.value = map
+  } catch {
+    const nextErrors = new Set(commentLoadError.value)
+    nextErrors.add(workoutId)
+    commentLoadError.value = nextErrors
+  }
+}
+
+async function onPostComment(workout: NonNullable<typeof workouts.value>[number]) {
+  const body = (commentInputs.value.get(workout.id) ?? '').trim()
+  if (!body || commentPosting.value.has(workout.id)) return
+
+  const posting = new Set(commentPosting.value)
+  posting.add(workout.id)
+  commentPosting.value = posting
+  try {
+    const comment = await postComment(workout.id, body)
+    const map = new Map(commentsByWorkoutId.value)
+    map.set(workout.id, [...(map.get(workout.id) ?? []), comment])
+    commentsByWorkoutId.value = map
+    workout.commentCount += 1
+
+    const inputs = new Map(commentInputs.value)
+    inputs.set(workout.id, '')
+    commentInputs.value = inputs
+  } catch {
+    // 通信失敗時は入力内容を残す(再送信できるように)。専用のエラー表示は今回は設けない
+  } finally {
+    const next = new Set(commentPosting.value)
+    next.delete(workout.id)
+    commentPosting.value = next
+  }
+}
+
+async function onDeleteComment(
+  workout: NonNullable<typeof workouts.value>[number],
+  comment: WorkoutComment,
+) {
+  if (commentDeleting.value.has(comment.id)) return
+  const deleting = new Set(commentDeleting.value)
+  deleting.add(comment.id)
+  commentDeleting.value = deleting
+  try {
+    await deleteComment(workout.id, comment.id)
+    const map = new Map(commentsByWorkoutId.value)
+    map.set(workout.id, (map.get(workout.id) ?? []).filter((c) => c.id !== comment.id))
+    commentsByWorkoutId.value = map
+    workout.commentCount = Math.max(0, workout.commentCount - 1)
+  } catch {
+    // 通信失敗時は表示をそのまま。専用のエラー表示は今回は設けない
+  } finally {
+    const next = new Set(commentDeleting.value)
+    next.delete(comment.id)
+    commentDeleting.value = next
   }
 }
 </script>
@@ -164,7 +261,7 @@ async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
             </div>
           </div>
 
-          <div class="mt-3 flex items-center border-t border-gray-100 pt-2.5">
+          <div class="mt-3 flex items-center gap-1 border-t border-gray-100 pt-2.5">
             <button
               type="button"
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
@@ -183,6 +280,92 @@ async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
               </span>
               <span v-else>いいね</span>
             </button>
+            <button
+              type="button"
+              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100"
+              :aria-expanded="isCommentsOpen(workout.id)"
+              @click="toggleComments(workout.id)"
+            >
+              <CommentIcon class="h-4 w-4" />
+              <span v-if="workout.commentCount > 0" class="tabular-nums">
+                {{ workout.commentCount }}
+              </span>
+              <span v-else>コメント</span>
+            </button>
+          </div>
+
+          <div v-if="isCommentsOpen(workout.id)" class="mt-2.5 border-t border-gray-100 pt-2.5">
+            <p v-if="commentLoadError.has(workout.id)" class="text-xs text-red-600">
+              コメントの取得に失敗しました。時間をおいて再度お試しください
+            </p>
+            <p
+              v-else-if="!commentsByWorkoutId.has(workout.id)"
+              class="text-xs text-gray-500"
+            >
+              読み込み中...
+            </p>
+            <ul v-else class="flex flex-col gap-2">
+              <li
+                v-for="comment in commentsByWorkoutId.get(workout.id)"
+                :key="comment.id"
+                class="flex items-start gap-2"
+              >
+                <span
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                >
+                  {{ comment.displayName.slice(0, 1) }}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div
+                    class="rounded-lg px-2.5 py-1.5"
+                    :class="comment.userId === user?.id ? 'bg-brand-50' : 'bg-gray-100'"
+                  >
+                    <p
+                      class="text-xs font-medium"
+                      :class="comment.userId === user?.id ? 'text-brand-700' : 'text-gray-600'"
+                    >
+                      {{ comment.displayName }}{{ comment.userId === user?.id ? '（自分）' : '' }}
+                    </p>
+                    <p class="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">
+                      {{ comment.body }}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  v-if="comment.userId === user?.id"
+                  type="button"
+                  class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  aria-label="このコメントを削除"
+                  :disabled="commentDeleting.has(comment.id)"
+                  @click="onDeleteComment(workout, comment)"
+                >
+                  <TrashIcon class="h-3 w-3" />
+                </button>
+              </li>
+              <li v-if="commentsByWorkoutId.get(workout.id)?.length === 0" class="text-xs text-gray-500">
+                まだコメントがありません
+              </li>
+            </ul>
+
+            <div class="mt-2 flex gap-1.5">
+              <input
+                :value="commentInputs.get(workout.id) ?? ''"
+                type="text"
+                placeholder="コメントを入力"
+                maxlength="500"
+                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 px-3 text-sm"
+                @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
+                @keydown.enter="onPostComment(workout)"
+              />
+              <button
+                type="button"
+                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50"
+                :disabled="commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()"
+                @click="onPostComment(workout)"
+              >
+                送信
+              </button>
+            </div>
           </div>
         </li>
       </ul>
