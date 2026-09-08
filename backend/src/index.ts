@@ -7,6 +7,7 @@ import { workoutsRouter } from './routes/workouts.js'
 import { routinesRouter } from './routes/routines.js'
 import { statsRouter } from './routes/stats.js'
 import { groupsRouter } from './routes/groups.js'
+import { notificationsRouter } from './routes/notifications.js'
 
 export const app = express()
 
@@ -23,6 +24,7 @@ app.use('/workouts', workoutsRouter)
 app.use('/routines', routinesRouter)
 app.use('/stats', statsRouter)
 app.use('/groups', groupsRouter)
+app.use('/notifications', notificationsRouter)
 
 const port = process.env.PORT ?? 3001
 

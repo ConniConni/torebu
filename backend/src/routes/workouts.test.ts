@@ -40,7 +40,12 @@ beforeEach(async () => {
   })
   othersExerciseId = othersExercise.id
   const deletedExercise = await prisma.exercise.create({
-    data: { name: '削除済み自作種目', muscleGroup: 'arms', createdBy: ownerId, deletedAt: new Date() },
+    data: {
+      name: '削除済み自作種目',
+      muscleGroup: 'arms',
+      createdBy: ownerId,
+      deletedAt: new Date(),
+    },
   })
   deletedExerciseId = deletedExercise.id
 })
@@ -48,6 +53,9 @@ beforeEach(async () => {
 afterEach(async () => {
   await prisma.reaction.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.comment.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
+  await prisma.notification.deleteMany({
+    where: { recipientId: { in: [ownerId, otherId, outsiderId] } },
+  })
   await prisma.groupMember.deleteMany({ where: { userId: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.group.deleteMany({ where: { createdBy: { in: [ownerId, otherId, outsiderId] } } })
   await prisma.workoutSet.deleteMany({
@@ -83,7 +91,11 @@ async function loginAsOutsider() {
 // ownerとotherが同じグループに所属する状態を作る(いいねの許可範囲テスト用)
 async function createSharedGroup() {
   const group = await prisma.group.create({
-    data: { name: 'いいねテストグループ', createdBy: ownerId, inviteCode: `invite-${Math.random()}` },
+    data: {
+      name: 'いいねテストグループ',
+      createdBy: ownerId,
+      inviteCode: `invite-${Math.random()}`,
+    },
   })
   await prisma.groupMember.create({ data: { groupId: group.id, userId: ownerId, role: 'owner' } })
   await prisma.groupMember.create({ data: { groupId: group.id, userId: otherId, role: 'member' } })
@@ -171,7 +183,9 @@ describe('GET /workouts', () => {
     const agent = await loginAsOwner()
     const res = await agent.get('/workouts')
 
-    const byId = new Map((res.body as Array<{ id: string; hasSets: boolean }>).map((w) => [w.id, w]))
+    const byId = new Map(
+      (res.body as Array<{ id: string; hasSets: boolean }>).map((w) => [w.id, w]),
+    )
     expect(byId.get(withSet.id)?.hasSets).toBe(true)
     expect(byId.get(memoOnly.id)?.hasSets).toBe(false)
   })
@@ -409,7 +423,9 @@ describe('POST /workouts/:id/sets', () => {
     const first = await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
     })
-    await prisma.workoutSet.create({ data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 10 } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 10 },
+    })
     await prisma.workoutSet.delete({ where: { id: first.id } })
 
     const agent = await loginAsOwner()
@@ -423,7 +439,9 @@ describe('POST /workouts/:id/sets', () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
-    const res = await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10, weightKg: 1000 })
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId, reps: 10, weightKg: 1000 })
 
     expect(res.status).toBe(400)
   })
@@ -592,6 +610,16 @@ describe('POST /workouts/:id/reactions', () => {
     expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
   })
 
+  it('自分の記録への自分のいいねでは通知を作らない', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    await agent.post(`/workouts/${workout.id}/reactions`)
+
+    const count = await prisma.notification.count({ where: { recipientId: ownerId } })
+    expect(count).toBe(0)
+  })
+
   it('同じグループのメンバーの記録にいいねできる', async () => {
     await createSharedGroup()
     const workout = await createWorkout(ownerId)
@@ -603,6 +631,20 @@ describe('POST /workouts/:id/reactions', () => {
     expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
   })
 
+  it('他人の記録にいいねすると記録の投稿者に通知が作られる', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOther()
+    await agent.post(`/workouts/${workout.id}/reactions`)
+
+    const notification = await prisma.notification.findFirst({
+      where: { recipientId: ownerId, actorId: otherId, type: 'reaction', targetId: workout.id },
+    })
+    expect(notification).not.toBeNull()
+    expect(notification?.isRead).toBe(false)
+  })
+
   it('所属していないグループのメンバーの記録にはいいねできない(404)', async () => {
     await createSharedGroup()
     const workout = await createWorkout(ownerId)
@@ -611,7 +653,9 @@ describe('POST /workouts/:id/reactions', () => {
     const res = await agent.post(`/workouts/${workout.id}/reactions`)
 
     expect(res.status).toBe(404)
-    const count = await prisma.reaction.count({ where: { targetType: 'workout', targetId: workout.id } })
+    const count = await prisma.reaction.count({
+      where: { targetType: 'workout', targetId: workout.id },
+    })
     expect(count).toBe(0)
   })
 
@@ -625,15 +669,20 @@ describe('POST /workouts/:id/reactions', () => {
     expect(res.status).toBe(404)
   })
 
-  it('2回押しても冪等(件数は1のまま)', async () => {
+  it('2回押しても冪等(件数は1のまま、通知も1件のまま)', async () => {
+    await createSharedGroup()
     const workout = await createWorkout(ownerId)
-    const agent = await loginAsOwner()
+    const agent = await loginAsOther()
 
     await agent.post(`/workouts/${workout.id}/reactions`)
     const res = await agent.post(`/workouts/${workout.id}/reactions`)
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
+    const notificationCount = await prisma.notification.count({
+      where: { recipientId: ownerId, type: 'reaction', targetId: workout.id },
+    })
+    expect(notificationCount).toBe(1)
   })
 })
 
@@ -724,6 +773,30 @@ describe('POST /workouts/:id/comments', () => {
     expect(res.body).toMatchObject({ userId: ownerId, body: 'ナイスです' })
   })
 
+  it('自分の記録への自分のコメントでは通知を作らない', async () => {
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOwner()
+
+    await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'ひとりごと' })
+
+    const count = await prisma.notification.count({ where: { recipientId: ownerId } })
+    expect(count).toBe(0)
+  })
+
+  it('他人の記録にコメントすると記録の投稿者に通知が作られる', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOther()
+
+    await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'いいですね' })
+
+    const notification = await prisma.notification.findFirst({
+      where: { recipientId: ownerId, actorId: otherId, type: 'comment', targetId: workout.id },
+    })
+    expect(notification).not.toBeNull()
+    expect(notification?.isRead).toBe(false)
+  })
+
   it('同じグループのメンバーの記録にコメントできる', async () => {
     await createSharedGroup()
     const workout = await createWorkout(ownerId)
@@ -742,7 +815,9 @@ describe('POST /workouts/:id/comments', () => {
     const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'テスト' })
 
     expect(res.status).toBe(404)
-    const count = await prisma.comment.count({ where: { targetType: 'workout', targetId: workout.id } })
+    const count = await prisma.comment.count({
+      where: { targetType: 'workout', targetId: workout.id },
+    })
     expect(count).toBe(0)
   })
 
@@ -769,7 +844,9 @@ describe('POST /workouts/:id/comments', () => {
     const workout = await createWorkout(ownerId)
     const agent = await loginAsOwner()
 
-    const res = await agent.post(`/workouts/${workout.id}/comments`).send({ body: 'あ'.repeat(501) })
+    const res = await agent
+      .post(`/workouts/${workout.id}/comments`)
+      .send({ body: 'あ'.repeat(501) })
 
     expect(res.status).toBe(400)
   })
@@ -798,7 +875,9 @@ describe('DELETE /workouts/:id/comments/:commentId', () => {
     await createSharedGroup()
     const workout = await createWorkout(ownerId)
     const ownerAgent = await loginAsOwner()
-    const created = await ownerAgent.post(`/workouts/${workout.id}/comments`).send({ body: '他人のコメント' })
+    const created = await ownerAgent
+      .post(`/workouts/${workout.id}/comments`)
+      .send({ body: '他人のコメント' })
 
     const otherAgent = await loginAsOther()
     const res = await otherAgent.delete(`/workouts/${workout.id}/comments/${created.body.id}`)
@@ -812,7 +891,9 @@ describe('DELETE /workouts/:id/comments/:commentId', () => {
     const workout = await createWorkout(ownerId)
     const agent = await loginAsOwner()
 
-    const res = await agent.delete(`/workouts/${workout.id}/comments/00000000-0000-0000-0000-000000000000`)
+    const res = await agent.delete(
+      `/workouts/${workout.id}/comments/00000000-0000-0000-0000-000000000000`,
+    )
 
     expect(res.status).toBe(404)
   })
