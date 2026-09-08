@@ -283,6 +283,27 @@ describe('GET /groups/:id/workouts', () => {
     ])
   })
 
+  it('コメントの件数を含める', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10') },
+    })
+    await prisma.comment.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: ownerId, body: '1件目' },
+    })
+    await prisma.comment.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: memberId, body: '2件目' },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([expect.objectContaining({ id: ownerWorkout.id, commentCount: 2 })])
+  })
+
   it('未所属者(退会済み含む)の記録・ソフトデリート済みの記録は含めない', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId, { leftAt: new Date() })
