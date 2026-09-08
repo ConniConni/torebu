@@ -145,6 +145,58 @@ describe('GET /exercises', () => {
     })
   })
 
+  it('lastSetには直近のworkoutで記録した重量・回数が入り、記録が無い種目はnull', async () => {
+    const exercise = await createExercise({
+      data: { name: 'lastSetテスト種目', muscleGroup: 'chest' },
+    })
+    const unused = await createExercise({
+      data: { name: '未使用種目(lastSetテスト)', muscleGroup: 'legs' },
+    })
+    const olderWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-08-01') },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: olderWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 40, reps: 10 },
+    })
+    const newerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-09-01') },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: newerWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 50, reps: 8 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: newerWorkout.id, exerciseId: exercise.id, setOrder: 2, reps: 12 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const byId = new Map((res.body as Array<Record<string, unknown>>).map((e) => [e.id, e]))
+    // 一番新しいworkout(9/1)の中で最後(setOrder2)のセットが返る
+    expect(byId.get(exercise.id)).toMatchObject({ lastSet: { weightKg: null, reps: 12 } })
+    expect(byId.get(unused.id)).toMatchObject({ lastSet: null })
+  })
+
+  it('lastSetは削除済み(ソフトデリート)のworkoutを見ない', async () => {
+    const exercise = await createExercise({
+      data: { name: 'lastSet削除除外テスト種目', muscleGroup: 'chest' },
+    })
+    const deletedWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-09-01'), deletedAt: new Date() },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: deletedWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 99, reps: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const found = (res.body as Array<{ id: string; lastSet: unknown }>).find(
+      (e) => e.id === exercise.id,
+    )
+    expect(found?.lastSet).toBeNull()
+  })
+
   it('使用回数が同点の場合は名前順(あいうえお順)に並ぶ', async () => {
     // 使用回数はどちらも0(未使用)のまま。名前だけを五十音順が崩れる並びで作る
     const wa = await createExercise({ data: { name: 'わ種目', muscleGroup: 'chest' } })
@@ -197,6 +249,7 @@ describe('POST /exercises', () => {
       relatedMuscles: [],
       mainZone: null,
       deletedAt: null,
+      lastSet: null,
     })
   })
 })

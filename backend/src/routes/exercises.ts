@@ -28,6 +28,23 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     usageCounts.map((row) => [row.exerciseId, row._count._all]),
   )
 
+  // 種目ごとの直近の実績セット(前回記録の自動反映用、Issue #116)。
+  // workout.performedAt降順・setOrder降順で全件取ってきて種目ごとに先頭(＝一番新しい)だけ拾う。
+  // groupByでは実際の値(weightKg/reps)までは取れないためfindManyしてJS側でreduceする
+  const recentSets = await prisma.workoutSet.findMany({
+    where: { workout: { userId, deletedAt: null } },
+    select: { exerciseId: true, weightKg: true, reps: true },
+    orderBy: [{ workout: { performedAt: 'desc' } }, { setOrder: 'desc' }],
+  })
+  const lastSetByExerciseId = new Map<string, { weightKg: number | null; reps: number }>()
+  for (const set of recentSets) {
+    if (lastSetByExerciseId.has(set.exerciseId)) continue
+    lastSetByExerciseId.set(set.exerciseId, {
+      weightKg: set.weightKg === null ? null : Number(set.weightKg),
+      reps: set.reps,
+    })
+  }
+
   // useCountは複数箇所(ソート・レスポンス)で使うため、先に一度だけ計算して種目データにくっつけておく
   const exercisesWithUseCount = exercises.map((exercise) => ({
     ...exercise,
@@ -55,6 +72,7 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
       relatedMuscles: exercise.relatedMuscles,
       mainZone: exercise.mainZone,
       deletedAt: exercise.deletedAt,
+      lastSet: lastSetByExerciseId.get(exercise.id) ?? null,
     })),
   )
 })
@@ -98,6 +116,8 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     relatedMuscles: exercise.relatedMuscles,
     mainZone: exercise.mainZone,
     deletedAt: exercise.deletedAt,
+    // 作成直後なので実績はまだ無い。GET /exercisesとレスポンスの形を揃えるため含める
+    lastSet: null,
   })
 })
 
