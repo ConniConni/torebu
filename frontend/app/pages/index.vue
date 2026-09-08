@@ -39,6 +39,14 @@ const memoOnlyDates = computed(
 )
 
 const today = todayLocalDateString()
+
+// 今月／通算の記録日数（Phase3-B）。hasSetsを問わず「記録がある日」であれば対象にする
+// （docs/spec.md参照。frontend/app/utils/trainingDays.ts参照）
+const allRecordedDates = computed(() => (workouts.value ?? []).map((w) => w.performedAt))
+const trainingDaysThisMonth = computed(() =>
+  countTrainingDaysInMonth(allRecordedDates.value, today),
+)
+const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates.value))
 const selectedDate = ref(today)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
@@ -128,6 +136,23 @@ async function onLogout() {
       </p>
 
       <template v-else>
+        <div
+          class="flex items-center justify-around rounded-lg border border-blue-100 bg-blue-50 py-2.5 text-xs text-blue-900"
+        >
+          <p>
+            今月<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+              trainingDaysThisMonth
+            }}</span
+            >日
+          </p>
+          <p>
+            通算<span class="text-base font-extrabold tabular-nums text-blue-700">{{
+              totalTrainingDays
+            }}</span
+            >日
+          </p>
+        </div>
+
         <HomeCalendar
           :recorded-dates="recordedDates"
           :memo-only-dates="memoOnlyDates"
@@ -159,9 +184,7 @@ async function onLogout() {
               >
                 <p v-if="workout.memo" class="mb-1 text-xs text-gray-500">{{ workout.memo }}</p>
 
-                <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">
-                  読み込み中...
-                </p>
+                <p v-if="summaryPending[workout.id]" class="text-sm text-gray-500">読み込み中...</p>
                 <!-- セット0件（メモのみ）の記録は、カード自体が③記録作成へのリンクになっている
                      ことを踏まえ、「＋この日の記録を始める」等の既存の能動的な文言と語彙を揃えた
                      表現にする（Issue #99。以前の「種目未登録」は受動的で分かりにくいという指摘） -->
@@ -202,15 +225,21 @@ async function onLogout() {
                             set.setOrder
                           }}</span>
                           <span class="flex min-w-0 items-baseline justify-end gap-1">
-                            <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">{{
-                              set.weightKg ?? '自重'
-                            }}</span>
-                            <span v-if="set.weightKg !== null" class="shrink-0 text-xs text-gray-500">kg</span>
+                            <span
+                              class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
+                              >{{ set.weightKg ?? '自重' }}</span
+                            >
+                            <span
+                              v-if="set.weightKg !== null"
+                              class="shrink-0 text-xs text-gray-500"
+                              >kg</span
+                            >
                           </span>
                           <span class="flex min-w-0 items-baseline justify-end gap-1">
-                            <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">{{
-                              set.reps
-                            }}</span>
+                            <span
+                              class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900"
+                              >{{ set.reps }}</span
+                            >
                             <span class="shrink-0 text-xs text-gray-500">回</span>
                           </span>
                         </div>
