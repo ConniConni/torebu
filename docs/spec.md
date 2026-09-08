@@ -257,6 +257,14 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - グループ一覧・詳細は`useGroups`（[useGroups.ts](../frontend/app/composables/useGroups.ts)）で
   取得。`groups`一覧は`useState`でセッション中キャッシュし、ログアウト時に`useAuth.ts`の
   `resetUserState()`でリセットする（他のuseState一覧と同じ理由。Issue #111参照）
+- **バグ修正（2026-09-08、Issue #138の作業中に発覚）**：`fetchGroupDetail`/`fetchGroupWorkouts`が
+  素の`$fetch`を使っていたため、SSR時にブラウザのCookieが転送されず`401`になり、SSRは
+  「グループの取得に失敗しました」のエラー表示を返す一方、ハイドレーション後のクライアント側
+  再取得は成功して正常な内容に描き変わる、という**ハイドレーションミスマッチ**を起こしていた
+  （コンソールに`Hydration node mismatch`と`401`が出る。グループ詳細・記録フィード双方の画面遷移で
+  再現）。`fetchGroups`が既にしていた通り`useRequestFetch()`に統一して解消した。
+  グロッサリー（§1「SSR」）に載っている既知の落とし穴だが、新しいAPI呼び出しを追加するたびに
+  同じミスが起きうるため、`useGroups.ts`にコメントを追記した
 
 **グループの記録フィード（Phase4、[Issue #138](https://github.com/ConniConni/torebu/issues/138)）の実装メモ**
 - いいね・コメント機能の対象となる「仲間の記録を見る画面」が無いことに気づき、グループ基盤の次に

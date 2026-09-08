@@ -88,11 +88,14 @@ export function useGroups() {
   }
 
   async function fetchGroupDetail(id: string) {
-    return await $fetch<GroupDetail>(`/api/groups/${id}`)
+    // 一覧(fetchGroups)と同じ理由でrequestFetchを使う。$fetchのままだとSSR時にCookieが
+    // 転送されず401になり、クライアント再取得後の内容とSSRの内容がずれてハイドレーション
+    // ミスマッチを起こす（2026-09-08、コンソールエラーの調査で発覚）
+    return await requestFetch<GroupDetail>(`/api/groups/${id}`)
   }
 
   async function fetchGroupWorkouts(id: string) {
-    return await $fetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
+    return await requestFetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
   }
 
   async function reissueInvite(id: string) {
