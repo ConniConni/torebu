@@ -34,13 +34,21 @@ async function findOwnWorkout(userId: string, workoutId: string) {
   return prisma.workout.findFirst({ where: { id: workoutId, userId, deletedAt: null } })
 }
 
-// GET /exercisesと同じ基準(公式 or 自分のカスタム)で、記録に使ってよい種目かを確認する
-// 削除済み(ソフトデリート済み)のカスタム種目は新規の記録には使えない(Issue #113)
-async function isExerciseVisible(userId: string, exerciseId: string) {
+// GET /exercisesと同じ基準(公式 or 自分のカスタム)で、記録に使ってよい種目かを確認する。
+// 削除済み(ソフトデリート済み)のカスタム種目は、新規にこの種目を選ぶ操作(④種目選択・⑦種目追加)
+// では選べない。一方、このworkoutに既にその種目のセットがある場合(=このカードは削除前から
+// 既に開かれている)への追加は、新規の種目選択を伴わない「既存カードの編集の延長」とみなし、
+// PATCH /workouts/:id/sets/:setId(重量・回数編集)と同じ扱いで許可する(Issue #113)
+async function isExerciseVisible(userId: string, exerciseId: string, workoutId?: string) {
   const exercise = await prisma.exercise.findFirst({
-    where: { id: exerciseId, deletedAt: null, OR: [{ createdBy: null }, { createdBy: userId }] },
+    where: { id: exerciseId, OR: [{ createdBy: null }, { createdBy: userId }] },
   })
-  return exercise !== null
+  if (!exercise) return false
+  if (exercise.deletedAt === null) return true
+  if (!workoutId) return false
+
+  const existingSet = await prisma.workoutSet.findFirst({ where: { workoutId, exerciseId } })
+  return existingSet !== null
 }
 
 const createWorkoutSchema = z.object({
@@ -181,7 +189,7 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     return
   }
 
-  const visible = await isExerciseVisible(userId, parsed.data.exerciseId)
+  const visible = await isExerciseVisible(userId, parsed.data.exerciseId, workout.id)
   if (!visible) {
     res.status(400).json({ error: 'invalid_exercise' })
     return

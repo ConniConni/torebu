@@ -103,7 +103,9 @@ async function onDeleteExercise(id: string) {
           <ul v-else class="space-y-1">
             <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
               <div v-if="confirmingDeleteId === exercise.id" class="flex flex-col gap-2 rounded bg-gray-50 p-2">
-                <p class="text-sm text-gray-700">「{{ exercise.name }}」を削除しますか？（元に戻せません）</p>
+                <p class="text-sm text-gray-700">
+                  「{{ exercise.name }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
+                </p>
                 <div class="flex gap-2">
                   <button
                     type="button"

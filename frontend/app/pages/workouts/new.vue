@@ -220,13 +220,23 @@ async function onSetFieldBlur(setId: string) {
 const DEFAULT_SET_REPS = 10
 const addSetError = ref('')
 
+// invalid_exercise(削除済み種目への新規追加など)は「時間をおいて再度お試しください」と
+// 案内しても解決しない恒久的な失敗のため、他の失敗(通信エラー等)と分けて案内する(Issue #113)
+function addSetErrorMessage(error: unknown): string {
+  const code = (error as { data?: { error?: string } })?.data?.error
+  if (code === 'invalid_exercise') {
+    return 'この種目は削除されているため、新しくセットを追加できません'
+  }
+  return 'セットの記録に失敗しました。時間をおいて再度お試しください'
+}
+
 async function onAddSet(exerciseId: string) {
   addSetError.value = ''
   try {
     const set = await addSet(exerciseId, DEFAULT_SET_REPS)
     ensureSetInput(set)
-  } catch {
-    addSetError.value = 'セットの記録に失敗しました。時間をおいて再度お試しください'
+  } catch (error) {
+    addSetError.value = addSetErrorMessage(error)
   }
 }
 

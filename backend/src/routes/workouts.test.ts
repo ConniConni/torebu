@@ -298,7 +298,38 @@ describe('POST /workouts/:id/sets', () => {
     expect(res.body).toEqual({ error: 'invalid_exercise' })
   })
 
-  it('削除済みの自分のカスタム種目は指定できない(400)', async () => {
+  it('削除済みの自分のカスタム種目は、このworkoutでまだ使っていなければ指定できない(400)', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: deletedExerciseId, setOrder: 1, reps: 10 })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_exercise' })
+  })
+
+  it('削除済みの自分のカスタム種目でも、このworkoutで既に使っていれば追加のセットを記録できる(新規選択を伴わない既存カードへの追加のため。Issue #113)', async () => {
+    const workout = await createWorkout(ownerId)
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: deletedExerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: deletedExerciseId, reps: 8 })
+
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ exerciseId: deletedExerciseId, setOrder: 2, reps: 8 })
+  })
+
+  it('削除済みの自分のカスタム種目は、別のworkoutで使っていても指定できない(400)', async () => {
+    const otherWorkout = await createWorkout(ownerId)
+    await prisma.workoutSet.create({
+      data: { workoutId: otherWorkout.id, exerciseId: deletedExerciseId, setOrder: 1, reps: 10 },
+    })
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
