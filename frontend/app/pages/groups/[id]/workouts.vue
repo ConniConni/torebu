@@ -8,7 +8,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const groupId = route.params.id as string
 
-const { fetchGroupWorkouts } = useGroups()
+const { fetchGroupWorkouts, likeWorkout, unlikeWorkout } = useGroups()
 
 const workouts = ref<Awaited<ReturnType<typeof fetchGroupWorkouts>> | null>(null)
 const pending = ref(true)
@@ -48,13 +48,37 @@ function toggleExercise(workoutId: string, exerciseId: string) {
 function isExerciseOpen(workoutId: string, exerciseId: string) {
   return openExercises.value.has(exerciseKey(workoutId, exerciseId))
 }
+
+// 連打による二重リクエスト・表示の一時的な不整合を防ぐため、通信中のworkoutIdを持っておく
+const likePending = ref(new Set<string>())
+
+async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
+  if (likePending.value.has(workout.id)) return
+  likePending.value = new Set(likePending.value).add(workout.id)
+
+  try {
+    const result = workout.reactedByMe
+      ? await unlikeWorkout(workout.id)
+      : await likeWorkout(workout.id)
+    workout.reactionCount = result.reactionCount
+    workout.reactedByMe = result.reactedByMe
+  } catch {
+    // 通信失敗時は表示をそのまま(次の操作やリロードで再度整合を取る)。専用のエラー表示は今回は設けない
+  } finally {
+    const next = new Set(likePending.value)
+    next.delete(workout.id)
+    likePending.value = next
+  }
+}
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500">← グループに戻る</NuxtLink>
+        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500"
+          >← グループに戻る</NuxtLink
+        >
         <h1 class="text-base font-semibold text-gray-900">みんなの記録</h1>
       </div>
 
@@ -138,6 +162,27 @@ function isExerciseOpen(workoutId: string, exerciseId: string) {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div class="mt-3 flex items-center border-t border-gray-100 pt-2.5">
+            <button
+              type="button"
+              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
+              :class="
+                workout.reactedByMe
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-gray-500 hover:bg-gray-100'
+              "
+              :disabled="likePending.has(workout.id)"
+              :aria-pressed="workout.reactedByMe"
+              @click="toggleLike(workout)"
+            >
+              <HeartIcon :filled="workout.reactedByMe" class="h-4 w-4" />
+              <span v-if="workout.reactionCount > 0" class="tabular-nums">
+                {{ workout.reactionCount }}
+              </span>
+              <span v-else>いいね</span>
+            </button>
           </div>
         </li>
       </ul>
