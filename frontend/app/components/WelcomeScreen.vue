@@ -1,25 +1,25 @@
 <script setup lang="ts">
-// 未ログイン時の「/」に表示するトップ画面（Issue #151）。イラストを画面いっぱいに見せ、
-// 下部にログイン・新規登録への導線を置く
+// 未ログイン時の「/」に表示するトップ画面（Issue #151）。イラストを画面いっぱいに表示し、
+// イラスト下部のオレンジの余白部分にログイン・新規登録ボタンを重ねて配置する
 import topImage from '~/assets/images/top_image.png'
 </script>
 
 <template>
-  <div class="flex h-screen flex-col bg-gray-50">
-    <div class="min-h-0 flex-1 overflow-hidden bg-brand-50">
-      <img :src="topImage" alt="トレ部" class="h-full w-full object-cover" />
-    </div>
+  <div class="relative h-screen overflow-hidden bg-brand-50">
+    <img :src="topImage" alt="トレ部" class="h-full w-full object-cover" />
 
-    <div class="flex flex-col gap-3 px-6 py-6">
+    <!-- イラスト下部の無地のオレンジ部分（画像下端から約10%）にボタンを重ねる。
+         安全にボタンが収まる余白であることをtop_image.pngのピクセル解析で確認済み -->
+    <div class="absolute inset-x-6 bottom-5 flex gap-3">
       <NuxtLink
         to="/login"
-        class="w-full rounded bg-brand-600 py-2.5 text-center text-sm font-semibold text-white"
+        class="flex-1 rounded-full bg-white py-2.5 text-center text-sm font-semibold text-brand-700 shadow"
       >
         ログイン
       </NuxtLink>
       <NuxtLink
         to="/register"
-        class="w-full rounded border border-brand-600 py-2.5 text-center text-sm font-semibold text-brand-600"
+        class="flex-1 rounded-full border border-white py-2.5 text-center text-sm font-semibold text-white"
       >
         新規登録
       </NuxtLink>

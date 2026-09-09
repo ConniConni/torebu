@@ -187,10 +187,13 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   切り出した。`v-if`で条件付きマウントすることで、未ログイン時は中の`fetchWorkouts()`等のAPI呼び出しが
   一切走らない（コンポーネントの`setup`自体が実行されないため）
 - トップ画面は[WelcomeScreen.vue](../frontend/app/components/WelcomeScreen.vue)。静的なイラスト
-  （`frontend/app/assets/images/top_image.png`）を画面幅いっぱい・高さは残り領域いっぱいに`object-cover`で
-  表示し、下部に「ログイン」「新規登録」の全幅ボタンを縦に並べる。`app/assets/`配下に置きコンポーネント側で
-  `import`する形にした（`public/`は未加工でそのまま配信されるため、ビルド時にViteが最適化する`assets/`側を
-  採用。既存の`assets/css`/`assets/data`と揃える）
+  （`frontend/app/assets/images/top_image.png`）を画面いっぱいに`object-cover`で敷き、「ログイン」
+  「新規登録」ボタンはイラスト下部の無地オレンジの余白部分に重ねて配置する（ボタンをイラストの下に
+  別領域として置く案・縦積み案も検討したが、イラストを画面いっぱいに見せたいという要望に沿って
+  オーバーレイ方式にした）。余白部分の位置はPythonでピクセル解析し、画像下端から約10%
+  （y座標90%〜100%）が無地であることを確認したうえでボタンの絶対配置位置を決めた。
+  `app/assets/`配下に置きコンポーネント側で`import`する形にした（`public/`は未加工でそのまま配信される
+  ため、ビルド時にViteが最適化する`assets/`側を採用。既存の`assets/css`/`assets/data`と揃える）
 - スマホ幅（320〜430px程度）で崩れないことを確認した。PC向けの専用レイアウト（横並び等）は
   今回のスコープ外（`docs/backlog.md`「判断保留」節参照）
 
