@@ -403,6 +403,45 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   数値の差がそのまま棒の高さの差として伝わる（全員0kgのときは全員同じ最小の高さになる）
 - グループ詳細画面（`/groups/[id]`）の「みんなの記録を見る」の下に「ランキングを見る」ボタンを追加
 
+**通知の宛先拡大・いいねユーザー表示（Phase4改善、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）の実装メモ**
+- Phase4の通知・いいね（#144, #140）実装後の棚卸しで見つかった2つの積み残し（`docs/backlog.md`参照）
+- **コメント通知の宛先を拡大**：あるworkoutにA→B→Aとコメントが連なった場合、Aの2回目のコメントで
+  「記録の投稿者」だけでなく「そのworkoutへの過去のコメント投稿者（スレッド参加者）」にも通知が
+  届くようにした（[workouts.ts](../backend/src/routes/workouts.ts)の`notifyCommentParticipants`関数）
+  - 記録の投稿者への通知は既存どおり`type: comment`のまま。スレッド参加者への通知は新設した
+    `type: comment_reply`で区別する（`docs/schema.md`で「reply等を追加するか検討する」としていた
+    論点への回答。投稿者向けと文言を変える必要があるため、既存の`comment`を流用せず別typeにした）
+  - 宛先は「過去のコメント投稿者（`distinct: ['userId']`）」から、今回のコメント投稿者（自分自身）と
+    記録の投稿者（`comment`で通知済み）を除いた集合。重複通知は発生しない
+  - `notifications.type`のenumに`comment_reply`を追加（マイグレーション`add_comment_reply_notification_type`）
+- **いいねユーザーの表示**：`GET /groups/:id/workouts`のレスポンス各要素に`reactorNames`
+  （いいねした人の表示名の配列、いいねした順）を追加した
+  - 実装のついでに、従来`reactionCount`用に発行していた`groupBy`クエリを廃止し、`reactorNames`と
+    同じ`findMany`（displayName込み）から件数・自分のいいね有無も導出する形に整理した
+    （クエリ数は変わらない）
+  - 当初は全ての記録でいいねボタンの下に常時テキスト表示する案で実装したが、レビューで
+    「自分の記録のいいねボタンを押すといいねしてくれた人が見える」という案が出て設計変更した
+    （下記「自分の記録へのいいね禁止」参照）。最終的に`reactorNames`は**自分の記録でのみ画面に
+    表示**し、他人の記録では取得はするが使わない（他人の記録のいいねボタンはこれまで通り
+    トグルのみで、誰がいいねしたかは見せない。フロントでの絞り込みのみで、APIレスポンス自体は
+    全記録共通のまま）
+- **自分の記録へのいいね禁止**：`POST /workouts/:id/reactions`は、対象が自分の記録の場合
+  `400 { error: 'cannot_react_to_own_workout' }`を返すようにした（`workout.userId === userId`の
+  チェックを`findAccessibleWorkout`の後に追加）
+  - **理由**：いいねボタン1つに「トグルする（いいねする/取り消す）」と「いいねした人の一覧を開く」
+    という2つの役割を持たせると、自分の記録の場合に動きが重なって曖昧になる。自分の記録への
+    いいね自体を禁止することでトグル操作が存在しなくなり、「押す＝一覧を開く」に一意に決まる
+  - フロント（グループの記録フィード）は、自分の記録かどうか（`workout.userId === 自分のuserId`）
+    でいいねボタンの見た目・挙動を出し分ける：
+    - **自分の記録**：ハートは常にカウント数表示（0件でも数字のまま、「いいね」という誘導文言は
+      出さない）。タップで`reactorNames`を縦一覧で表示するパネルを開閉する（0件なら
+      「まだいいねがありません」と表示）。`aria-pressed`は使わずアコーディオンと同じ`aria-expanded`
+      にする
+    - **他人の記録**：これまで通りトグル（`reactedByMe`で色・塗りを切り替え、0件時は「いいね」の
+      誘導文言）。一覧は表示しない
+  - `DELETE /workouts/:id/reactions`は自分の記録に対しても引き続き200を返す（元々いいねできない
+    ため実質何もしないが、他のエンドポイントと同じ冪等設計に揃えて特別扱いしない）
+
 ### 3-2. 記録するときの流れ（実装どおり）
 
 ```
@@ -629,7 +668,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/workouts/:id/sets` | 要 | セットを1件追加する |
 | PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する |
 | DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除） |
-| POST | `/workouts/:id/reactions` | 要 | いいねする（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）。**自分の記録、またはいずれかのアクティブなグループで同席しているメンバーの記録のみ**（`404`で存在を隠す）。冪等（`upsert`。既にいいね済みでも`200`） |
+| POST | `/workouts/:id/reactions` | 要 | いいねする（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）。**いずれかのアクティブなグループで同席しているメンバーの記録のみ**（`404`で存在を隠す）。**自分の記録には不可**（`400 cannot_react_to_own_workout`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）。冪等（`upsert`。既にいいね済みでも`200`） |
 | DELETE | `/workouts/:id/reactions` | 要 | いいねを取り消す。認可は`POST`と同じ。冪等（未いいねの状態で呼んでも`200`） |
 | GET | `/workouts/:id/comments` | 要 | コメント一覧を`createdAt`昇順（古い順）で返す（Phase4、[Issue #142](https://github.com/ConniConni/torebu/issues/142)）。認可は`reactions`と同じ |
 | POST | `/workouts/:id/comments` | 要 | コメントを投稿する。`body`必須（1〜500文字、`workouts.memo`と同じ上限）。認可は`reactions`と同じ |
@@ -662,7 +701,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
-| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）)、いいね情報（`reactionCount`/`reactedByMe`）、コメント件数（`commentCount`）を含む |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
@@ -709,11 +748,11 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等） |
 | `POST /groups/:id/leave` | オーナーの退会可否は「そのグループの**アクティブなオーナー数**」で判定する（`role`が`owner`かつ`left_at IS NULL`の行数）。1人なら`400 sole_owner_cannot_leave` |
 | `DELETE /groups/:id` | **ソフトデリート**（`groups.deleted_at`）。`group_members`側は変更しない。削除後は全メンバーが`GET /groups/:id`等で`404`になる |
-| `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している |
+| `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している。ただし`POST`はこのアクセス可否とは別に、**対象が自分の記録なら`400`**（[Issue #149](https://github.com/ConniConni/torebu/issues/149)。理由は§3-2の実装メモ参照）。`DELETE`は自分の記録も含め常に許可（元々いいねできないため実質何もしない） |
 | `GET/POST /workouts/:id/comments`<br>`DELETE /workouts/:id/comments/:commentId` | 認可は`reactions`と同じ`shareActiveGroup`関数を再利用。削除は`userId`一致も条件に加えるため、自分のコメント以外は`404` |
-| いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる |
+| いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる。**コメントは投稿者に加え、そのworkoutへの過去のコメント投稿者（スレッド参加者）にも`type: comment_reply`で通知する**（`notifyCommentParticipants`関数、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）。自分自身・投稿者（`comment`で通知済み）は宛先から除く |
 | `GET /groups/:id/ranking` | **集計対象は公式種目のみ**（`stats.ts`と同じ方針）。ただし`stats.ts`と異なり**自重セット（`weightKg`が`null`）は除外せず0kg扱いで加算する**（schema.md「Phase4の検討結果」参照。合計に影響はしないが、記録自体はランキングの母数に含める）。`period=week`は日曜起算、`month`は1日起算（Phase3-Dの週定義と統一）で「現在の期間の開始日時以降」を集計し、`all`は期間の下限を設けない。過去の期間（先週・先月等）を見る機能は無い。記録が無いメンバーも`totalVolumeKg: 0`で結果に含める。同着は同順位、次の順位は人数分スキップする（例：1位2人なら次点は3位ではなく3人目時点で3位＝1,1,3） |
-| `GET /notifications` | 対象は常に**自分の記録**（`notifyWorkoutOwner`が`recipientId = workout.userId`で作るため）。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
+| `GET /notifications` | 対象は**自分の記録（`type: reaction`/`comment`）**、または**自分もコメントしたことがある記録に他の人がコメントしたとき（`type: comment_reply`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）**。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
 
 ---
 
@@ -733,7 +772,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
 | `reactions`（Phase4） | いいね | `target_type`（enum：`workout`/`workout_set`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)、`workout_set`/`topic_post`は対象UI未実装）。`target_id`はFK制約なし（対象が`target_type`によって変わるため）、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`UNIQUE(target_type, target_id, user_id)`で1人1いいねを保証 |
 | `comments`（Phase4） | コメント | `target_type`（enum：`workout`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #142](https://github.com/ConniConni/torebu/issues/142)、`topic_post`は対象UI未実装）。`target_id`はFK制約なし、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`reactions`と異なり1人が複数回投稿できるため`UNIQUE`制約は無い |
-| `notifications`（Phase4） | 通知 | `recipient_id`（誰宛）／`actor_id`（誰が起こしたか、nullable）／`type`（enum：`reaction`/`comment`/`topic`/`ranking`/`exercise_promoted`）／`target_type`（enum：`workout`/`workout_set`/`topic_post`/`topic`/`exercise`/`group`）＋`target_id`の汎用テーブル。**現状発行されるのは`type: reaction`/`comment`、`target_type: workout`のみ**（[Issue #144](https://github.com/ConniConni/torebu/issues/144)。残りの`type`/`target_type`はランキング・イチオシこだわり共有・種目昇格が未実装のため発行しない、docs/schema.mdの設計をそのまま反映）。`target_id`はFK制約なし、対象の存在確認はアプリ側（`notifications.ts`）で行う。`recipient_id`は`onDelete: Cascade`（受信者退会でまとめて消える）、`actor_id`は`onDelete: SetNull`（行為者が退会しても通知自体は残る） |
+| `notifications`（Phase4） | 通知 | `recipient_id`（誰宛）／`actor_id`（誰が起こしたか、nullable）／`type`（enum：`reaction`/`comment`/`comment_reply`/`topic`/`ranking`/`exercise_promoted`。`comment_reply`は[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）／`target_type`（enum：`workout`/`workout_set`/`topic_post`/`topic`/`exercise`/`group`）＋`target_id`の汎用テーブル。**現状発行されるのは`type: reaction`/`comment`/`comment_reply`、`target_type: workout`のみ**（[Issue #144](https://github.com/ConniConni/torebu/issues/144)・#149。残りの`type`/`target_type`はランキング・イチオシこだわり共有・種目昇格が未実装のため発行しない、docs/schema.mdの設計をそのまま反映）。`target_id`はFK制約なし、対象の存在確認はアプリ側（`notifications.ts`）で行う。`recipient_id`は`onDelete: Cascade`（受信者退会でまとめて消える）、`actor_id`は`onDelete: SetNull`（行為者が退会しても通知自体は残る） |
 
 **`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
 `connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している

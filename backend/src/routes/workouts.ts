@@ -68,7 +68,7 @@ async function countReactions(targetId: string) {
 
 // 通知(Phase4、#144)。自分の記録への自分の操作では作成しない(actorId === recipientIdの場合はスキップ)
 async function notifyWorkoutOwner(
-  type: 'reaction' | 'comment',
+  type: 'reaction' | 'comment' | 'comment_reply',
   recipientId: string,
   actorId: string,
   workoutId: string,
@@ -77,6 +77,26 @@ async function notifyWorkoutOwner(
   await prisma.notification.create({
     data: { recipientId, actorId, type, targetType: 'workout', targetId: workoutId },
   })
+}
+
+// コメント通知(#149)。記録の投稿者(comment)に加え、そのworkoutへの過去のコメント投稿者
+// (comment_reply)にもスレッド参加者として通知する。投稿者自身・今回のコメント投稿者(actor)は
+// 重複しないよう除外する
+async function notifyCommentParticipants(workoutOwnerId: string, actorId: string, workoutId: string) {
+  await notifyWorkoutOwner('comment', workoutOwnerId, actorId, workoutId)
+
+  const pastCommenters = await prisma.comment.findMany({
+    where: { targetType: 'workout', targetId: workoutId },
+    distinct: ['userId'],
+    select: { userId: true },
+  })
+  const participantIds = new Set(pastCommenters.map((c) => c.userId))
+  participantIds.delete(actorId)
+  participantIds.delete(workoutOwnerId) // 投稿者には上のnotifyWorkoutOwnerで通知済み
+
+  for (const participantId of participantIds) {
+    await notifyWorkoutOwner('comment_reply', participantId, actorId, workoutId)
+  }
 }
 
 function serializeComment(
@@ -324,12 +344,18 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   res.status(204).send()
 })
 
-// いいね(Phase4)。対象は自分の記録、または所属グループで同席しているメンバーの記録(docs/schema.md参照)
+// いいね(Phase4)。対象は所属グループで同席しているメンバーの記録(docs/schema.md参照)。
+// 自分の記録には不可(#149)：自分の記録のいいねボタンは「いいねしてくれた人の一覧を開く」専用に
+// なるため、トグル操作(いいねする/取り消す)と一覧表示のタップが同じボタンで衝突しないようにする
 workoutsRouter.post('/:id/reactions', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const workout = await findAccessibleWorkout(userId, req.params.id as string)
   if (!workout) {
     res.status(404).json({ error: 'not_found' })
+    return
+  }
+  if (workout.userId === userId) {
+    res.status(400).json({ error: 'cannot_react_to_own_workout' })
     return
   }
 
@@ -405,7 +431,7 @@ workoutsRouter.post('/:id/comments', requireAuth, async (req, res) => {
     include: { user: { select: { displayName: true } } },
   })
 
-  await notifyWorkoutOwner('comment', workout.userId, userId, workout.id)
+  await notifyCommentParticipants(workout.userId, userId, workout.id)
 
   res.status(201).json(serializeComment(comment, comment.user.displayName))
 })

@@ -17,7 +17,8 @@ interface NotificationTarget {
 // 型名`Notification`はブラウザ標準のWeb Notifications APIとグローバルに衝突するため`AppNotification`にする
 export interface AppNotification {
   id: string
-  type: 'reaction' | 'comment'
+  // comment_reply: 自分の記録ではないが、自分も過去にコメントしたworkoutに別の人がコメントしたときの通知(#149)
+  type: 'reaction' | 'comment' | 'comment_reply'
   isRead: boolean
   createdAt: string
   actor: NotificationActor | null

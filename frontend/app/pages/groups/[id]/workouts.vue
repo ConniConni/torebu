@@ -18,6 +18,29 @@ const {
 } = useGroups()
 const { user } = useAuth()
 
+function isOwnWorkout(workout: { userId: string }) {
+  return workout.userId === user.value?.id
+}
+
+// 自分の記録のいいねボタンは「いいねしてくれた人の一覧を開く」専用にする(#149)。
+// 自分の記録にはいいねできない(トグル操作自体が無い)ため、同じボタンにトグルと一覧表示の
+// 2つの役割を持たせても意味が衝突しない
+const openReactorWorkoutIds = ref(new Set<string>())
+
+function isReactorsOpen(workoutId: string) {
+  return openReactorWorkoutIds.value.has(workoutId)
+}
+
+function toggleReactorsPanel(workoutId: string) {
+  const next = new Set(openReactorWorkoutIds.value)
+  if (next.has(workoutId)) {
+    next.delete(workoutId)
+  } else {
+    next.add(workoutId)
+  }
+  openReactorWorkoutIds.value = next
+}
+
 type WorkoutComment = Awaited<ReturnType<typeof fetchComments>>[number]
 
 const workouts = ref<Awaited<ReturnType<typeof fetchGroupWorkouts>> | null>(null)
@@ -66,6 +89,8 @@ function isExerciseOpen(workoutId: string, exerciseId: string) {
 // 連打による二重リクエスト・表示の一時的な不整合を防ぐため、通信中のworkoutIdを持っておく
 const likePending = ref(new Set<string>())
 
+// 他人の記録のみが対象(自分の記録はtoggleReactorsPanelを使う。バックエンドも自分の記録への
+// いいねは400を返す)
 async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
   if (likePending.value.has(workout.id)) return
   likePending.value = new Set(likePending.value).add(workout.id)
@@ -297,7 +322,24 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
           </div>
 
           <div class="mt-3 flex items-center gap-1 border-t border-gray-100 pt-2.5">
+            <!-- 自分の記録：いいねボタンは押せず(トグル無し)、いいねしてくれた人の一覧を開閉する専用ボタンになる(#149) -->
             <button
+              v-if="isOwnWorkout(workout)"
+              type="button"
+              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
+              :class="
+                isReactorsOpen(workout.id)
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-gray-500 hover:bg-gray-100'
+              "
+              :aria-expanded="isReactorsOpen(workout.id)"
+              @click="toggleReactorsPanel(workout.id)"
+            >
+              <HeartIcon :filled="workout.reactionCount > 0" class="h-4 w-4" />
+              <span class="tabular-nums">{{ workout.reactionCount }}</span>
+            </button>
+            <button
+              v-else
               type="button"
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
               :class="
@@ -327,6 +369,30 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               </span>
               <span v-else>コメント</span>
             </button>
+          </div>
+
+          <!-- いいねしてくれた人の一覧(#149)。自分の記録でのみ開ける -->
+          <div
+            v-if="isOwnWorkout(workout) && isReactorsOpen(workout.id)"
+            class="mt-2.5 border-t border-gray-100 pt-2.5"
+          >
+            <p v-if="workout.reactorNames.length === 0" class="text-xs text-gray-500">
+              まだいいねがありません
+            </p>
+            <ul v-else class="flex flex-col gap-2">
+              <li
+                v-for="(name, i) in workout.reactorNames"
+                :key="`${workout.id}-${i}`"
+                class="flex items-center gap-2"
+              >
+                <span
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                >
+                  {{ name.slice(0, 1) }}
+                </span>
+                <span class="text-sm text-gray-700">{{ name }}</span>
+              </li>
+            </ul>
           </div>
 
           <div v-if="isCommentsOpen(workout.id)" class="mt-2.5 border-t border-gray-100 pt-2.5">
