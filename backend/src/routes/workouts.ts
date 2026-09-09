@@ -344,12 +344,18 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   res.status(204).send()
 })
 
-// いいね(Phase4)。対象は自分の記録、または所属グループで同席しているメンバーの記録(docs/schema.md参照)
+// いいね(Phase4)。対象は所属グループで同席しているメンバーの記録(docs/schema.md参照)。
+// 自分の記録には不可(#149)：自分の記録のいいねボタンは「いいねしてくれた人の一覧を開く」専用に
+// なるため、トグル操作(いいねする/取り消す)と一覧表示のタップが同じボタンで衝突しないようにする
 workoutsRouter.post('/:id/reactions', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const workout = await findAccessibleWorkout(userId, req.params.id as string)
   if (!workout) {
     res.status(404).json({ error: 'not_found' })
+    return
+  }
+  if (workout.userId === userId) {
+    res.status(400).json({ error: 'cannot_react_to_own_workout' })
     return
   }
 

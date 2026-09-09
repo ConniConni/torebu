@@ -600,23 +600,19 @@ describe('POST /workouts/:id/reactions', () => {
     expect(res.status).toBe(401)
   })
 
-  it('自分のworkoutにいいねできる', async () => {
+  // 自分の記録にはいいねできない(#149)。自分の記録のいいねボタンは
+  // 「いいねしてくれた人の一覧を開く」専用にするため、トグル操作自体を禁止する
+  it('自分のworkoutにはいいねできない(400)', async () => {
     const workout = await createWorkout(ownerId)
 
     const agent = await loginAsOwner()
     const res = await agent.post(`/workouts/${workout.id}/reactions`)
 
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ reactionCount: 1, reactedByMe: true })
-  })
-
-  it('自分の記録への自分のいいねでは通知を作らない', async () => {
-    const workout = await createWorkout(ownerId)
-    const agent = await loginAsOwner()
-
-    await agent.post(`/workouts/${workout.id}/reactions`)
-
-    const count = await prisma.notification.count({ where: { recipientId: ownerId } })
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'cannot_react_to_own_workout' })
+    const count = await prisma.reaction.count({
+      where: { targetType: 'workout', targetId: workout.id },
+    })
     expect(count).toBe(0)
   })
 
@@ -694,8 +690,9 @@ describe('DELETE /workouts/:id/reactions', () => {
   })
 
   it('いいねを取り消せる', async () => {
+    await createSharedGroup()
     const workout = await createWorkout(ownerId)
-    const agent = await loginAsOwner()
+    const agent = await loginAsOther()
     await agent.post(`/workouts/${workout.id}/reactions`)
 
     const res = await agent.delete(`/workouts/${workout.id}/reactions`)
@@ -705,6 +702,18 @@ describe('DELETE /workouts/:id/reactions', () => {
   })
 
   it('いいねしていない状態で呼んでも冪等に200を返す', async () => {
+    await createSharedGroup()
+    const workout = await createWorkout(ownerId)
+    const agent = await loginAsOther()
+
+    const res = await agent.delete(`/workouts/${workout.id}/reactions`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ reactionCount: 0, reactedByMe: false })
+  })
+
+  // 自分の記録には元々いいねできないため(#149)、DELETEも常に何もせず冪等に200を返す
+  it('自分の記録に対しては(いいねした実績が無くても)冪等に200を返す', async () => {
     const workout = await createWorkout(ownerId)
     const agent = await loginAsOwner()
 
