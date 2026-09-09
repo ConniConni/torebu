@@ -42,6 +42,8 @@ interface GroupWorkout {
   hasSets: boolean
   reactionCount: number
   reactedByMe: boolean
+  // いいねした人の表示名(#149)。いいねした順(古い順)に並ぶ
+  reactorNames: string[]
   commentCount: number
   exercises: GroupWorkoutExercise[]
 }

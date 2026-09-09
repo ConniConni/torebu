@@ -18,6 +18,13 @@ const {
 } = useGroups()
 const { user } = useAuth()
 
+// いいねした人の一覧表示(#149)。多いと横に長くなるため、先頭2人＋残り件数の表記にする
+function formatReactorNames(names: string[]) {
+  if (names.length === 0) return ''
+  if (names.length <= 2) return `${names.join('、')}がいいねしました`
+  return `${names.slice(0, 2).join('、')}他${names.length - 2}人がいいねしました`
+}
+
 type WorkoutComment = Awaited<ReturnType<typeof fetchComments>>[number]
 
 const workouts = ref<Awaited<ReturnType<typeof fetchGroupWorkouts>> | null>(null)
@@ -71,11 +78,17 @@ async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
   likePending.value = new Set(likePending.value).add(workout.id)
 
   try {
-    const result = workout.reactedByMe
-      ? await unlikeWorkout(workout.id)
-      : await likeWorkout(workout.id)
+    const wasReacted = workout.reactedByMe
+    const result = wasReacted ? await unlikeWorkout(workout.id) : await likeWorkout(workout.id)
     workout.reactionCount = result.reactionCount
     workout.reactedByMe = result.reactedByMe
+    // POST/DELETE /workouts/:id/reactionsはreactorNamesを返さないため、自分の分だけ画面側で反映する
+    // (件数・他メンバーのいいね状況は元々このAPIでは分からないため一覧の再取得までは追随しない)
+    if (user.value) {
+      workout.reactorNames = wasReacted
+        ? workout.reactorNames.filter((name) => name !== user.value!.displayName)
+        : [...workout.reactorNames, user.value.displayName]
+    }
   } catch {
     // 通信失敗時は表示をそのまま(次の操作やリロードで再度整合を取る)。専用のエラー表示は今回は設けない
   } finally {
@@ -328,6 +341,9 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               <span v-else>コメント</span>
             </button>
           </div>
+          <p v-if="workout.reactorNames.length > 0" class="mt-1 px-1 text-xs text-gray-500">
+            {{ formatReactorNames(workout.reactorNames) }}
+          </p>
 
           <div v-if="isCommentsOpen(workout.id)" class="mt-2.5 border-t border-gray-100 pt-2.5">
             <p v-if="commentLoadError.has(workout.id)" class="text-xs text-red-600">
