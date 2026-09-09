@@ -86,4 +86,28 @@ describe('POST /auth/login', () => {
     expect(sid2).toBeDefined()
     expect(sid1).not.toBe(sid2)
   })
+
+  it('登録直後はlastLoginAtがnullで、ログインに成功すると更新される', async () => {
+    const beforeLogin = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } })
+    expect(beforeLogin.lastLoginAt).toBeNull()
+
+    await request(app).post('/auth/login').send({
+      email: testEmail,
+      password: testPassword,
+    })
+
+    const afterLogin = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } })
+    expect(afterLogin.lastLoginAt).not.toBeNull()
+    expect(afterLogin.lastLoginAt!.getTime()).toBeGreaterThan(Date.now() - 5000)
+  })
+
+  it('ログイン失敗時はlastLoginAtを更新しない', async () => {
+    await request(app).post('/auth/login').send({
+      email: testEmail,
+      password: 'wrongpassword',
+    })
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: testEmail } })
+    expect(user.lastLoginAt).toBeNull()
+  })
 })

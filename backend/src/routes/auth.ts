@@ -133,6 +133,13 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
   })
   req.session.userId = user.id
 
+  // 長期未利用アカウントの自動削除バッチ（未実装、docs/backlog.md参照）の判定に使う想定。
+  // ログイン成功時にのみ更新する
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  })
+
   res.status(200).json({
     id: user.id,
     email: user.email,
