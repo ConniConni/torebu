@@ -283,6 +283,49 @@ describe('GET /groups/:id/workouts', () => {
     ])
   })
 
+  it('いいねした人の表示名をいいねした順に含める(#149)', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10') },
+    })
+    // memberが先にいいねし、その後ownerがいいねする(表示順が作成順であることを確認する)
+    await prisma.reaction.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: memberId },
+    })
+    await prisma.reaction.create({
+      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: ownerId },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([
+      expect.objectContaining({
+        id: ownerWorkout.id,
+        reactorNames: ['グループテストメンバー', 'グループテストオーナー'],
+      }),
+    ])
+  })
+
+  it('いいねが無い記録のreactorNamesは空配列', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10') },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([
+      expect.objectContaining({ id: ownerWorkout.id, reactorNames: [] }),
+    ])
+  })
+
   it('コメントの件数を含める', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId)

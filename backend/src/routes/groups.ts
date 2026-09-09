@@ -150,20 +150,17 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
     },
   })
 
-  // いいね(reactions)は件数と「自分がいいね済みか」をworkoutごとにまとめて引く。
-  // 件数はgroupBy、自分のいいねはfindMany(userId固定)でそれぞれ1クエリに抑える(N+1回避)
-  // コメント数もいいねと同じ考え方でgroupByし1クエリで済ませる(一覧では件数のみ必要で、
-  // コメント本文は展開時にGET /workouts/:id/commentsで別途取得する)
+  // いいね(reactions)は「誰がいいねしたか」の表示(#149)に使うため、件数・自分のいいね有無に加えて
+  // reactorのdisplayNameも1クエリでまとめて取る(件数・reactorNamesとも同じ行から導出できるため、
+  // 従来あったgroupByでの件数集計クエリは不要になった)
+  // コメント数はgroupByし1クエリで済ませる(一覧では件数のみ必要で、コメント本文は展開時に
+  // GET /workouts/:id/commentsで別途取得する)
   const workoutIds = workouts.map((w) => w.id)
-  const [reactionCounts, myReactions, commentCounts] = await Promise.all([
-    prisma.reaction.groupBy({
-      by: ['targetId'],
-      where: { targetType: 'workout', targetId: { in: workoutIds } },
-      _count: { _all: true },
-    }),
+  const [reactions, commentCounts] = await Promise.all([
     prisma.reaction.findMany({
-      where: { targetType: 'workout', targetId: { in: workoutIds }, userId },
-      select: { targetId: true },
+      where: { targetType: 'workout', targetId: { in: workoutIds } },
+      orderBy: { createdAt: 'asc' },
+      select: { targetId: true, userId: true, user: { select: { displayName: true } } },
     }),
     prisma.comment.groupBy({
       by: ['targetId'],
@@ -171,8 +168,14 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
       _count: { _all: true },
     }),
   ])
-  const reactionCountByWorkoutId = new Map(reactionCounts.map((r) => [r.targetId, r._count._all]))
-  const myReactedWorkoutIds = new Set(myReactions.map((r) => r.targetId))
+  const reactorNamesByWorkoutId = new Map<string, string[]>()
+  const myReactedWorkoutIds = new Set<string>()
+  for (const r of reactions) {
+    const names = reactorNamesByWorkoutId.get(r.targetId) ?? []
+    names.push(r.user.displayName)
+    reactorNamesByWorkoutId.set(r.targetId, names)
+    if (r.userId === userId) myReactedWorkoutIds.add(r.targetId)
+  }
   const commentCountByWorkoutId = new Map(commentCounts.map((c) => [c.targetId, c._count._all]))
 
   res.status(200).json(
@@ -193,8 +196,10 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         performedAt: w.performedAt.toISOString().slice(0, 10),
         memo: w.memo,
         hasSets: w.sets.length > 0,
-        reactionCount: reactionCountByWorkoutId.get(w.id) ?? 0,
+        reactionCount: reactorNamesByWorkoutId.get(w.id)?.length ?? 0,
         reactedByMe: myReactedWorkoutIds.has(w.id),
+        // いいねした人の表示名(#149)。いいねした順(古い順)に並ぶ
+        reactorNames: reactorNamesByWorkoutId.get(w.id) ?? [],
         commentCount: commentCountByWorkoutId.get(w.id) ?? 0,
         exercises: [...setsByExercise.entries()].map(([exerciseId, { name, sets }]) => ({
           exerciseId,
