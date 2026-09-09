@@ -30,7 +30,7 @@ async function onSubmit() {
       <img
         :src="topImage"
         alt=""
-        class="mx-auto mb-4 h-32 w-auto object-contain sm:h-40"
+        class="mx-auto mb-4 w-1/3 min-w-[80px] h-auto object-contain"
       />
       <h1 class="mb-6 text-center text-xl font-bold text-gray-900">ログイン</h1>
 
