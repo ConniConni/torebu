@@ -31,6 +31,9 @@ type Occupation =
 const gender = ref<Gender | ''>('')
 const occupation = ref<Occupation | ''>('')
 
+// 利用規約・プライバシーポリシーへの同意（Issue #160）。未チェックでは登録できない
+const agreedToTerms = ref(false)
+
 async function onSubmit() {
   errorMessage.value = ''
 
@@ -45,6 +48,10 @@ async function onSubmit() {
   }
   if (!gender.value || !occupation.value) {
     errorMessage.value = '性別・職業を選択してください'
+    return
+  }
+  if (!agreedToTerms.value) {
+    errorMessage.value = '利用規約・プライバシーポリシーへの同意が必要です'
     return
   }
 
@@ -201,6 +208,20 @@ async function onSubmit() {
             <option value="no_answer">回答しない</option>
           </select>
         </div>
+
+        <label class="flex items-start gap-2 text-sm text-gray-600">
+          <input v-model="agreedToTerms" type="checkbox" required class="mt-0.5" />
+          <span>
+            <NuxtLink to="/terms" target="_blank" class="text-brand-600 hover:underline">
+              利用規約
+            </NuxtLink>
+            ・
+            <NuxtLink to="/privacy" target="_blank" class="text-brand-600 hover:underline">
+              プライバシーポリシー
+            </NuxtLink>
+            に同意する
+          </span>
+        </label>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
 
