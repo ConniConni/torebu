@@ -46,6 +46,20 @@ interface GroupWorkout {
   exercises: GroupWorkoutExercise[]
 }
 
+type RankingPeriod = 'week' | 'month' | 'all'
+
+interface GroupRankingEntry {
+  userId: string
+  displayName: string
+  totalVolumeKg: number
+  rank: number
+}
+
+interface GroupRanking {
+  period: RankingPeriod
+  ranking: GroupRankingEntry[]
+}
+
 interface WorkoutComment {
   id: string
   userId: string
@@ -110,6 +124,11 @@ export function useGroups() {
     return await requestFetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
   }
 
+  // ランキング(Phase4)。週間/月間/通算はタブ切り替えのたびに都度取得し直す
+  async function fetchGroupRanking(id: string, period: RankingPeriod) {
+    return await requestFetch<GroupRanking>(`/api/groups/${id}/ranking`, { query: { period } })
+  }
+
   // いいね(Phase4)。対象はworkout単体のためgroupsではなくworkoutsのエンドポイントを叩く
   // （backend/src/routes/workouts.ts参照。認可は「所属グループで同席しているか」で判定される）
   async function likeWorkout(workoutId: string) {
@@ -172,6 +191,7 @@ export function useGroups() {
     createGroup,
     fetchGroupDetail,
     fetchGroupWorkouts,
+    fetchGroupRanking,
     likeWorkout,
     unlikeWorkout,
     fetchComments,
@@ -191,5 +211,8 @@ export type {
   GroupWorkout,
   GroupWorkoutExercise,
   GroupWorkoutSet,
+  GroupRanking,
+  GroupRankingEntry,
+  RankingPeriod,
   WorkoutComment,
 }

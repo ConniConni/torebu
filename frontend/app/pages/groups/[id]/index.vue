@@ -124,6 +124,12 @@ async function onDelete() {
           >
             みんなの記録を見る
           </NuxtLink>
+          <NuxtLink
+            :to="`/groups/${groupId}/ranking`"
+            class="mt-2 block rounded border border-brand-600 py-1.5 text-center text-sm font-semibold text-brand-600"
+          >
+            ランキングを見る
+          </NuxtLink>
         </div>
 
         <div class="rounded-lg bg-white p-4 shadow">
