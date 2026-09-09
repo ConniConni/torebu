@@ -27,9 +27,9 @@ await load()
 
 function notificationText(n: AppNotification) {
   const actorName = n.actor?.displayName ?? '(退会済みのメンバー)'
-  return n.type === 'reaction'
-    ? `${actorName}さんがあなたの記録にいいねしました`
-    : `${actorName}さんがあなたの記録にコメントしました`
+  if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
+  if (n.type === 'comment_reply') return `${actorName}さんが、あなたもコメントした記録にコメントしました`
+  return `${actorName}さんがあなたの記録にコメントしました`
 }
 
 function targetSummary(n: AppNotification) {
