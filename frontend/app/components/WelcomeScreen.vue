@@ -6,7 +6,10 @@ import topImage from '~/assets/images/top_image.png'
 
 <template>
   <div class="relative h-screen overflow-hidden bg-brand-50">
-    <img :src="topImage" alt="トレ部" class="h-full w-full object-cover" />
+    <!-- object-bottom（object-position: bottom）で常に画像の下端を基準に切り抜く。
+         デフォルトの中央基準だと画面の縦横比が変わるたびに「どの部分を映すか」がずれ、
+         下部のオレンジの余白（ボタンの重なる位置）とのバランスが崩れてしまうため -->
+    <img :src="topImage" alt="トレ部" class="h-full w-full object-cover object-bottom" />
 
     <!-- イラスト下部の無地のオレンジ部分（画像下端から約10%）にボタンを重ねる。
          安全にボタンが収まる余白であることをtop_image.pngのピクセル解析で確認済み -->
