@@ -155,7 +155,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
-| `/login` | ① | ログイン | `POST /auth/login` | `guest` |
+| `/login` | ① | ログイン（イラスト付き） | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | `auth` |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
@@ -174,6 +174,12 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
+
+**①ログイン画面のイラスト（Issue #151）の実装メモ**
+- カード上部（タイトルの上）に静的なイラスト（`frontend/app/assets/images/top_image.png`）を表示する。
+  `app/assets/`配下に置きコンポーネント側で`import`する形にした（`public/`は未加工でそのまま配信される
+  ため、ビルド時にViteが最適化する`assets/`側を採用。既存の`assets/css`/`assets/data`と揃える）
+- 装飾目的のみで意味を持たないため`alt=""`にした
 
 **記録日数（今月・通算、Phase3-B）の実装メモ**
 - ②ホーム画面の「＋今日の記録をつける」ボタン・「ルーティン一覧」リンクとカレンダーの間に、
