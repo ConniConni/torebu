@@ -8,6 +8,16 @@ interface RegisterPayload {
   email: string
   password: string
   displayName: string
+  birthYearMonth: 'no_answer' | { year: number; month: number }
+  gender: 'male' | 'female' | 'other' | 'no_answer'
+  occupation:
+    | 'student'
+    | 'company_employee'
+    | 'self_employed'
+    | 'executive'
+    | 'homemaker'
+    | 'other'
+    | 'no_answer'
 }
 
 interface LoginPayload {
