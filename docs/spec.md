@@ -155,9 +155,10 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
-| `/login` | ① | ログイン（イラスト付き） | `POST /auth/login` | `guest` |
+| `/login` | ① | ログイン | `POST /auth/login` | `guest` |
 | `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
-| `/` | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | `auth` |
+| `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151） | - | なし（ページ内で分岐、下記参照） |
+| `/`（ログイン中） | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -172,14 +173,26 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
 
 **ミドルウェアの意味**
-- `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
+- `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす（`/`自体は対象外。下記参照）
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
 
-**①ログイン画面のイラスト（Issue #151）の実装メモ**
-- カード上部（タイトルの上）に静的なイラスト（`frontend/app/assets/images/top_image.png`）を表示する。
-  `app/assets/`配下に置きコンポーネント側で`import`する形にした（`public/`は未加工でそのまま配信される
-  ため、ビルド時にViteが最適化する`assets/`側を採用。既存の`assets/css`/`assets/data`と揃える）
-- 装飾目的のみで意味を持たないため`alt=""`にした
+**「/」の出し分け・トップ画面のイラスト（Issue #151）の実装メモ**
+- 当初は①ログイン画面にイラストを追加する想定だったが、検討の結果「イラストを画面いっぱいに見せる
+  専用のトップ画面を新設し、下部にログイン・新規登録への導線を置く」構成に変更した
+- [index.vue](../frontend/app/pages/index.vue)（`/`）に`auth`ミドルウェアは付けず、`useAuth().fetchMe()`で
+  ログイン状態を取得したうえで`<HomeScreen v-if="user" /><WelcomeScreen v-else />`と自前で分岐する。
+  以前は未ログインで`/`にアクセスすると`auth`ミドルウェアで`/login`へ強制リダイレクトしていたが、
+  未ログインでも`/`自体にトップ画面を表示したいため、リダイレクトはやめてこの分岐に置き換えた
+- ②ホーム画面の中身（旧`index.vue`の全体）は[HomeScreen.vue](../frontend/app/components/HomeScreen.vue)に
+  切り出した。`v-if`で条件付きマウントすることで、未ログイン時は中の`fetchWorkouts()`等のAPI呼び出しが
+  一切走らない（コンポーネントの`setup`自体が実行されないため）
+- トップ画面は[WelcomeScreen.vue](../frontend/app/components/WelcomeScreen.vue)。静的なイラスト
+  （`frontend/app/assets/images/top_image.png`）を画面幅いっぱい・高さは残り領域いっぱいに`object-cover`で
+  表示し、下部に「ログイン」「新規登録」の全幅ボタンを縦に並べる。`app/assets/`配下に置きコンポーネント側で
+  `import`する形にした（`public/`は未加工でそのまま配信されるため、ビルド時にViteが最適化する`assets/`側を
+  採用。既存の`assets/css`/`assets/data`と揃える）
+- スマホ幅（320〜430px程度）で崩れないことを確認した。PC向けの専用レイアウト（横並び等）は
+  今回のスコープ外（`docs/backlog.md`「判断保留」節参照）
 
 **記録日数（今月・通算、Phase3-B）の実装メモ**
 - ②ホーム画面の「＋今日の記録をつける」ボタン・「ルーティン一覧」リンクとカレンダーの間に、

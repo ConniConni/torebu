@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import topImage from '~/assets/images/top_image.png'
-
 definePageMeta({ middleware: 'guest' })
 
 const { login } = useAuth()
@@ -27,11 +25,6 @@ async function onSubmit() {
 <template>
   <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4">
     <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow">
-      <img
-        :src="topImage"
-        alt=""
-        class="mx-auto mb-4 h-32 w-auto object-contain sm:h-40"
-      />
       <h1 class="mb-6 text-center text-xl font-bold text-gray-900">ログイン</h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
