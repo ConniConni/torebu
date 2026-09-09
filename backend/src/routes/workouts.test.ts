@@ -850,6 +850,73 @@ describe('POST /workouts/:id/comments', () => {
 
     expect(res.status).toBe(400)
   })
+
+  // コメントのスレッド参加者への通知拡大(Issue #149)。owner→other→outsiderの3人が同じグループに
+  // 所属し、ownerの記録にother→outsiderの順でコメントが連なる状況を再現する
+  describe('スレッド参加者への通知拡大(#149)', () => {
+    async function addOutsiderToGroup(groupId: string) {
+      await prisma.groupMember.create({
+        data: { groupId, userId: outsiderId, role: 'member' },
+      })
+    }
+
+    it('記録の投稿者以外のスレッド参加者にはcomment_replyで通知が届く', async () => {
+      const group = await createSharedGroup()
+      await addOutsiderToGroup(group.id)
+      const workout = await createWorkout(ownerId)
+
+      await (await loginAsOther()).post(`/workouts/${workout.id}/comments`).send({ body: '1つ目' })
+      await (
+        await loginAsOutsider()
+      ).post(`/workouts/${workout.id}/comments`).send({ body: '2つ目' })
+
+      // 記録の投稿者(owner)へは引き続きtype: commentで通知される
+      const ownerNotification = await prisma.notification.findFirst({
+        where: { recipientId: ownerId, actorId: outsiderId, type: 'comment', targetId: workout.id },
+      })
+      expect(ownerNotification).not.toBeNull()
+
+      // 先にコメントしたother(スレッド参加者だが記録の投稿者ではない)にはcomment_replyで通知される
+      const otherNotification = await prisma.notification.findFirst({
+        where: {
+          recipientId: otherId,
+          actorId: outsiderId,
+          type: 'comment_reply',
+          targetId: workout.id,
+        },
+      })
+      expect(otherNotification).not.toBeNull()
+    })
+
+    it('コメント投稿者自身には通知が作られない', async () => {
+      const group = await createSharedGroup()
+      await addOutsiderToGroup(group.id)
+      const workout = await createWorkout(ownerId)
+
+      await (await loginAsOther()).post(`/workouts/${workout.id}/comments`).send({ body: '1つ目' })
+      // otherが再度コメント(スレッド参加者は自分自身のみ)
+      await (await loginAsOther()).post(`/workouts/${workout.id}/comments`).send({ body: '2つ目' })
+
+      const selfNotification = await prisma.notification.count({
+        where: { recipientId: otherId, actorId: otherId, targetId: workout.id },
+      })
+      expect(selfNotification).toBe(0)
+    })
+
+    it('記録の投稿者自身がコメントした場合、他のスレッド参加者にcomment_replyで通知が届く', async () => {
+      const group = await createSharedGroup()
+      await addOutsiderToGroup(group.id)
+      const workout = await createWorkout(ownerId)
+
+      await (await loginAsOther()).post(`/workouts/${workout.id}/comments`).send({ body: '1つ目' })
+      await (await loginAsOwner()).post(`/workouts/${workout.id}/comments`).send({ body: '返信' })
+
+      const notification = await prisma.notification.findFirst({
+        where: { recipientId: otherId, actorId: ownerId, type: 'comment_reply', targetId: workout.id },
+      })
+      expect(notification).not.toBeNull()
+    })
+  })
 })
 
 describe('DELETE /workouts/:id/comments/:commentId', () => {
