@@ -34,6 +34,12 @@ const occupation = ref<Occupation | ''>('')
 // 利用規約・プライバシーポリシーへの同意（Issue #160）。未チェックでは登録できない
 const agreedToTerms = ref(false)
 
+// リンクを開かずに同意チェックができてしまう問題への対応（Issue #163）。
+// 両方のリンクを一度でも開く（クリックする）までチェックボックスをdisabledにする
+const hasViewedTerms = ref(false)
+const hasViewedPrivacy = ref(false)
+const canAgreeToTerms = computed(() => hasViewedTerms.value && hasViewedPrivacy.value)
+
 async function onSubmit() {
   errorMessage.value = ''
 
@@ -209,19 +215,40 @@ async function onSubmit() {
           </select>
         </div>
 
-        <label class="flex items-start gap-2 text-sm text-gray-600">
-          <input v-model="agreedToTerms" type="checkbox" required class="mt-0.5" />
-          <span>
-            <NuxtLink to="/terms" target="_blank" class="text-brand-600 hover:underline">
-              利用規約
-            </NuxtLink>
-            ・
-            <NuxtLink to="/privacy" target="_blank" class="text-brand-600 hover:underline">
-              プライバシーポリシー
-            </NuxtLink>
-            に同意する
-          </span>
-        </label>
+        <div>
+          <label class="flex items-start gap-2 text-sm text-gray-600">
+            <input
+              v-model="agreedToTerms"
+              type="checkbox"
+              required
+              :disabled="!canAgreeToTerms"
+              class="mt-0.5 disabled:cursor-not-allowed"
+            />
+            <span>
+              <NuxtLink
+                to="/terms"
+                target="_blank"
+                class="text-brand-600 hover:underline"
+                @click="hasViewedTerms = true"
+              >
+                利用規約
+              </NuxtLink>
+              ・
+              <NuxtLink
+                to="/privacy"
+                target="_blank"
+                class="text-brand-600 hover:underline"
+                @click="hasViewedPrivacy = true"
+              >
+                プライバシーポリシー
+              </NuxtLink>
+              に同意する
+            </span>
+          </label>
+          <p v-if="!canAgreeToTerms" class="mt-1 text-xs text-gray-500">
+            利用規約・プライバシーポリシーの両方を開くと、同意にチェックできるようになります
+          </p>
+        </div>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
 
