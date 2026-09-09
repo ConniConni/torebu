@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 未ログイン時の「/」に表示するトップ画面（Issue #151）。イラストを画面いっぱいに表示し、
 // イラスト下部のオレンジの余白部分にログイン・新規登録ボタンを重ねて配置する
-import topImage from '~/assets/images/top_image.png'
+import topImage from '~/assets/images/top_image.jpeg'
 </script>
 
 <template>
@@ -11,8 +11,8 @@ import topImage from '~/assets/images/top_image.png'
          下部のオレンジの余白（ボタンの重なる位置）とのバランスが崩れてしまうため -->
     <img :src="topImage" alt="トレ部" class="h-full w-full object-cover object-bottom" />
 
-    <!-- イラスト下部の無地のオレンジ部分（画像下端から約10%）にボタンを重ねる。
-         安全にボタンが収まる余白であることをtop_image.pngのピクセル解析で確認済み -->
+    <!-- イラスト下部の無地のオレンジ部分（画像下端から約9%）にボタンを重ねる。
+         安全にボタンが収まる余白であることをtop_image.jpegのピクセル解析で確認済み -->
     <div class="absolute inset-x-6 bottom-5 flex gap-3">
       <NuxtLink
         to="/login"
