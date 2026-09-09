@@ -193,40 +193,6 @@ async function onDeleteWorkout(id: string) {
         </div>
       </div>
 
-      <button
-        type="button"
-        class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white"
-        @click="navigateTo('/workouts/new')"
-      >
-        ＋今日の記録をつける
-      </button>
-
-      <!-- 「ルーティン一覧」「統計」は元は縦積みの全幅ボタン2つだったが、スマホでカレンダーまでの
-           距離が遠い問題（2026-09-08指摘、Issue #127）を受けて横並びの2分割に圧縮した。
-           Phase4で「グループ」を追加し3分割にする（タブバー化はdocs/backlog.mdの通りまだ見送り） -->
-      <div class="grid grid-cols-3 gap-2">
-        <NuxtLink
-          to="/routines"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          ルーティン
-        </NuxtLink>
-
-        <NuxtLink
-          to="/stats"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          統計
-        </NuxtLink>
-
-        <NuxtLink
-          to="/groups"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          グループ
-        </NuxtLink>
-      </div>
-
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
       <p v-else-if="error" class="text-center text-sm text-red-600">
         記録の取得に失敗しました。時間をおいて再度お試しください
@@ -446,6 +412,42 @@ async function onDeleteWorkout(id: string) {
           </ul>
         </div>
       </template>
+
+      <!-- CTA・ナビ（ルーティン／統計／グループ）は、ホーム画面の「見る」情報（記録日数・
+           今週のサマリー・カレンダー・選択日の記録）より下に配置する（2026-09-09、Issue #153）。
+           カレンダーまでの距離が遠い問題への対応として、CTA・ナビを含めた全体の並び順を
+           「見る情報を上・操作を下」に組み替えた。読み込み中・エラー時も含め常に表示したいため、
+           pending/errorの分岐の外に置く -->
+      <button
+        type="button"
+        class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white"
+        @click="navigateTo('/workouts/new')"
+      >
+        ＋今日の記録をつける
+      </button>
+
+      <div class="grid grid-cols-3 gap-2">
+        <NuxtLink
+          to="/routines"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          ルーティン
+        </NuxtLink>
+
+        <NuxtLink
+          to="/stats"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          統計
+        </NuxtLink>
+
+        <NuxtLink
+          to="/groups"
+          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
+        >
+          グループ
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>
