@@ -156,7 +156,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
 | `/login` | ① | ログイン | `POST /auth/login` | `guest` |
-| `/register` | ① | 新規登録 | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
+| `/register` | ① | 新規登録。表示名・メール・パスワードに加え、生年月（年月のみ）・性別・職業が必須（いずれも「回答しない」を選択可能。下記参照） | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
@@ -207,6 +207,25 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   「判断保留」節参照）
 - スマホ幅（320〜430px程度）で崩れないことを確認した。PC向けの専用レイアウト（横並び等）は
   今回のスコープ外（`docs/backlog.md`「判断保留」節参照）
+
+**①新規登録の追加項目（生年月・性別・職業、Issue #158）の実装メモ**
+- `docs/schema.md`には元々「`birthDate`/`gender`/`occupation`は登録時は任意のまま、Phase3の
+  属性別分析機能を使おうとしたタイミングで入力を促す」という方針があったが、リリース前整理
+  （2026-09-09）で方針を変更し、**登録時に3項目とも必須の選択式で入力させる**ことにした
+  （`docs/backlog.md`「リリース前整理で出た項目」①参照）
+- 3項目とも「回答しない」を選べる必須の選択式。未入力（未選択）のままの送信は許可しない
+- 生年月は年（1900年〜当年）・月の2つの`<select>`で受け取り、`birthYearMonth`として
+  `{ year, month }`または`'no_answer'`（回答しないチェック時）を`POST /auth/register`に渡す。
+  バックエンド側で日を1日固定にした`Date`へ変換して`birthDate`に保存する（例：2000年5月選択→
+  `2000-05-01`）。「回答しない」の場合は`birthDate`を`null`のまま保存する
+- 性別は既存の`Gender` enumをそのまま使用（変更なし）
+- 職業（`occupation`）は自由記述`String?`からenumに変更した（`student`/`company_employee`/
+  `self_employed`/`executive`/`homemaker`/`other`/`no_answer`。マイグレーション：
+  `20260909210000_add_occupation_enum`）。変更前はUIからもAPIからも未使用のカラムだったため、
+  既存データへの影響はない
+- 既存ユーザー（3項目とも未入力）への入力促し方（ログイン時の一度きりモーダル等）、利用規約・
+  プライバシーポリシーページと同意チェックボックスは、今回のIssueのスコープ外
+  （`docs/backlog.md`「リリース前整理で出た項目」③参照）
 
 **記録日数（今月・通算、Phase3-B）の実装メモ**
 - ②ホーム画面の「＋今日の記録をつける」ボタン・「ルーティン一覧」リンクとカレンダーの間に、
