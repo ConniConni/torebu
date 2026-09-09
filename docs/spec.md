@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み14ページ）
+### 3-1. 画面一覧（実装済み15ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -169,6 +169,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」の通知を新しい順に表示する。開いた時点で全件既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
+| `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす
@@ -370,6 +371,37 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
     自動スクロール・コメント欄を自動展開・一時的な枠線ハイライトを行う
 - ベルアイコンは[BellIcon.vue](../frontend/app/components/BellIcon.vue)を新規追加
   （HeartIcon.vue・CommentIcon.vue等と同じ方針でHeroiconsのSVGパスを静的コピー）
+
+**グループ内ランキング（Phase4、[Issue #147](https://github.com/ConniConni/torebu/issues/147)）の実装メモ**
+- グループ基盤・記録フィード・いいね・コメント・通知に続くPhase4の残タスクのうち、ランキングを
+  先に着手した（`docs/roadmap.md`参照。残る「イチオシこだわり共有」は次のIssue）
+- 指標は`docs/schema.md`「Phase4の検討結果」で決めた通り**合計挙上重量1本**のみ。期間は
+  週間（日曜起算）／月間（1日起算）／通算の3タブで、`GET /groups/:id/ranking?period=week|month|all`
+  を新設した（デフォルトは`week`）
+- **集計は個人の集計（Phase3-C `stats.ts`）と条件を1つだけ変えて再利用**：公式種目のみが対象な点は
+  共通だが、`stats.ts`は自重セット（`weightKg`が`null`）を集計から完全に除外するのに対し、
+  ランキングは**0kg扱いで加算する**（合計は変わらないが、`totalVolumeKg: 0`のメンバーも
+  「記録はしている」ことが分かるようにするため）
+- 週・月の起算日はPhase3-D（週間サマリー）の週定義（日曜〜土曜）と統一し、月は1日起算。
+  ただし過去の期間（先週・先月等）を遡る機能は無く、常に「現在の期間の開始日時以降」のみを見る
+- **記録が無いメンバーも一覧に含める**：グループの全アクティブメンバーを先に0kgで初期化してから
+  集計結果を足し込む（`GET /groups/:id/workouts`が投稿がある記録しか返さないのと違い、
+  ランキングは「メンバー全員の順位」を見せる画面のため）
+- **同着の順位は「同順位、次は人数分スキップ」方式**（1,2,2,4）。オリンピックの表彰台と同じ
+  考え方で、単純な人数連番（1,2,2,3）は同着なのに次点だけ優遇されて見えるため採用しなかった
+- フロントは`/groups/[id]/ranking`。上位3人を表彰台形式（1位を中央・大きめメダル）で強調し、
+  その下に全メンバーの順位一覧を表示する。自分の行は背景色でハイライトする（事前にモックで
+  合意した構成。承認待ちのままモックを流用せず、実装前にユーザーへ画面案を提示して承認を得てから
+  着手した）
+- **1〜3位は金・銀・銅で色分け**（ブランドのオレンジとは別軸の配色。表彰台のメダル・土台の棒・
+  一覧の順位バッジすべてに同じ配色を使う）。事前のモック確認で銅色が読みにくいという指摘を受け、
+  背景色を暗めの銅色から明るいテラコッタ寄りの色に変更し、文字とのコントラスト比7:1超を確保した
+  （金・銀は元の配色のままコントラスト比5:1超）。配色は
+  [ranking.vue](../frontend/app/pages/groups/[id]/ranking.vue)の`MEDAL_COLORS`に集約している
+- **表彰台の土台（棒グラフ）は実績（合計挙上重量）を1位比の相対的な高さで表示する**。ランクの
+  見た目上の並び（2-1-3）ではなく、実測値を1位の値で割った比率から都度高さを計算するため、
+  数値の差がそのまま棒の高さの差として伝わる（全員0kgのときは全員同じ最小の高さになる）
+- グループ詳細画面（`/groups/[id]`）の「みんなの記録を見る」の下に「ランキングを見る」ボタンを追加
 
 ### 3-2. 記録するときの流れ（実装どおり）
 
@@ -635,6 +667,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
 | DELETE | `/groups/:id` | 要 | グループを削除する（**ソフトデリート**）。**オーナー限定**（オーナー以外は`403`） |
+| GET | `/groups/:id/ranking` | 要 | グループのアクティブな全メンバー（本人含む）の合計挙上重量ランキングを返す。`period`クエリ（`week`/`month`/`all`、省略時`week`）で対象期間を切り替える |
 
 ### 通知（Phase4） — [notifications.ts](../backend/src/routes/notifications.ts)
 
@@ -679,6 +712,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `POST/DELETE /workouts/:id/reactions` | 対象workoutへのアクセス可否は「自分の記録、または対象の投稿者といずれかのアクティブなグループで同席しているか」（`shareActiveGroup`関数）で判定する。グループ単位ではなく**ユーザー単位**の判定のため、`groups`のエンドポイント群ではなく`workouts.ts`に実装している |
 | `GET/POST /workouts/:id/comments`<br>`DELETE /workouts/:id/comments/:commentId` | 認可は`reactions`と同じ`shareActiveGroup`関数を再利用。削除は`userId`一致も条件に加えるため、自分のコメント以外は`404` |
 | いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる |
+| `GET /groups/:id/ranking` | **集計対象は公式種目のみ**（`stats.ts`と同じ方針）。ただし`stats.ts`と異なり**自重セット（`weightKg`が`null`）は除外せず0kg扱いで加算する**（schema.md「Phase4の検討結果」参照。合計に影響はしないが、記録自体はランキングの母数に含める）。`period=week`は日曜起算、`month`は1日起算（Phase3-Dの週定義と統一）で「現在の期間の開始日時以降」を集計し、`all`は期間の下限を設けない。過去の期間（先週・先月等）を見る機能は無い。記録が無いメンバーも`totalVolumeKg: 0`で結果に含める。同着は同順位、次の順位は人数分スキップする（例：1位2人なら次点は3位ではなく3人目時点で3位＝1,1,3） |
 | `GET /notifications` | 対象は常に**自分の記録**（`notifyWorkoutOwner`が`recipientId = workout.userId`で作るため）。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する） |
 
 ---
