@@ -339,10 +339,10 @@ async function onGoToExercisePicker() {
   <div class="min-h-screen bg-gray-50 px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
         <button type="button" class="text-sm text-gray-500" @click="onLeaveWorkout">
-          ホームへ戻る
+          ← ホームに戻る
         </button>
+        <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
       </div>
 
       <section class="rounded-lg bg-white p-4 shadow">
