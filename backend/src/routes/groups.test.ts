@@ -551,3 +551,134 @@ describe('DELETE /groups/:id', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('GET /groups/:id/ranking', () => {
+  let officialExerciseId: string
+  let customExerciseId: string
+
+  beforeEach(async () => {
+    const officialExercise = await prisma.exercise.create({
+      data: { name: 'ベンチプレス', muscleGroup: 'chest' },
+    })
+    officialExerciseId = officialExercise.id
+    const customExercise = await prisma.exercise.create({
+      data: { name: 'オリジナル種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+    customExerciseId = customExercise.id
+  })
+
+  afterEach(async () => {
+    await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
+    await prisma.exercise.deleteMany({ where: { id: { in: [officialExerciseId, customExerciseId] } } })
+  })
+
+  it('未所属者には404を返す(IDOR対策)', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(outsiderEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('退会済みメンバーには404を返す', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId, { leftAt: new Date() })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('periodが不正なら400を返す', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'year' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('公式種目の合計挙上重量で降順に並べ、自重セットは0kg扱いで加算する', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const today = new Date()
+    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    // 自重セット(weightKg null)は0kg扱いで加算される(合計には影響しない)
+    await prisma.workoutSet.create({
+      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 2, reps: 20, weightKg: null },
+    })
+
+    const memberWorkout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: memberWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 80 },
+    })
+    // カスタム種目は集計対象外
+    await prisma.workoutSet.create({
+      data: { workoutId: memberWorkout.id, exerciseId: customExerciseId, setOrder: 2, reps: 10, weightKg: 999 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      period: 'all',
+      ranking: [
+        { userId: memberId, displayName: 'グループテストメンバー', totalVolumeKg: 800, rank: 1 },
+        { userId: ownerId, displayName: 'グループテストオーナー', totalVolumeKg: 500, rank: 2 },
+      ],
+    })
+  })
+
+  it('記録が無いメンバーも0kgで一覧に含める', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, totalVolumeKg: 0 }),
+        expect.objectContaining({ userId: memberId, totalVolumeKg: 0 }),
+      ]),
+    )
+  })
+
+  it('同着は同順位、次の順位は人数分スキップする(1,2,2,4)', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+    const passwordHash = await bcrypt.hash(testPassword, 12)
+    const thirdUser = await prisma.user.create({
+      data: { email: 'groups-ranking-third@example.com', passwordHash, displayName: '三人目' },
+    })
+    await addMember(group.id, thirdUser.id)
+
+    const today = new Date()
+    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    const memberWorkout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: memberWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    // thirdUserは記録なし(0kg)
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    const ranks = res.body.ranking.map((r: { userId: string; rank: number }) => r.rank)
+    expect(ranks).toEqual([1, 1, 3])
+
+    await prisma.user.delete({ where: { id: thirdUser.id } })
+  })
+})

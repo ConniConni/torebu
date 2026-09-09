@@ -344,3 +344,107 @@ groupsRouter.delete('/:id', requireAuth, async (req, res) => {
 
   res.status(204).send()
 })
+
+// 集計対象は公式種目のみ(createdBy IS NULL)。stats.ts(Phase3-C)と同じ方針
+const RANKING_OFFICIAL_EXERCISE_FILTER = { createdBy: null }
+
+const rankingPeriodSchema = z.object({
+  period: z.enum(['week', 'month', 'all']).default('week'),
+})
+
+// todayを含む週の開始日(直近の日曜日、時刻0時)を返す。
+// 週の定義はPhase3-D(frontend/app/utils/weeklySummary.ts)と統一(日曜始まり〜土曜)
+function weekStart(now: Date): Date {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - start.getDay())
+  return start
+}
+
+// todayを含む月の開始日(1日、時刻0時)を返す
+function monthStart(now: Date): Date {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(1)
+  return start
+}
+
+// periodから「performedAt >= このtimestamp」の下限を計算する。allはundefined(下限なし)。
+// 過去の期間ではなく「現在進行中の期間の集計」のみを扱うため、上限(終了日)は設けない
+function rankingStartDate(period: 'week' | 'month' | 'all'): Date | undefined {
+  if (period === 'all') return undefined
+  const now = new Date()
+  return period === 'week' ? weekStart(now) : monthStart(now)
+}
+
+// GET /groups/:id/ranking?period=week|month|all
+// グループのアクティブな全メンバー(本人含む)について、公式種目の合計挙上重量(Σ weightKg * reps)
+// でランキングを作る。自重セット(weightKgがnull)は0kg扱いで加算する(stats.tsは自重セットを
+// 集計から除外するが、ランキングは「0kgとして扱う」ことで記録自体はしている点を評価する。
+// schema.md「Phase4の検討結果」参照)
+groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const groupId = req.params.id as string
+
+  const parsed = rankingPeriodSchema.safeParse(req.query)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    // 未所属者には存在の有無も返さない(IDOR対策)
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    include: { user: { select: { displayName: true } } },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const startDate = rankingStartDate(parsed.data.period)
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      workout: {
+        userId: { in: memberIds },
+        deletedAt: null,
+        ...(startDate ? { performedAt: { gte: startDate } } : {}),
+      },
+      exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+    },
+    select: { weightKg: true, reps: true, workout: { select: { userId: true } } },
+  })
+
+  // 記録が無いメンバーも0kgで一覧に含めるため、先に全メンバーを0で初期化しておく
+  const volumeByUserId = new Map<string, number>(memberIds.map((id) => [id, 0]))
+  for (const set of sets) {
+    const weightKg = set.weightKg === null ? 0 : Number(set.weightKg)
+    const uid = set.workout.userId
+    volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * set.reps)
+  }
+
+  // 合計挙上重量の降順。同点はdisplayNameで安定した順序にする(表示上の並びをブレさせないため)
+  const sorted = members
+    .map((m) => ({
+      userId: m.userId,
+      displayName: m.user.displayName,
+      totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
+    }))
+    .sort((a, b) => b.totalVolumeKg - a.totalVolumeKg || a.displayName.localeCompare(b.displayName))
+
+  // 同着は同順位、次の順位は人数分スキップする方式(例: 1,2,2,4)
+  let rank = 0
+  let prevVolumeKg: number | null = null
+  const ranking = sorted.map((entry, index) => {
+    if (entry.totalVolumeKg !== prevVolumeKg) {
+      rank = index + 1
+      prevVolumeKg = entry.totalVolumeKg
+    }
+    return { ...entry, rank }
+  })
+
+  res.status(200).json({ period: parsed.data.period, ranking })
+})
