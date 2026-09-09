@@ -293,14 +293,26 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
 > グループ基盤（[Issue #135](https://github.com/ConniConni/torebu/issues/135)）・グループの記録フィード
 > （[Issue #138](https://github.com/ConniConni/torebu/issues/138)）・記録へのいいね
 > （[Issue #140](https://github.com/ConniConni/torebu/issues/140)）・記録へのコメント
-> （[Issue #142](https://github.com/ConniConni/torebu/issues/142)）は実装済み。以下のroadmap.md・
+> （[Issue #142](https://github.com/ConniConni/torebu/issues/142)）・通知
+> （[Issue #144](https://github.com/ConniConni/torebu/issues/144)）は実装済み。以下のroadmap.md・
 > このファイルの記載が実装より古いままになっていたため、2026-09-09に棚卸しして更新した
 > （このセクション自体もIssue化せず随時追記する運用に留める）
 
-- **未着手**：通知・ランキング・「イチオシこだわり共有」投稿・一覧画面。設計の方向性は
+- **未着手**：ランキング・「イチオシこだわり共有」投稿・一覧画面。設計の方向性は
   [concept.md](./concept.md)・[schema.md](./schema.md)に記載済みだが、画面単位の詳細設計は未着手
   - **再検討のタイミング**：次のPhase4 Issueに着手するとき。`docs/schema.md`「Phase4の検討結果」の
     分割方針に沿って1 Issueずつ積み上げる
+- **通知が「記録の投稿者」にしか届かず、コメントのスレッド参加者には届かない**
+  （[Issue #144](https://github.com/ConniConni/torebu/issues/144)実装後、ユーザー指摘で発覚、
+  2026-09-09）：例えばユーザーAがユーザーBの記録にコメントするとBに通知が届くが、続けてBがAへの
+  返信コメントを投稿しても、通知の宛先は現状「記録の投稿者（＝B自身）」に固定されているため、
+  A（コメント欄の他の参加者）には通知が届かない。`notifyWorkoutOwner`（[workouts.ts](../backend/src/routes/workouts.ts)）が
+  常に`workout.userId`のみを宛先にしている設計上の制約
+  - 対応するには、対象workoutへの過去のコメント投稿者一覧を宛先に加える（自分自身・既に送った
+    相手への重複通知は除く）等の設計が必要。`notifications.type`に`reply`等を追加するか、既存の
+    `comment`のまま宛先を増やすかも合わせて検討する
+  - **再検討のタイミング**：次に通知まわりのIssueに着手するとき、または実際にコメントのやり取りが
+    活発なグループで「返信に気づけない」という不満が出たタイミング
 - **いいねしたユーザーの表示**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)の
   作業中に検討、2026-09-09）：現状は件数（`reactionCount`）と自分がいいね済みか（`reactedByMe`）
   のみを返し、「誰がいいねしたか」の一覧は無い。あえてスコープを広げず、必要になったら別Issueで

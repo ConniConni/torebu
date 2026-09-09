@@ -45,13 +45,15 @@ model User {
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  workouts         Workout[]
-  routines         Routine[]
-  createdExercises Exercise[]    @relation("ExerciseCreatedBy")
-  createdGroups    Group[]       @relation("GroupCreatedBy")
-  groupMemberships GroupMember[]
-  reactions        Reaction[]
-  comments         Comment[]
+  workouts          Workout[]
+  routines          Routine[]
+  createdExercises  Exercise[]     @relation("ExerciseCreatedBy")
+  createdGroups     Group[]        @relation("GroupCreatedBy")
+  groupMemberships  GroupMember[]
+  reactions         Reaction[]
+  comments          Comment[]
+  notifications     Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationActor")
 
   @@map("users")
 }
@@ -155,15 +157,15 @@ enum GroupMemberRole {
 
 // Phase4（交流とランキング）の土台。docs/schema.mdのPhase4節・「Phase4の検討結果」参照
 model Group {
-  id               String    @id @default(uuid())
-  name             String
-  createdBy        String    @map("created_by") // 作成者の記録用。権限判定はGroupMember.roleを見る
-  inviteCode       String    @unique @map("invite_code") // 暗号学的乱数の英数字32文字程度
-  inviteExpiresAt  DateTime? @map("invite_expires_at") @db.Timestamptz(3) // 再発行のたびに更新
-  memberLimit      Int       @default(10) @map("member_limit") // 課金で拡張(Phase5)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。ownerのみ実行可
+  id              String    @id @default(uuid())
+  name            String
+  createdBy       String    @map("created_by") // 作成者の記録用。権限判定はGroupMember.roleを見る
+  inviteCode      String    @unique @map("invite_code") // 暗号学的乱数の英数字32文字程度
+  inviteExpiresAt DateTime? @map("invite_expires_at") @db.Timestamptz(3) // 再発行のたびに更新
+  memberLimit     Int       @default(10) @map("member_limit") // 課金で拡張(Phase5)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。ownerのみ実行可
 
   creator User          @relation("GroupCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   members GroupMember[]
@@ -233,4 +235,42 @@ model Comment {
 
   @@index([targetType, targetId])
   @@map("comments")
+}
+
+enum NotificationType {
+  reaction
+  comment
+  topic // 未使用(イチオシこだわり共有は未実装)
+  ranking // 未使用(ランキングは未実装)
+  exercise_promoted // 未使用(カスタム種目の公式昇格は未実装)
+}
+
+enum NotificationTargetType {
+  workout
+  workout_set // 未使用
+  topic_post // 未使用
+  topic // 未使用
+  exercise // 未使用
+  group // 未使用
+}
+
+// Phase4通知(#144)。今回発行するのはtype: reaction/commentのみ、target_typeはworkoutのみ。
+// 残りのtype/target_typeは将来のランキング・イチオシこだわり共有・種目昇格向けにdocs/schema.mdの
+// 設計をそのまま反映しているが、今回のスコープでは発行しない。target_idはFK制約なし(target_typeに
+// よって参照先テーブルが変わるため。reactions/commentsと同じ方針)
+model Notification {
+  id          String                 @id @default(uuid())
+  recipientId String                 @map("recipient_id") // 誰宛の通知か
+  actorId     String?                @map("actor_id") // 誰が起こしたか(rankingのようなシステム通知はnull。今回は常に値あり)
+  type        NotificationType
+  targetType  NotificationTargetType @map("target_type")
+  targetId    String                 @map("target_id")
+  isRead      Boolean                @default(false) @map("is_read")
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, createdAt])
+  @@map("notifications")
 }

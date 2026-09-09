@@ -70,7 +70,23 @@ async function countComments(targetId: string) {
   return prisma.comment.count({ where: { targetType: 'workout', targetId } })
 }
 
-function serializeComment(comment: { id: string; userId: string; body: string; createdAt: Date }, displayName: string) {
+// 通知(Phase4、#144)。自分の記録への自分の操作では作成しない(actorId === recipientIdの場合はスキップ)
+async function notifyWorkoutOwner(
+  type: 'reaction' | 'comment',
+  recipientId: string,
+  actorId: string,
+  workoutId: string,
+) {
+  if (recipientId === actorId) return
+  await prisma.notification.create({
+    data: { recipientId, actorId, type, targetType: 'workout', targetId: workoutId },
+  })
+}
+
+function serializeComment(
+  comment: { id: string; userId: string; body: string; createdAt: Date },
+  displayName: string,
+) {
   return {
     id: comment.id,
     userId: comment.userId,
@@ -150,7 +166,9 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
     orderBy: { setOrder: 'asc' },
   })
 
-  res.status(200).json({ ...serializeWorkout(workout, sets.length > 0), sets: sets.map(serializeSet) })
+  res
+    .status(200)
+    .json({ ...serializeWorkout(workout, sets.length > 0), sets: sets.map(serializeSet) })
 })
 
 // performedAtは編集不可(意図的)：③「今日の記録を始める」が「同じ日付のworkoutがあれば再開する」
@@ -319,12 +337,21 @@ workoutsRouter.post('/:id/reactions', requireAuth, async (req, res) => {
     return
   }
 
+  // 既存いいねの有無を先に見ておく(通知は新規いいね時のみ作成し、連打で重複させないため)
+  const alreadyReacted = await prisma.reaction.findUnique({
+    where: { targetType_targetId_userId: { targetType: 'workout', targetId: workout.id, userId } },
+  })
+
   // 既にいいね済みでも冪等に200を返す(UNIQUE制約違反はここで吸収する)
   await prisma.reaction.upsert({
     where: { targetType_targetId_userId: { targetType: 'workout', targetId: workout.id, userId } },
     create: { targetType: 'workout', targetId: workout.id, userId },
     update: {},
   })
+
+  if (!alreadyReacted) {
+    await notifyWorkoutOwner('reaction', workout.userId, userId, workout.id)
+  }
 
   res.status(200).json({ reactionCount: await countReactions(workout.id), reactedByMe: true })
 })
@@ -382,6 +409,8 @@ workoutsRouter.post('/:id/comments', requireAuth, async (req, res) => {
     include: { user: { select: { displayName: true } } },
   })
 
+  await notifyWorkoutOwner('comment', workout.userId, userId, workout.id)
+
   res.status(201).json(serializeComment(comment, comment.user.displayName))
 })
 
@@ -395,7 +424,12 @@ workoutsRouter.delete('/:id/comments/:commentId', requireAuth, async (req, res) 
   }
 
   const comment = await prisma.comment.findFirst({
-    where: { id: req.params.commentId as string, targetType: 'workout', targetId: workout.id, userId },
+    where: {
+      id: req.params.commentId as string,
+      targetType: 'workout',
+      targetId: workout.id,
+      userId,
+    },
   })
   if (!comment) {
     res.status(404).json({ error: 'not_found' })
