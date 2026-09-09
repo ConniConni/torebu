@@ -17,10 +17,32 @@ const DUMMY_PASSWORD_HASH = await bcrypt.hash(
   BCRYPT_SALT_ROUNDS,
 )
 
+// 生年月（年月のみ）。DBの`birthDate`（Date型）へは日を1日固定で保存する（Issue #158）。
+// 「回答しない」の場合はリテラル'no_answer'を受け取り、birthDateはnullで保存する
+const birthYearMonthSchema = z.union([
+  z.literal('no_answer'),
+  z.object({
+    year: z.number().int().min(1900).max(new Date().getFullYear()),
+    month: z.number().int().min(1).max(12),
+  }),
+])
+
 const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(72), // bcryptは72バイトを超える部分を無視するため上限を設ける
   displayName: z.string().trim().min(1).max(50),
+  // 3項目とも「回答しない」を選べる必須の選択式にする（未入力は許可しない。Issue #158）
+  birthYearMonth: birthYearMonthSchema,
+  gender: z.enum(['male', 'female', 'other', 'no_answer']),
+  occupation: z.enum([
+    'student',
+    'company_employee',
+    'self_employed',
+    'executive',
+    'homemaker',
+    'other',
+    'no_answer',
+  ]),
 })
 
 authRouter.post('/register', async (req, res) => {
@@ -29,7 +51,7 @@ authRouter.post('/register', async (req, res) => {
     res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
     return
   }
-  const { email, password, displayName } = parsed.data
+  const { email, password, displayName, birthYearMonth, gender, occupation } = parsed.data
 
   const existingUser = await prisma.user.findUnique({ where: { email } })
   if (existingUser) {
@@ -40,12 +62,21 @@ authRouter.post('/register', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  // 年月のみ受け取り、日を1日固定でDBに保存する（例：2000年5月 → 2000-05-01）。
+  // 「回答しない」を選んだ場合はnullで保存する
+  const birthDate =
+    birthYearMonth === 'no_answer'
+      ? null
+      : new Date(Date.UTC(birthYearMonth.year, birthYearMonth.month - 1, 1))
 
   const user = await prisma.user.create({
     data: {
       email,
       passwordHash,
       displayName,
+      birthDate,
+      gender,
+      occupation,
     },
   })
 
