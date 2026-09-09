@@ -240,6 +240,7 @@ model Comment {
 enum NotificationType {
   reaction
   comment
+  comment_reply // 記録の投稿者以外の、そのworkoutへの過去のコメント投稿者宛の通知(Issue #149)
   topic // 未使用(イチオシこだわり共有は未実装)
   ranking // 未使用(ランキングは未実装)
   exercise_promoted // 未使用(カスタム種目の公式昇格は未実装)
