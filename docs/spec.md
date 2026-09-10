@@ -832,7 +832,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
-| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1） |
+| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない |
 | `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
 | `workouts` | 1日1回分のトレーニング | `deleted_at` を持つ（ソフトデリート） |
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |

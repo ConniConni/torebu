@@ -52,6 +52,9 @@ model User {
   occupation             Occupation?
   passwordResetToken     String?   @map("password_reset_token")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at") @db.Timestamptz(3)
+  // 長期未利用アカウントの自動削除バッチ（未実装、docs/backlog.md参照）の判定に使う想定。
+  // ログイン成功時にのみ更新する。登録直後はnull
+  lastLoginAt            DateTime? @map("last_login_at") @db.Timestamptz(3)
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
