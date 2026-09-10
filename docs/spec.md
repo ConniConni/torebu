@@ -162,7 +162,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・記録日数・今週のサマリー・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
-| `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照） | `GET /exercises` | `auth` |
+| `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
@@ -802,7 +802,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | どこ | 押さえること |
 |---|---|
-| `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → 名前順」の2段階**（`default_sort_order` は全件null運用のためソート条件に入れていない）。各種目に `useCount`（自分の使用回数）が付いてくる。**削除済み（`deletedAt`有り）のカスタム種目もレスポンスには含める**（過去の記録・ルーティンがこのレスポンスをキャッシュして種目名を解決しているため、除外すると過去記録の表示が壊れる）。新規の記録・ルーティンへの追加候補からの除外は、`deletedAt`を見てフロント側（④種目選択・⑦種目追加の重複サジェスト）で行う |
+| `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → `default_sort_order`昇順 → 名前順」の3段階**（Issue #167で3段階に変更。公式種目には種目マスタ元データの並び順＝部位ごとに「コンパウンド→バリエーション→アイソレーション」を`default_sort_order`として`seed.ts`で投入済み。カスタム種目は`default_sort_order`がnullのままのため、同じ使用回数の公式種目より後ろに来る）。各種目に `useCount`（自分の使用回数）が付いてくる。**削除済み（`deletedAt`有り）のカスタム種目もレスポンスには含める**（過去の記録・ルーティンがこのレスポンスをキャッシュして種目名を解決しているため、除外すると過去記録の表示が壊れる）。新規の記録・ルーティンへの追加候補からの除外は、`deletedAt`を見てフロント側（④種目選択・⑦種目追加の重複サジェスト）で行う |
 | `GET /exercises` の `lastSet`（[Issue #116](https://github.com/ConniConni/torebu/issues/116)） | `{ weightKg, reps } \| null`。自分の削除されていない（`deletedAt: null`の）workoutの中で、その種目を一番新しく記録したセット1件（`performedAt`降順→`setOrder`降順で先頭）。記録が無ければ`null`。③記録作成でのセット追加のデフォルト値決定に使う（§3-2「＋セット追加」参照） |
 | `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`isExerciseVisible`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`isExerciseVisible`を呼ばないため削除済みでも編集できる） |
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
@@ -833,7 +833,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | テーブル | 役割 | 押さえること |
 |---|---|---|
 | `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_*` カラムはあるが**API未実装**（§2-1）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない |
-| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order` は全件null運用。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
+| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order`は公式種目のみ設定（種目マスタ元データの並び順。使用実績が無いユーザーの初期並び順に使う、Issue #167）、カスタム種目は常にnull。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
 | `workouts` | 1日1回分のトレーニング | `deleted_at` を持つ（ソフトデリート） |
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |

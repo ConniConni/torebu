@@ -198,9 +198,10 @@ Phase4着手前の設計セッションで詰めた論点。画面単位の詳�
 - **退会後の同じグループへの再参加は可能**。実装は新規INSERTではなく、既存の`group_members`行をUPDATEして`left_at`をNULLに戻す形
 - **筋肉イラスト可視化**は`react-native-body-highlighter`のSVG・筋肉スラッグデータを流用（Reactコンポーネント自体ではなくSVGデータのみ、ライセンスはMIT想定だが実装時に要確認）。出典はExRx.net中心＋free-exercise-db等で補完
 - **有酸素運動は今回のmuscle_groupには含めない**。記録項目の設計とセットで将来の拡張機能として追加する
-- **種目一覧の表示順**は「自分の使用回数 DESC → 名前順」の2段階。当初は`default_sort_order ASC`を
-  間に挟む3段階で設計していたが、`default_sort_order`を全件null運用にしたため実装ではソート条件から
-  省略している（詳細は[spec.md](./spec.md)の`GET /exercises`参照）
+- **種目一覧の表示順**は「自分の使用回数 DESC → `default_sort_order` ASC → 名前順」の3段階。
+  当初`default_sort_order`は全件null運用でソート条件から省略していたが、④種目選択画面の見やすさ改善
+  （Issue #167、2026-09-10）で、公式種目に種目マスタ元データの並び順を投入して使うよう変更した
+  （詳細は[spec.md](./spec.md)の`GET /exercises`参照）
 - **アカウント削除は完全削除せず匿名化する**。display_nameを「退会済みユーザー」に置き換え、投稿・コメント・いいねは残す
 - **`birth_date`/`gender`/`occupation`は登録時に必須で入力させる**（2026-09-09方針変更、Issue #158）。
   元々は「登録時は任意のまま、Phase3の属性別分析機能を使おうとしたタイミングで入力を促す」という
