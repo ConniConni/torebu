@@ -2,6 +2,8 @@
 // ④ 種目選択。部位ごとにセクション分けし、各セクション上位5件＋開閉トグルで全件表示
 // ③記録作成・⑤ルーティン編集の両方から遷移してくる共通画面。選択後にどこへ戻るかは
 // クエリパラメータreturnTo(未指定なら③記録作成)で決める
+// 器具絞り込み(Issue #167)：バーベル/ダンベル/自重/その他マシンの4分類タグで複数選択(OR)。
+// equipment未設定(=カスタム種目)は絞り込み中は表示しない
 import type { Exercise } from '~/composables/useExercises'
 
 definePageMeta({ middleware: 'auth' })
@@ -20,12 +22,34 @@ const { user } = useAuth()
 const SECTION_PREVIEW_COUNT = 5
 const expandedGroups = ref<Set<MuscleGroup>>(new Set())
 
+// 器具絞り込み(Issue #167)。未選択(空集合)なら絞り込みなし。複数選択時はOR。
+// equipment未設定(=カスタム種目)はどのタグにも属さないため、絞り込み中は表示しない
+const selectedEquipmentCategories = ref<Set<EquipmentCategory>>(new Set())
+
+function toggleEquipmentCategory(category: EquipmentCategory) {
+  const next = new Set(selectedEquipmentCategories.value)
+  if (next.has(category)) {
+    next.delete(category)
+  } else {
+    next.add(category)
+  }
+  selectedEquipmentCategories.value = next
+}
+
+function matchesEquipmentFilter(exercise: Exercise) {
+  if (selectedEquipmentCategories.value.size === 0) return true
+  const category = equipmentCategoryOf(exercise.equipment)
+  return category !== undefined && selectedEquipmentCategories.value.has(category)
+}
+
 const sections = computed(() =>
   MUSCLE_GROUPS.map((group) => ({
     group,
     label: muscleGroupLabel(group),
     // 削除済み(ソフトデリート)の種目は新規の記録には選べないため一覧から除外する(Issue #113)
-    exercises: (exercises.value ?? []).filter((e) => e.muscleGroup === group && !e.deletedAt),
+    exercises: (exercises.value ?? []).filter(
+      (e) => e.muscleGroup === group && !e.deletedAt && matchesEquipmentFilter(e),
+    ),
   })),
 )
 
@@ -82,6 +106,23 @@ async function onDeleteExercise(id: string) {
       <NuxtLink :to="returnTo" class="text-sm text-gray-500">← 戻る</NuxtLink>
       <h1 class="text-base font-semibold text-gray-900">種目を選択</h1>
 
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="category in EQUIPMENT_CATEGORIES"
+          :key="category"
+          type="button"
+          class="rounded-full border px-3 py-1 text-xs font-medium"
+          :class="
+            selectedEquipmentCategories.has(category)
+              ? 'border-brand-600 bg-brand-600 text-white'
+              : 'border-gray-300 bg-white text-gray-600'
+          "
+          @click="toggleEquipmentCategory(category)"
+        >
+          {{ equipmentCategoryLabel(category) }}
+        </button>
+      </div>
+
       <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
       <p v-else-if="error" class="text-center text-sm text-red-600">
         種目一覧の取得に失敗しました。時間をおいて再度お試しください
@@ -107,7 +148,11 @@ async function onDeleteExercise(id: string) {
           </div>
 
           <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">
-            種目がありません
+            {{
+              selectedEquipmentCategories.size > 0
+                ? '該当する種目がありません'
+                : '種目がありません'
+            }}
           </p>
           <ul v-else class="space-y-1">
             <li v-for="exercise in visibleExercises(section)" :key="exercise.id">

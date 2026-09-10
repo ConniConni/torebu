@@ -115,6 +115,27 @@ describe('GET /exercises', () => {
     expect(order.indexOf(usedOnce.id)).toBeLessThan(order.indexOf(unused.id))
   })
 
+  it('使用回数が同じ場合はdefault_sort_order順→名前順で並ぶ(未使用ユーザーの初期表示、Issue #167)', async () => {
+    // 名前順(50音順)だと「腹筋ローラー」が先頭に来てしまう並びを、defaultSortOrderで逆転させて検証する
+    const isolation = await createExercise({
+      data: { name: '腹筋ローラー', muscleGroup: 'chest', defaultSortOrder: 1 },
+    })
+    const compound = await createExercise({
+      data: { name: 'ベンチプレス', muscleGroup: 'chest', defaultSortOrder: 0 },
+    })
+    // defaultSortOrder未設定(カスタム種目相当)は、設定済みの種目より後ろに来る
+    const customLike = await createExercise({
+      data: { name: 'アダプテッドプレス', muscleGroup: 'chest' },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const order = (res.body as Array<{ id: string }>).map((e) => e.id)
+    expect(order.indexOf(compound.id)).toBeLessThan(order.indexOf(isolation.id))
+    expect(order.indexOf(isolation.id)).toBeLessThan(order.indexOf(customLike.id))
+  })
+
   it('部位ハイライト用の項目(mainMuscle/relatedMuscles/mainZone)を返す。カスタム種目は全てnull', async () => {
     const official = await createExercise({
       data: {

@@ -51,11 +51,16 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
     useCount: usageCountByExerciseId.get(exercise.id) ?? 0,
   }))
 
-  // 表示順：自分の使用回数DESC → 名前順
-  // (default_sort_orderは当面すべてnull運用のため、ソート条件には含めない。詳細はdocs/backlog.md参照)
-  exercisesWithUseCount.sort(
-    (a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name, 'ja'),
-  )
+  // 表示順：自分の使用回数DESC → default_sort_order ASC（未設定=カスタム種目はnull扱いで最後） → 名前順
+  // 使用実績が無い(useCount=0)ユーザーでも、部位セクション内が定番順(コンパウンド→アイソレーション)に
+  // なるようdefault_sort_orderを使う(Issue #167。公式種目はseed.tsで種目マスタの元データ順を投入済み)
+  exercisesWithUseCount.sort((a, b) => {
+    if (a.useCount !== b.useCount) return b.useCount - a.useCount
+    const aOrder = a.defaultSortOrder ?? Number.MAX_SAFE_INTEGER
+    const bOrder = b.defaultSortOrder ?? Number.MAX_SAFE_INTEGER
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return a.name.localeCompare(b.name, 'ja')
+  })
 
   res.status(200).json(
     exercisesWithUseCount.map((exercise) => ({
