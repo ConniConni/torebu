@@ -67,7 +67,7 @@ async function upsertOfficialExercises() {
   let created = 0
   let updated = 0
 
-  for (const exercise of officialExercises) {
+  for (const [index, exercise] of officialExercises.entries()) {
     const muscleGroup = BODY_PART_TO_MUSCLE_GROUP[exercise.main_body_part]
     if (!muscleGroup) {
       throw new Error(`未知のmain_body_part: ${exercise.main_body_part}（${exercise.name_ja}）`)
@@ -79,6 +79,9 @@ async function upsertOfficialExercises() {
       mainMuscle: exercise.main_muscle,
       relatedMuscles: exercise.related_muscles,
       mainZone: exercise.main_zone ?? null,
+      // JSON内の並び順（部位ごとに「コンパウンド→バリエーション→アイソレーション」でキュレーション済み）を
+      // そのままフォールバック順に転用する。使用実績が無いユーザーでも部位セクション内が定番順になる(Issue #167)
+      defaultSortOrder: index,
     }
 
     const existing = await prisma.exercise.findFirst({
