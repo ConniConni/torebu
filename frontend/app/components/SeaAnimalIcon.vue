@@ -4,12 +4,16 @@
   指摘を受け、用意されたPNG画像を表示するだけのシンプルな構成に変更した（2026-09-11）。
   画像は`frontend/public/images/animals/`に置き、ビルド時ではなく実行時にパス解決される
   publicアセットとして参照する（`~/assets/`配下のビルド時import と違い、画像ファイルが
-  無くてもdevサーバーやビルド自体は落ちない。単に画像が表示されないだけになる）
+  無くてもdevサーバーやビルド自体は落ちない。単に画像が表示されないだけになる）。
+  altは呼び出し側から動物名（weightDisplay.tsのanimalCaption().animalName）を渡す。
+  以前は空alt+aria-hiddenの装飾画像扱いだったが、隣接テキストから動物名を省いた（「×0.8相当の
+  負荷重量」に変更、2026-09-11）ことで動物名の情報がこのイラストだけになったため、
+  スクリーンリーダーでも動物名が伝わるようaltを必須にした
 -->
 <script setup lang="ts">
 import type { SeaAnimal } from '~/utils/weightDisplay'
 
-const props = withDefaults(defineProps<{ name: SeaAnimal['key']; class?: string }>(), {
+const props = withDefaults(defineProps<{ name: SeaAnimal['key']; alt: string; class?: string }>(), {
   class: 'h-6 w-9',
 })
 
@@ -22,12 +26,7 @@ const IMAGE_PATHS: Record<SeaAnimal['key'], string> = {
 </script>
 
 <template>
-  <img
-    :src="IMAGE_PATHS[props.name]"
-    :alt="''"
-    aria-hidden="true"
-    :class="[props.class, 'object-contain']"
-  />
+  <img :src="IMAGE_PATHS[props.name]" :alt="props.alt" :class="[props.class, 'object-contain']" />
 </template>
 
 <style scoped>

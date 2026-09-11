@@ -32,13 +32,25 @@ describe('pickSeaAnimal', () => {
 })
 
 describe('animalCaption', () => {
-  it('「動物名×倍数」の形式にする（倍数は小数第1位で四捨五入）', () => {
-    expect(animalCaption(800)).toEqual({ animalKey: 'manbou', text: 'マンボウ×0.8' })
-    expect(animalCaption(7_700)).toEqual({ animalKey: 'orca', text: 'シャチ×1.4' })
+  it('multiplierTextは倍数を常に小数第1位までの文字列にする。animalNameは動物名を別途持つ', () => {
+    expect(animalCaption(800)).toEqual({
+      animalKey: 'manbou',
+      animalName: 'マンボウ',
+      multiplierText: '0.8',
+    })
+    expect(animalCaption(7_700)).toEqual({
+      animalKey: 'orca',
+      animalName: 'シャチ',
+      multiplierText: '1.4',
+    })
   })
 
-  it('倍数が整数のときは小数点を付けない', () => {
-    expect(animalCaption(5_500)).toEqual({ animalKey: 'orca', text: 'シャチ×1' })
+  it('倍数が整数のときも小数第1位（.0）まで表示する', () => {
+    expect(animalCaption(5_500)).toEqual({
+      animalKey: 'orca',
+      animalName: 'シャチ',
+      multiplierText: '1.0',
+    })
   })
 
   it('0kg以下はnullを返す', () => {
