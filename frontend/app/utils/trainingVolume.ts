@@ -18,7 +18,9 @@ export function sumRecentVolume(
   days: number,
 ): number {
   const start = shiftDate(today, -(days - 1))
-  return points.filter((p) => p.date >= start && p.date <= today).reduce((sum, p) => sum + p.volumeKg, 0)
+  return points
+    .filter((p) => p.date >= start && p.date <= today)
+    .reduce((sum, p) => sum + p.volumeKg, 0)
 }
 
 // 通算の合計負荷重量(kg)

@@ -12,7 +12,11 @@ import { shiftDate } from './date'
 // today起算でdays日前〜today（todayを含む）のローリング期間の記録日数。
 // 「今週」「今月」は暦週・暦月ではなく今日起算のローリング期間（直近7日／直近28日）にする方針
 // （2026-09-11、trainingVolume.tsのsumRecentVolume参照）
-export function countRecentTrainingDays(recordedDates: string[], today: string, days: number): number {
+export function countRecentTrainingDays(
+  recordedDates: string[],
+  today: string,
+  days: number,
+): number {
   const start = shiftDate(today, -(days - 1))
   return new Set(recordedDates.filter((d) => d >= start && d <= today)).size
 }
