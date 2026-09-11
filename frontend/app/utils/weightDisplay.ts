@@ -43,16 +43,22 @@ export function pickSeaAnimal(tons: number): SeaAnimal {
 
 export interface AnimalCaption {
   animalKey: SeaAnimal['key']
-  text: string // 例:「シャチ×1.4」
+  animalName: string // イラストのalt用（画面上のtextには含めない。下記参照）
+  multiplierText: string // 「×」の後に続く倍数の文字列。例:「1.4」「1.0」「20.0」（常に小数第1位まで）
 }
 
 // 合計負荷重量(kg)から動物換算のキャプションを作る。0kg以下（記録が無い）はキャプション自体を
-// 出さない（「マンボウ×0」等は意味を持たないため）。
-// 表記は「約◯匹(頭)分」から「×◯」に短縮した（2026-09-11、アイコンを大きく見せるスペース確保のため）
+// 出さない（「×0」等は意味を持たないため）。
+// 動物名はテキストに含めず、イラスト側（img altとしてanimalNameを使う。SeaAnimalIcon.vue参照）で
+// 伝える方針（2026-09-11）。呼び出し側（HomeScreen.vue）で「負荷重量 イラスト×multiplierText」の
+// 順に組み立てる。
+// 倍数は以前「整数のときは小数点を付けない（×1）」としていたが、シャチ・クジラは体重が大きく
+// 倍数が整数付近になりやすいため小数第1位が消えると精度が分かりにくいという指摘を受け、
+// 常に小数第1位まで表示するtoFixed(1)に変更した（2026-09-11）
 export function animalCaption(kg: number): AnimalCaption | null {
   if (kg <= 0) return null
   const tons = kg / 1000
   const animal = pickSeaAnimal(tons)
-  const count = Math.round((tons / animal.tons) * 10) / 10 // 小数第1位で四捨五入
-  return { animalKey: animal.key, text: `${animal.name}×${count}` }
+  const multiplier = tons / animal.tons
+  return { animalKey: animal.key, animalName: animal.name, multiplierText: multiplier.toFixed(1) }
 }

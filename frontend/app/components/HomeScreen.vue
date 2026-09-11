@@ -44,19 +44,16 @@ const memoOnlyDates = computed(
 
 const today = todayLocalDateString()
 
-// 今月／通算の記録日数（Phase3-B）。hasSetsを問わず「記録がある日」であれば対象にする
+// 通算の記録日数（Phase3-B）。hasSetsを問わず「記録がある日」であれば対象にする
 // （docs/spec.md参照。frontend/app/utils/trainingDays.ts参照）
 const allRecordedDates = computed(() => (workouts.value ?? []).map((w) => w.performedAt))
-const trainingDaysThisMonth = computed(() =>
-  countTrainingDaysInMonth(allRecordedDates.value, today),
-)
 const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates.value))
 
 // 合計負荷重量（期間別サマリーカード、Issue #169）。新規バックエンドAPIは
-// 作らず、既存GET /stats/volume（range=all）をフロントで週/月/全期間に集計する。
-// range=allにしているのは、今月/通算分（Issue #169で追加）が月初〜現在・全期間の合計を必要とし、
-// 週別推移用のrange=1mだけでは足りないため。トレ日数は今月/通算と同じallRecordedDatesを流用する
-// （frontend/app/utils/weeklySummary.ts・trainingVolume.ts参照）
+// 作らず、既存GET /stats/volume（range=all）をフロントで直近7日/直近28日/全期間に集計する。
+// range=allにしているのは、直近28日/通算分（Issue #169で追加）が28日前〜現在・全期間の合計を
+// 必要とし、週別推移用のrange=1mだけでは足りないため。トレ日数も同じallRecordedDatesを流用する
+// （frontend/app/utils/trainingDays.ts・trainingVolume.ts参照）
 const volumePoints = ref<{ date: string; volumeKg: number }[]>([])
 const weeklyVolumePending = ref(true)
 const weeklyVolumeError = ref(false)
@@ -73,38 +70,44 @@ async function loadWeeklyVolume() {
   }
 }
 await loadWeeklyVolume()
-const weeklyVolumeKg = computed(() => sumWeeklyVolume(volumePoints.value, today))
-const weeklyTrainingDays = computed(() => countWeeklyTrainingDays(allRecordedDates.value, today))
 
-// 今月/通算の合計負荷重量（Issue #169）
-const monthlyVolumeKg = computed(() => sumVolumeInMonth(volumePoints.value, today))
-const totalVolumeKg = computed(() => sumTotalVolume(volumePoints.value))
-
-// 期間別サマリーカード（今週/今月/通算、Issue #169）。以前は「今月/通算の記録日数帯」と
+// 期間別サマリーカード（直近7日/直近28日/通算、Issue #169）。以前は「今月/通算の記録日数帯」と
 // 「今週のサマリー」が別々のカードだったが、見た目の言語が2種類に分かれて不自然という指摘を受け、
 // 1枚のカードで期間をタブ切り替えする形に統合した（モックで複数案を比較して決定）。
 // 合計負荷重量はkgではなくt表記にする（桁が減って見やすい、2026-09-10決定。frontend/app/utils/
 // weightDisplay.ts参照）。あわせて「0.8t」だけだと実感が湧きにくいため、海の生き物の体重に
-// 例えるキャプション（動物換算）を添える
-type SummaryPeriod = 'week' | 'month' | 'total'
+// 例えるキャプション（動物換算）を添える。
+// 「今週」「今月」は当初、日曜始まりの暦週／暦月（1日〜今日）だったが、「実態と違う」という
+// 指摘を受け、今日起算のローリング期間（直近7日間／直近28日間）に変更した（2026-09-11）。
+// 文言もそれに合わせて「直近7日」「直近28日」にする。なお週別推移カード（下記
+// weeklyVolumeTrendPoints）は「◯週前」ラベルとの整合のため暦週の定義のまま据え置いており、
+// 画面内で期間の定義が二重になる点は許容した上での判断（frontend/app/utils/weeklySummary.ts参照）
+type SummaryPeriod = 'recent7' | 'recent28' | 'total'
 const PERIODS: { key: SummaryPeriod; label: string }[] = [
-  { key: 'week', label: '今週' },
-  { key: 'month', label: '今月' },
+  { key: 'recent7', label: '直近7日' },
+  { key: 'recent28', label: '直近28日' },
   { key: 'total', label: '通算' },
 ]
-const selectedPeriod = ref<SummaryPeriod>('week')
+const selectedPeriod = ref<SummaryPeriod>('recent7')
 const periodStats = computed<Record<SummaryPeriod, { volumeKg: number; days: number }>>(() => ({
-  week: { volumeKg: weeklyVolumeKg.value, days: weeklyTrainingDays.value },
-  month: { volumeKg: monthlyVolumeKg.value, days: trainingDaysThisMonth.value },
-  total: { volumeKg: totalVolumeKg.value, days: totalTrainingDays.value },
+  recent7: {
+    volumeKg: sumRecentVolume(volumePoints.value, today, 7),
+    days: countRecentTrainingDays(allRecordedDates.value, today, 7),
+  },
+  recent28: {
+    volumeKg: sumRecentVolume(volumePoints.value, today, 28),
+    days: countRecentTrainingDays(allRecordedDates.value, today, 28),
+  },
+  total: { volumeKg: sumTotalVolume(volumePoints.value), days: totalTrainingDays.value },
 }))
 const activeStats = computed(() => periodStats.value[selectedPeriod.value])
 const activeAnimalCaption = computed(() => animalCaption(activeStats.value.volumeKg))
 
-// 週別推移（直近4週間、横棒グラフ）。今週を一番上に表示するため表示直前でreverseする
+// 週別推移（直近5週間、横棒グラフ）。今週を一番上に表示するため表示直前でreverseする
 // （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
-// バーの長さのみで比較させる形をモックで比較して決定、2026-09-08）
-const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(volumePoints.value, today))
+// バーの長さのみで比較させる形をモックで比較して決定、2026-09-08。
+// 4週間だと隣の期間別サマリーカードより短くなり余白ができるため5週間に変更、2026-09-11）
+const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(volumePoints.value, today, 5))
 const weeklyVolumeTrendDisplay = computed(() => [...weeklyVolumeTrendPoints.value].reverse())
 const weeklyVolumeTrendMax = computed(() =>
   Math.max(1, ...weeklyVolumeTrendPoints.value.map((p) => p.volumeKg)),
@@ -178,10 +181,10 @@ async function onDeleteWorkout(id: string) {
     await deleteWorkout(id)
     confirmingDeleteId.value = null
     // 以前は③記録本体画面から削除すると必ずホームへ遷移し、その際のページ再マウントで
-    // 今週のサマリー（volumePoints、GET /stats/volume由来）も自然に取り直されていた。
+    // サマリー（volumePoints、GET /stats/volume由来）も自然に取り直されていた。
     // ②に移設して画面遷移を伴わなくなった分、ここで明示的に再取得しないと削除前の古いkg値が
-    // 残ってしまう（trainingDaysThisMonth等はworkoutsから直接computedしているため対象外。
-    // monthlyVolumeKg/totalVolumeKgもvolumePointsから計算されるためここで一緒に更新される。
+    // 残ってしまう（periodStatsのdaysはworkoutsから直接computedしているため対象外。
+    // volumeKgはperiodStats内でvolumePointsから計算されるためここで一緒に更新される。
     // Issue #116と同種のキャッシュ更新漏れパターン、CLAUDE.mdのセルフチェック項目参照）
     await loadWeeklyVolume()
   } catch {
@@ -231,9 +234,7 @@ async function onDeleteWorkout(id: string) {
              「今週のサマリー」の2種類のカードを1枚に統合した（モックで複数案を比較して決定。
              経緯はdocs/spec.md参照）。このAPI呼び出し（GET /stats/volume）だけ失敗しても
              他の表示は妨げないよう独立してエラー処理する -->
-        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">
-          サマリーを読み込み中...
-        </p>
+        <p v-if="weeklyVolumePending" class="text-xs text-gray-400">サマリーを読み込み中...</p>
         <p v-else-if="weeklyVolumeError" class="text-xs text-red-600">
           サマリーの取得に失敗しました
         </p>
@@ -261,12 +262,31 @@ async function onDeleteWorkout(id: string) {
                   {{ formatTons(activeStats.volumeKg) }}
                 </p>
                 <div v-if="activeAnimalCaption" class="mt-1 flex items-center gap-1.5">
-                  <!-- キャプションを「約◯匹(頭)分」→「×◯」に短縮した分の余白で、アイコンを
-                       ひとまわり大きくした（クジラの視認性が悪いという指摘、2026-09-11） -->
-                  <SeaAnimalIcon :name="activeAnimalCaption.animalKey" class="h-6 w-9" />
-                  <span class="text-xs font-semibold text-gray-500">{{ activeAnimalCaption.text }}</span>
+                  <!-- 表示順は「負荷重量 イラスト×倍数」（2026-09-11、初見で意味が伝わりづらい
+                       という指摘を受けた文言修正）。アイコンは「約◯匹(頭)分」→「×◯」に
+                       短縮した分の余白でひとまわり大きくしている（クジラの視認性が悪いという
+                       指摘、2026-09-11）。ラベル・アイコンはshrink-0+whitespace-nowrapで、
+                       右の倍数（幅固定）に押されて折り返さないようにする -->
+                  <span class="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-500"
+                    >負荷重量</span
+                  >
+                  <SeaAnimalIcon
+                    :name="activeAnimalCaption.animalKey"
+                    :alt="activeAnimalCaption.animalName"
+                    class="h-6 w-9 shrink-0"
+                  />
+                  <!-- 倍数はタブ（直近7日/直近28日/通算）を切り替えるたびに桁数が変わりうるが、
+                       それによってラベルやイラストの位置がずれないよう、幅を最大6桁
+                       （×99999.9想定）分で固定しtabular-numsで揃える（2026-09-11）。
+                       カード幅が狭いため、想定を超える桁数（7桁以上）のときだけ稀にカード端から
+                       はみ出す可能性があるが許容する -->
+                  <span
+                    class="w-16 shrink-0 whitespace-nowrap text-left text-xs font-semibold tabular-nums text-gray-500"
+                  >
+                    × {{ activeAnimalCaption.multiplierText }}
+                  </span>
                 </div>
-                <p v-else class="mt-1 text-xs text-gray-500">合計負荷重量</p>
+                <p v-else class="mt-1 text-xs text-gray-500">負荷重量</p>
               </div>
               <div>
                 <p class="text-2xl font-extrabold leading-none tabular-nums text-brand-700">
