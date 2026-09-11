@@ -12,6 +12,15 @@ export function todayLocalDateString(): string {
   return toLocalDateString(new Date())
 }
 
+// dateStringをdeltaDays日だけずらした暦日をYYYY-MM-DD形式で返す（負数で過去方向）。
+// weeklySummary.ts（暦週の計算）・trainingDays.ts/trainingVolume.ts
+//（ローリング期間の計算）の両方から使う共通ヘルパー
+export function shiftDate(dateString: string, deltaDays: number): string {
+  const date = new Date(`${dateString}T00:00:00`)
+  date.setDate(date.getDate() + deltaDays)
+  return toLocalDateString(date)
+}
+
 // ③記録作成（/workouts/new）の?date=クエリを解決する。
 // 形式が不正・実在しない暦日（2026-02-30等）・未来日のいずれかであれば今日にフォールバックする。
 // 未来日を弾くのはフロント側のガードのみ（バックエンドAPI側のバリデーションは今回のスコープ外。
