@@ -9,6 +9,19 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
   },
+  // トップ画面（WelcomeScreen）の見出しに、元画像のマーカー体に寄せたGoogle Fontsを使う（Issue #176）
+  app: {
+    head: {
+      link: [
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap',
+        },
+      ],
+    },
+  },
   // フロントとバックエンドを同一サイト（同一オリジン）に揃えるためのプロキシ設定。
   // CSRF対策をSameSite=Laxのみに絞れる前提を保つための構成（docs/schema.mdの
   // 「セキュリティ実装の優先度」参照）。本番も同一登録可能ドメイン配下に両方置く想定
