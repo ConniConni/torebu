@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ⑤ ルーティン一覧。よく使うメニューをテンプレート登録する画面の入口
-definePageMeta({ middleware: 'auth' })
+definePageMeta({ middleware: 'auth', layout: 'tabbar' })
 
 const { routines, pending, error, fetchRoutines, createRoutine, deleteRoutine } = useRoutines()
 if (!routines.value) {
@@ -49,12 +49,9 @@ async function onDeleteRoutine(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-gray-500">← ホームに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900">ルーティン</h1>
-      </div>
+      <h1 class="text-base font-semibold text-gray-900">ルーティン</h1>
 
       <form class="flex items-end gap-2" @submit.prevent="onCreate">
         <label class="flex flex-1 flex-col gap-1 text-sm text-gray-700">

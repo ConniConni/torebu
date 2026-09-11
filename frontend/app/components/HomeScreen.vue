@@ -196,7 +196,7 @@ async function onDeleteWorkout(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-900">{{ user?.displayName }}さん</p>
@@ -463,11 +463,13 @@ async function onDeleteWorkout(id: string) {
         </div>
       </template>
 
-      <!-- CTA・ナビ（ルーティン／統計／グループ）は、ホーム画面の「見る」情報（記録日数・
-           今週のサマリー・カレンダー・選択日の記録）より下に配置する（2026-09-09、Issue #153）。
-           カレンダーまでの距離が遠い問題への対応として、CTA・ナビを含めた全体の並び順を
+      <!-- CTA（今日の記録をつける）は、ホーム画面の「見る」情報（記録日数・今週のサマリー・
+           カレンダー・選択日の記録）より下に配置する（2026-09-09、Issue #153）。
+           カレンダーまでの距離が遠い問題への対応として、CTAを含めた全体の並び順を
            「見る情報を上・操作を下」に組み替えた。読み込み中・エラー時も含め常に表示したいため、
-           pending/errorの分岐の外に置く -->
+           pending/errorの分岐の外に置く。
+           ルーティン／統計／グループへのナビはIssue #174で下部固定タブバーに移したため、
+           ここにあった3列のリンクグリッドは廃止した -->
       <button
         type="button"
         class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white"
@@ -475,29 +477,6 @@ async function onDeleteWorkout(id: string) {
       >
         ＋今日の記録をつける
       </button>
-
-      <div class="grid grid-cols-3 gap-2">
-        <NuxtLink
-          to="/routines"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          ルーティン
-        </NuxtLink>
-
-        <NuxtLink
-          to="/stats"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          統計
-        </NuxtLink>
-
-        <NuxtLink
-          to="/groups"
-          class="rounded border border-brand-600 py-2 text-center text-sm font-semibold text-brand-600"
-        >
-          グループ
-        </NuxtLink>
-      </div>
     </div>
   </div>
 </template>
