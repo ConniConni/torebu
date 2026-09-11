@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Phase4: グループ一覧。所属グループの作成・一覧表示・招待コードで参加する画面への導線
-definePageMeta({ middleware: 'auth' })
+definePageMeta({ middleware: 'auth', layout: 'tabbar' })
 
 const { groups, pending, error, fetchGroups, createGroup } = useGroups()
 if (!groups.value) {
@@ -29,12 +29,9 @@ async function onCreate() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-gray-500">← ホームに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900">グループ</h1>
-      </div>
+      <h1 class="text-base font-semibold text-gray-900">グループ</h1>
 
       <NuxtLink
         to="/groups/join"

@@ -12,7 +12,7 @@ import {
 import { Line } from 'vue-chartjs'
 import type { StatsRange } from '~/composables/useStats'
 
-definePageMeta({ middleware: 'auth' })
+definePageMeta({ middleware: 'auth', layout: 'tabbar' })
 
 // Chart.js is tree-shakeable: 使う要素だけ明示的に登録する必要がある
 ChartJS.register(
@@ -111,12 +111,9 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-gray-500">← ホームに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900">統計</h1>
-      </div>
+      <h1 class="text-base font-semibold text-gray-900">統計</h1>
 
       <div class="flex overflow-hidden rounded-lg border border-brand-600">
         <button
