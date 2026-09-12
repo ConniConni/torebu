@@ -12,5 +12,5 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["src", "prisma7.config.ts", "vitest.config.ts"]
+  "include": ["src", "api", "prisma7.config.ts", "vitest.config.ts"]
 }

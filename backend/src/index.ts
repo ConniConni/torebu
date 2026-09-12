@@ -11,6 +11,10 @@ import { notificationsRouter } from './routes/notifications.js'
 
 export const app = express()
 
+// Vercelのプロキシ配下で動くため必須（X-Forwarded-*ヘッダーを信頼し、
+// req.secure・req.ipやセッションCookieのsecure判定を正しく行えるようにする）
+app.set('trust proxy', 1)
+
 app.use(express.json())
 app.use(sessionMiddleware)
 
@@ -28,7 +32,9 @@ app.use('/notifications', notificationsRouter)
 
 const port = process.env.PORT ?? 3001
 
-if (process.env.NODE_ENV !== 'test') {
+// Vercel環境ではサーバーレス関数（api/index.ts）がappをそのままexportして使うため、
+// ここでlistenしない（listenするとデプロイ時にエラーになる）
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`backend server listening on port ${port}`)
   })
