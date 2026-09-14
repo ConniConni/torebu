@@ -341,13 +341,11 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   → Vercel対応（[Issue #181](https://github.com/ConniConni/torebu/issues/181)）で
   `app.set('trust proxy', 1)`を追加し解消（2026-09-12）。ローカルでもNitro（Nuxt開発サーバ）
   だけがExpressに直接到達できる構成のため、1ホップ分の`X-Forwarded-For`を信頼しても安全と判断した
-- **`backend/src/routes/exercises.ts:135`の型エラーで`npm run typecheck`・`npm run build`が
-  失敗する**（2026-09-12、Vercel対応作業中に発見。今回のPRでは無関係のため未修正）。
-  `req.params.id`の型が`string | string[]`と推論され、Prismaの`where: { id: ... }`
-  （`string | StringFilter`期待）に代入できずエラーになる。Express・`@types/express`の
-  バージョン更新で型定義が変わった可能性がある。実行時の動作には影響していない（テスト204件は
-  全て通っている）が、型チェックが壊れている状態が放置されている
-  - **再検討のタイミング**：次にこのファイルを触るとき、またはCI導入時（型チェックが必須になる）
+- ~~**`backend/src/routes/exercises.ts:135`の型エラーで`npm run typecheck`・`npm run build`が
+  失敗する**~~（2026-09-12発見）→ 実際にVercelへデプロイして初めて判明したのだが、この型エラーは
+  ローカルの`tsc --noEmit`だけでなく**Vercel Functionsのビルド（`api/index.ts`から辿れる全ファイルの
+  型チェック）も落とす実害あり**だった（他のroutes/*.tsは`req.params.id as string`のキャストで
+  回避済みだったが、exercises.tsだけキャスト漏れだった）。同じキャストを追加して解消（2026-09-12）
 - **`backend`の`npm test`（Vitest）が、実行のたびに違うテストファイルで1件だけランダムに失敗して
   いた**（2026-09-12発見、[Issue #183](https://github.com/ConniConni/torebu/issues/183)で調査・対応）。
   観測した失敗例：`notifications.test.ts`のgroupId判定、`routines.test.ts`のGET一覧・DELETE、
