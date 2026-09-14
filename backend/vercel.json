@@ -1,4 +1,8 @@
 {
+  "framework": null,
   "buildCommand": "npm run vercel-build",
+  "functions": {
+    "api/index.ts": {}
+  },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
