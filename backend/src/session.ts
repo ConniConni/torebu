@@ -10,8 +10,14 @@ declare module 'express-session' {
 
 // セッションの実体（sid/sess/expire）はこのプールで直接管理する。
 // Prismaのマイグレーション管理外（経緯はdocs/schema.mdの「設計方針メモ」参照）
+//
+// 本番のDATABASE_URLはNeonのプール接続用エンドポイント（PgBouncer経由、ホスト名に
+// -poolerが付く方）を使う前提。Vercelのサーバーレス関数は複数インスタンスが同時に
+// 起動しうるため、インスタンスごとのプールのmaxは小さく絞る（PgBouncerがトランザクション
+// モードで動く場合、1コネクションあたり同時に持てるサーバー側接続は実質1つのため）
 const sessionPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 1,
 })
 
 const sessionSecret = process.env.SESSION_SECRET

@@ -146,10 +146,12 @@
 > 「③リリース前確認事項の棚卸し」（本ファイル上部）と重複する項目もあるが、着手時に迷わないよう
 > ホスティング関連も含めて1箇所にまとめ直したもの。実装したら都度チェックを付ける想定
 
-- [ ] Expressをサーバーレス関数（Vercel Functions）として動かせる形に対応させる
+- [x] Expressをサーバーレス関数（Vercel Functions）として動かせる形に対応させる
+      （[Issue #181](https://github.com/ConniConni/torebu/issues/181)、`backend/api/index.ts`＋`backend/vercel.json`）
 - [ ] `express-session`＋`connect-pg-simple`がサーバーレス環境で問題なく動くか検証する
-      （Neonのプール接続文字列を使う想定）
-- [ ] `trust proxy`を設定する（Vercelのプロキシ配下で動くため必須。既出の技術的負債）
+      （Neonのプール接続文字列を使う想定。コード側の対応（Poolの`max`を絞る等）は完了、
+      実際のVercelプレビュー環境での動作確認はこれから）
+- [x] `trust proxy`を設定する（Vercelのプロキシ配下で動くため必須。既出の技術的負債）
 - [ ] 環境変数（`DATABASE_URL`・セッションシークレット等）をVercel側に設定する
 - [ ] 利用規約・プライバシーポリシーページと新規登録時の同意チェックボックス（③棚卸しの既出項目、優先度高）
 - [ ] `member_limit`のデフォルト値が5になっているか確認する（バックログ「収益化の方針」節で決定済み）
@@ -334,18 +336,16 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   伸び続ける設計のため、いずれ`performedAt`の範囲指定クエリパラメータをAPI側に追加する必要がある
   - **再検討のタイミング**：実際に一覧取得が重いと感じるようになったタイミング。それまでは
     件数が少なく実害が出にくいため、無理に先取りで実装しない
-- **ログイン試行時、バックエンドのログに`express-rate-limit`の`ValidationError`
-  （`ERR_ERL_UNEXPECTED_X_FORWARDED_FOR`）が出る**（2026-09-05、ローカル開発中に発見）。
-  [auth.ts](../backend/src/routes/auth.ts)の`loginRateLimiter`（IPベースの総当たり対策）が、
-  `X-Forwarded-For`ヘッダは付いているのにExpress側の`trust proxy`が未設定（デフォルト`false`）な
-  ことを検知して警告している。ローカル開発ではNuxt開発サーバ（Nitro）がAPI呼び出しをバックエンドへ
-  中継する際にこのヘッダを付与しているのが原因。例外ではなく警告のみでログイン自体は失敗しないため
-  実害は無いが、`trust proxy`が未設定のままだと`req.ip`は常にNuxt側のIPになり、実クライアントIP単位の
-  レート制限になっていない
-  - **再検討のタイミング**：本番でリバースプロキシを挟む構成になり、環境ごとに`trust proxy`を
-    正しく設定する必要が出たタイミング。ローカルでは信頼すべきでないヘッダのため、今`trust proxy`を
-    有効にするのは逆にリスクがあり、先取りしない
-
+- ~~**ログイン試行時、バックエンドのログに`express-rate-limit`の`ValidationError`
+  （`ERR_ERL_UNEXPECTED_X_FORWARDED_FOR`）が出る**~~（2026-09-05、ローカル開発中に発見）
+  → Vercel対応（[Issue #181](https://github.com/ConniConni/torebu/issues/181)）で
+  `app.set('trust proxy', 1)`を追加し解消（2026-09-12）。ローカルでもNitro（Nuxt開発サーバ）
+  だけがExpressに直接到達できる構成のため、1ホップ分の`X-Forwarded-For`を信頼しても安全と判断した
+- ~~**`backend/src/routes/exercises.ts:135`の型エラーで`npm run typecheck`・`npm run build`が
+  失敗する**~~（2026-09-12発見）→ 実際にVercelへデプロイして初めて判明したのだが、この型エラーは
+  ローカルの`tsc --noEmit`だけでなく**Vercel Functionsのビルド（`api/index.ts`から辿れる全ファイルの
+  型チェック）も落とす実害あり**だった（他のroutes/*.tsは`req.params.id as string`のキャストで
+  回避済みだったが、exercises.tsだけキャスト漏れだった）。同じキャストを追加して解消（2026-09-12）
 - **`backend`の`npm test`（Vitest）が、実行のたびに違うテストファイルで1件だけランダムに失敗して
   いた**（2026-09-12発見、[Issue #183](https://github.com/ConniConni/torebu/issues/183)で調査・対応）。
   観測した失敗例：`notifications.test.ts`のgroupId判定、`routines.test.ts`のGET一覧・DELETE、

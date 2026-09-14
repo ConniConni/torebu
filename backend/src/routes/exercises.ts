@@ -132,7 +132,7 @@ exercisesRouter.delete('/:id', requireAuth, async (req, res) => {
   const userId = req.session.userId
 
   const exercise = await prisma.exercise.findFirst({
-    where: { id: req.params.id, createdBy: userId, deletedAt: null },
+    where: { id: req.params.id as string, createdBy: userId, deletedAt: null },
   })
   if (!exercise) {
     res.status(404).json({ error: 'not_found' })
