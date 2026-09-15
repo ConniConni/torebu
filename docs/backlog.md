@@ -148,17 +148,50 @@
 
 - [x] Expressをサーバーレス関数（Vercel Functions）として動かせる形に対応させる
       （[Issue #181](https://github.com/ConniConni/torebu/issues/181)、`backend/api/index.ts`＋`backend/vercel.json`）
-- [ ] `express-session`＋`connect-pg-simple`がサーバーレス環境で問題なく動くか検証する
-      （Neonのプール接続文字列を使う想定。コード側の対応（Poolの`max`を絞る等）は完了、
-      実際のVercelプレビュー環境での動作確認はこれから）
+- [x] `express-session`＋`connect-pg-simple`がサーバーレス環境で問題なく動くか検証する
+      （2026-09-15、Vercel本番環境で新規登録→SPA内遷移→フルリロード→ログアウト→再ログインを実機確認済み）
 - [x] `trust proxy`を設定する（Vercelのプロキシ配下で動くため必須。既出の技術的負債）
-- [ ] 環境変数（`DATABASE_URL`・セッションシークレット等）をVercel側に設定する
+- [x] 環境変数（`DATABASE_URL`・セッションシークレット等）をVercel側に設定する
 - [ ] 利用規約・プライバシーポリシーページと新規登録時の同意チェックボックス（③棚卸しの既出項目、優先度高）
 - [ ] `member_limit`のデフォルト値が5になっているか確認する（バックログ「収益化の方針」節で決定済み）
 - [ ] Neon Freeプランのバックアップ制約（PITR6時間のみ）を認識した上でリリースする（対応は不要、認識のみ）
 - [ ] 独自ドメインは取得しない（無料サブドメインで運用開始。取得タイミングは本節「ドメイン方針」参照）
-- [ ] 実際のブラウザ操作（SPA内遷移）で主要フローを一通り確認する（`CLAUDE.md`のセルフチェック方針に沿う）
+- [x] 実際のブラウザ操作（SPA内遷移）で主要フローを一通り確認する（`CLAUDE.md`のセルフチェック方針に沿う）
 - [ ] （任意・優先度低）CI（GitHub Actions）・エラー監視（Sentry等）の導入は別Issueとして切り出すか判断する
+- [ ] **本番DBへのマイグレーション適用**（`prisma migrate deploy`）を、新しいNeonプロジェクトを作るたびに
+      忘れず実施する（2026-09-15、初回デプロイ時にテーブル未作成のまま登録APIが500になり発覚。
+      下記「Vercel実デプロイで分かったこと」参照）
+
+### Vercel実デプロイで分かったこと（2026-09-15、初回リリース作業）
+
+> Issue #181（PR #186・#187）のコード対応だけでは気づけず、実際にVercelアカウントを作って
+> デプロイして初めて判明した問題をまとめる。次回another projectでVercel+Express構成を
+> 組むときの参考用
+
+- **Vercelの「Framework Preset: Express」がsrc/index.tsを勝手に関数化しようとして落ちる**：
+  `express`が依存関係にあると、Vercelは自動でExpress用のサーバーレス関数を組み立てようとする。
+  こちらは独自に`backend/api/index.ts`（`export default app`）＋`vercel.json`のrewritesで
+  経路を用意していたが、それとは別にVercelが`backend/src/index.ts`（named exportの`app`しか
+  無く、default exportが無い）を直接ラップしようとして`FUNCTION_INVOCATION_FAILED`になった。
+  ダッシュボードでFramework Presetを`Other`に変更・保存しても解消せず、最終的に`vercel.json`に
+  `"functions": { "api/index.ts": { "maxDuration": 10 } }`を明示して回避した
+  （`functions`のオブジェクトを空`{}`にすると別のバリデーションエラーになるため、
+  何らかのプロパティを持たせる必要がある点も注意）
+- **独自のbuildCommandを設定すると「public」ディレクトリが無いと怒られる**：APIのみ（静的な
+  出力が無い）プロジェクトでも、Vercelはbuild commandが設定されている（自動検出された
+  `package.json`の`build`スクリプト含む）と静的サイトの出力ディレクトリを期待してしまう。
+  `vercel.json`で`"buildCommand": ""`と明示して回避した。`prisma generate`は
+  `postinstall`スクリプト（npm installで常に実行される）に任せることで、buildCommandを
+  空にしても問題なく動いた
+- **新しいNeonプロジェクトにはテーブルが1つも無い**：ローカルはDocker起動時に
+  `prisma migrate dev`で自動的にできていたため見落としがちだが、Neon側は
+  `prisma migrate deploy`を手動で実行するまで空のまま。忘れると全APIが
+  「table does not exist」で500になる
+- **Neonのプロジェクトを操作中に誤って重複作成してしまった**：接続文字列を探す過程で
+  誤操作し、意図したSingapore以外にSydneyのプロジェクトも作られていた。実際にVercelの
+  `DATABASE_URL`に設定されていたのはSydneyの方だった（先に作った方が採用されていた）。
+  Neonのプロジェクト作成画面は目立つ場所にあるため、接続文字列を探すときは
+  誤って新規作成ボタンを押していないか注意する
 
 ### リリース作業の概要・流れ（着手時の見通し用メモ）
 
@@ -391,6 +424,19 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
 
 > 対応の是非は判断済み・未判断どちらもあるが、いずれも「今すぐ動かす材料が無い／今動かすと逆に
 > リスクがある」ため、明示されたトリガーが来るまで意図的に据え置いている項目。
+
+- **PreviewデプロイがProductionと同じNeonデータベースを見ている**（2026-09-15、初回本番デプロイ後に発覚）：
+  Vercelの環境変数`DATABASE_URL`をProduction・Preview両方に同じ値（Neonの本番接続文字列）で設定した
+  ため、PRのブランチごとに作られるPreview環境で動作確認をすると、本番の実データベースに直接
+  読み書きすることになる。今は実ユーザーがいないため実害は無いが、将来的には別対応が必要になる
+  - **対応候補**：Neonの「ブランチ」機能（Gitのブランチと同じ発想で、実データをコピーせず差分だけ
+    持つ軽量なDBのコピー）を使い、PreviewデプロイごとにNeon側のブランチを分ける。VercelとNeonには
+    公式の連携機能があり、Preview作成のたびに自動でNeonブランチを作ってくれる
+  - **費用面**：Neonの無料プランには複数ブランチを作れる枠が最初から含まれており、追加の金銭的
+    コストは基本的に発生しない見込み（実際、プロジェクトを2つ作った時点でも無料枠内に収まっている）。
+    かかるとすればVercel-Neon連携の設定作業そのものの手間
+  - **再検討のタイミング**：実ユーザーが使い始める前、または実際にPreview環境での動作確認が
+    本番データを汚してしまう事故が起きたとき
 
 - **未ログイン時トップ画面（`WelcomeScreen.vue`）のPC向けレイアウト**（Issue #151、2026-09-09）：
   今回はスマホ幅（320〜430px程度）でのレスポンシブ対応のみをスコープにした。PC幅ではイラストが
