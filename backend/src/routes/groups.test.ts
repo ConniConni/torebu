@@ -55,7 +55,7 @@ async function createGroup(overrides: {
       name: 'ベンチプレス部',
       createdBy,
       inviteCode: overrides.inviteCode ?? `invite-${Math.random().toString(36).slice(2)}`,
-      memberLimit: overrides.memberLimit ?? 10,
+      memberLimit: overrides.memberLimit ?? 5,
       inviteExpiresAt: overrides.inviteExpiresAt,
     },
   })
@@ -93,7 +93,7 @@ describe('POST /groups', () => {
     expect(res.body).toEqual({
       id: expect.any(String),
       name: 'ベンチプレス部',
-      memberLimit: 10,
+      memberLimit: 5,
       inviteCode: expect.any(String),
       inviteExpiresAt: expect.any(String),
       createdAt: expect.any(String),

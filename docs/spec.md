@@ -960,7 +960,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` はサーバー採番 |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |
 | `routine_exercises` | ルーティンに入っている種目と並び順 | `target_sets`（jsonb、nullable）に目安セット（重量・回数の配列）を持てる。未設定は`null`（APIレスポンスでは`[]`に正規化。§4-2参照） |
-| `groups`（Phase4） | グループ本体 | `invite_code`は英数字約32文字（`crypto.randomBytes`によるbase64url）で`UNIQUE`。`invite_expires_at`は発行/再発行のたびに現在時刻+30日で更新（§3-1「グループ機能の実装メモ」参照）。`member_limit`はデフォルト10（将来課金で拡張、Phase5）。**`deleted_at`を持つ（ソフトデリート）**、削除は`role: owner`のメンバーのみ実行可 |
+| `groups`（Phase4） | グループ本体 | `invite_code`は英数字約32文字（`crypto.randomBytes`によるbase64url）で`UNIQUE`。`invite_expires_at`は発行/再発行のたびに現在時刻+30日で更新（§3-1「グループ機能の実装メモ」参照）。`member_limit`はデフォルト5（将来課金で拡張、Phase5。詳細は`docs/backlog.md`「収益化」参照）。**`deleted_at`を持つ（ソフトデリート）**、削除は`role: owner`のメンバーのみ実行可 |
 | `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
 | `reactions`（Phase4） | いいね | `target_type`（enum：`workout`/`workout_set`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)、`workout_set`/`topic_post`は対象UI未実装）。`target_id`はFK制約なし（対象が`target_type`によって変わるため）、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`UNIQUE(target_type, target_id, user_id)`で1人1いいねを保証 |
 | `comments`（Phase4） | コメント | `target_type`（enum：`workout`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #142](https://github.com/ConniConni/torebu/issues/142)、`topic_post`は対象UI未実装）。`target_id`はFK制約なし、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`reactions`と異なり1人が複数回投稿できるため`UNIQUE`制約は無い |
