@@ -7,6 +7,7 @@ const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
 const isSubmitting = ref(false)
+const isPasswordVisible = ref(false)
 
 async function onSubmit() {
   errorMessage.value = ''
@@ -46,14 +47,25 @@ async function onSubmit() {
           <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
             パスワード
           </label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            required
-            autocomplete="current-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <div class="relative">
+            <input
+              id="password"
+              v-model="password"
+              :type="isPasswordVisible ? 'text' : 'password'"
+              required
+              autocomplete="current-password"
+              class="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              :aria-label="isPasswordVisible ? 'パスワードを非表示にする' : 'パスワードを表示する'"
+              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+              @click="isPasswordVisible = !isPasswordVisible"
+            >
+              <EyeSlashIcon v-if="isPasswordVisible" class="h-5 w-5" />
+              <EyeIcon v-else class="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
