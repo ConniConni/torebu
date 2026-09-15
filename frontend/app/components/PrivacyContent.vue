@@ -5,7 +5,7 @@
 <template>
   <div>
     <p class="mb-1 text-xl font-bold text-gray-900">プライバシーポリシー</p>
-    <p class="mb-6 text-xs text-gray-500">最終更新日：2026年9月9日</p>
+    <p class="mb-6 text-xs text-gray-500">最終更新日：2026年9月15日</p>
 
     <div class="space-y-6 text-sm leading-relaxed text-gray-700">
       <section>
@@ -19,7 +19,7 @@
         <h2 class="mb-2 font-semibold text-gray-900">1. 運営者情報</h2>
         <p>
           運営者：トレ部 運用事務局<br />
-          お問い合わせ先：torebu@gmail.com
+          お問い合わせ先：torebu1442@gmail.com
         </p>
       </section>
 
