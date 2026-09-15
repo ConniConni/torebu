@@ -1,6 +1,6 @@
 {
   "buildCommand": "",
-  "regions": ["syd1"],
+  "regions": ["sin1"],
   "functions": {
     "api/index.ts": {
       "maxDuration": 10
