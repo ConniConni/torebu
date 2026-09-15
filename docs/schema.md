@@ -74,7 +74,7 @@ groups
   created_by         uuid FK -> users        -- 作成者の記録用、権限とは別
   invite_code        text UNIQUE       -- 暗号学的乱数の英数字32文字程度
   invite_expires_at  timestamptz null    -- 再発行のたびに更新
-  member_limit       int  default 10  -- 課金で拡張
+  member_limit       int  default 5  -- 課金で拡張
   created_at         timestamptz
   updated_at         timestamptz
   deleted_at         timestamptz null  -- ソフトデリート。オーナーのみ実行可

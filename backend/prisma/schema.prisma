@@ -175,7 +175,7 @@ model Group {
   createdBy       String    @map("created_by") // 作成者の記録用。権限判定はGroupMember.roleを見る
   inviteCode      String    @unique @map("invite_code") // 暗号学的乱数の英数字32文字程度
   inviteExpiresAt DateTime? @map("invite_expires_at") @db.Timestamptz(3) // 再発行のたびに更新
-  memberLimit     Int       @default(10) @map("member_limit") // 課金で拡張(Phase5)
+  memberLimit     Int       @default(5) @map("member_limit") // 課金で拡張(Phase5)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。ownerのみ実行可
