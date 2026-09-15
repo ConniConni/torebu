@@ -289,6 +289,16 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   で修正した。利用規約・プライバシーポリシーの両リンクを一度でも開く（クリックする）まで同意チェックボックスを
   `disabled`にする（`hasViewedTerms`・`hasViewedPrivacy`のフラグで判定）。ページ内の状態のみで、
   永続化はしていない（リロードすると再度開き直す必要がある）
+- 当初は`target="_blank"`で別タブに`/terms`・`/privacy`を開く実装だったが、別タブが開けない環境
+  （アプリ内ブラウザ等）では同一タブでフルページ遷移してしまい、登録フォームの入力内容・同意チェック
+  状態が失われて登録が完了できない不具合があった。[Issue #189](https://github.com/ConniConni/torebu/issues/189)
+  で、①新規登録画面上でのモーダル表示（[TermsPrivacyModal.vue](../frontend/app/components/TermsPrivacyModal.vue)）
+  に変更した。ページ遷移自体をなくすことで新規タブの可否に依存しなくなる。モーダルを開いた時点で
+  `hasViewedTerms`・`hasViewedPrivacy`を更新する挙動は維持している
+  - 本文（[TermsContent.vue](../frontend/app/components/TermsContent.vue)・
+    [PrivacyContent.vue](../frontend/app/components/PrivacyContent.vue)）はページ（`/terms`・`/privacy`）と
+    モーダルの両方から共用する。`/terms`・`/privacy`はログイン後の参照等`/register`以外からもアクセスされる
+    独立ページとして維持している
 - ページ文面（収集目的・運営者情報等）はClaudeが作成したたたき台であり、法的な専門知識を要するため
   ユーザーの確認・修正を前提とする（`CLAUDE.md`のセルフチェック方針の例外）
 

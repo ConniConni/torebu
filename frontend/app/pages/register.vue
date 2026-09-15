@@ -35,10 +35,20 @@ const occupation = ref<Occupation | ''>('')
 const agreedToTerms = ref(false)
 
 // リンクを開かずに同意チェックができてしまう問題への対応（Issue #163）。
-// 両方のリンクを一度でも開く（クリックする）までチェックボックスをdisabledにする
+// 両方を一度でも開くまでチェックボックスをdisabledにする
 const hasViewedTerms = ref(false)
 const hasViewedPrivacy = ref(false)
 const canAgreeToTerms = computed(() => hasViewedTerms.value && hasViewedPrivacy.value)
+
+// 利用規約・プライバシーポリシーの確認はモーダル表示にする（Issue #189）。
+// 別タブ(target="_blank")での確認は、別タブが開けない環境で同一タブ遷移になり登録フォームの
+// 状態が失われる不具合があったため、ページ遷移自体をなくした
+const openTermsModal = ref<'terms' | 'privacy' | null>(null)
+function showTermsModal(type: 'terms' | 'privacy') {
+  openTermsModal.value = type
+  if (type === 'terms') hasViewedTerms.value = true
+  else hasViewedPrivacy.value = true
+}
 
 async function onSubmit() {
   errorMessage.value = ''
@@ -225,23 +235,21 @@ async function onSubmit() {
               class="mt-0.5 disabled:cursor-not-allowed"
             />
             <span>
-              <NuxtLink
-                to="/terms"
-                target="_blank"
-                class="text-brand-600 hover:underline"
-                @click="hasViewedTerms = true"
+              <button
+                type="button"
+                class="inline border-0 bg-transparent p-0 text-brand-600 hover:underline"
+                @click="showTermsModal('terms')"
               >
                 利用規約
-              </NuxtLink>
+              </button>
               ・
-              <NuxtLink
-                to="/privacy"
-                target="_blank"
-                class="text-brand-600 hover:underline"
-                @click="hasViewedPrivacy = true"
+              <button
+                type="button"
+                class="inline border-0 bg-transparent p-0 text-brand-600 hover:underline"
+                @click="showTermsModal('privacy')"
               >
                 プライバシーポリシー
-              </NuxtLink>
+              </button>
               に同意する
             </span>
           </label>
@@ -249,6 +257,12 @@ async function onSubmit() {
             利用規約・プライバシーポリシーの両方を開くと、同意にチェックできるようになります
           </p>
         </div>
+
+        <TermsPrivacyModal
+          v-if="openTermsModal"
+          :type="openTermsModal"
+          @close="openTermsModal = null"
+        />
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
 
