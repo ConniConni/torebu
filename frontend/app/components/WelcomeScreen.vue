@@ -4,6 +4,9 @@
 // （Issue #176）。画像に文字を焼き込んで全画面objectcoverする方式だと、画面比率によって
 // 文字が見切れたり、絶対座標で重ねたボタンと画像内の文字が重なったりする問題があったため
 import topIllustration from '~/assets/images/top_illustration.jpeg'
+
+// トレ部でできることを4枚のスクリーンショットで説明するオンボーディングモーダル（Issue #200）
+const isOnboardingOpen = ref(false)
 </script>
 
 <template>
@@ -94,7 +97,15 @@ import topIllustration from '~/assets/images/top_illustration.jpeg'
           </p>
         </div>
 
-        <div class="mt-4 flex gap-3">
+        <button
+          type="button"
+          class="mt-4 block text-sm font-semibold text-white underline underline-offset-2"
+          @click="isOnboardingOpen = true"
+        >
+          トレ部でできることを見る →
+        </button>
+
+        <div class="mt-3 flex gap-3">
           <NuxtLink
             to="/login"
             class="flex-1 rounded-full bg-white py-2.5 text-center text-sm font-semibold text-brand-700 shadow"
@@ -110,5 +121,7 @@ import topIllustration from '~/assets/images/top_illustration.jpeg'
         </div>
       </div>
     </div>
+
+    <OnboardingModal v-if="isOnboardingOpen" @close="isOnboardingOpen = false" />
   </div>
 </template>
