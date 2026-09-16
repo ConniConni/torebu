@@ -240,6 +240,7 @@ async function onDeleteExercise(id: string) {
       :main-muscle="highlightExercise.mainMuscle"
       :related-muscles="highlightExercise.relatedMuscles"
       :main-zone="highlightExercise.mainZone"
+      :gender="user?.gender"
       @close="highlightExercise = null"
     />
   </div>

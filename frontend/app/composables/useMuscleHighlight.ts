@@ -1,5 +1,10 @@
 import { mainMuscleToSlug, relatedMuscleToSlugZone, type MuscleZone } from '~/utils/muscleSlugs'
-import { computeHighlightMaps, type HighlightExercise, type SideMaps } from '~/utils/muscleHighlightSvg'
+import {
+  computeHighlightMaps,
+  type HighlightExercise,
+  type HighlightGender,
+  type SideMaps,
+} from '~/utils/muscleHighlightSvg'
 
 export interface HighlightSource {
   mainMuscle: string | null
@@ -20,7 +25,13 @@ const EMPTY_SIDE: SideMaps = { intensityMap: {}, zoneSpecs: [], labelMap: {}, ac
 // exercises APIのmainMuscle/relatedMuscles/mainZone(日本語文字列)から、
 // 前面/背面それぞれの発光・ラベル指定を計算する。
 // showRelatedがfalseなら関連筋を含めない(主働筋のみ表示)
-export function useMuscleHighlight(source: HighlightSource, showRelated: boolean): MuscleHighlightResult {
+// genderは表示するSVGの男性図/女性図の判定にのみ使う(front/backのslug集合が図によって
+// 微妙に異なるため、活性判定=activeの計算に影響する。Issue #202)
+export function useMuscleHighlight(
+  source: HighlightSource,
+  showRelated: boolean,
+  gender: HighlightGender = null,
+): MuscleHighlightResult {
   if (!source.mainMuscle) {
     return { hasHighlightData: false, front: EMPTY_SIDE, back: EMPTY_SIDE }
   }
@@ -43,6 +54,6 @@ export function useMuscleHighlight(source: HighlightSource, showRelated: boolean
     related,
   }
 
-  const { front, back } = computeHighlightMaps(highlightExercise, showRelated)
+  const { front, back } = computeHighlightMaps(highlightExercise, showRelated, gender)
   return { hasHighlightData: true, front, back }
 }
