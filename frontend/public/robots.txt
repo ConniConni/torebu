@@ -1,2 +1,8 @@
 User-Agent: *
-Disallow:
+Disallow: /groups
+Disallow: /workouts
+Disallow: /stats
+Disallow: /routines
+Disallow: /notifications
+
+Sitemap: https://torebu-7gf1.vercel.app/sitemap.xml
