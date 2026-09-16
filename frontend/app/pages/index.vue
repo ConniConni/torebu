@@ -10,6 +10,23 @@ const { user, fetchMe } = useAuth()
 if (!user.value) {
   await fetchMe()
 }
+
+// 未ログイン時のみサービス紹介用のメタ情報を出す（検索エンジン・SNSシェア向け。Issue #204）。
+// ログイン中は従来通りアプリのホーム画面として扱い、タイトルは変えない
+// og:imageはOpen Graphの仕様上、相対パスだとSNS側で読み込めないため絶対URLにする
+const ogImageUrl = new URL('/images/og-image.jpeg', useRequestURL().origin).href
+useSeoMeta({
+  title: user.value ? undefined : 'トレ部 | 仲間と筋トレを記録・応援しあうアプリ',
+  description: user.value
+    ? undefined
+    : 'トレ部は、部活・筋トレ仲間などクローズドなグループでトレーニング記録にリアクション・コメントし合いながらランキングで競い合える、交流特化のトレーニング記録アプリです。',
+  ogTitle: user.value ? undefined : 'トレ部 | 仲間と筋トレを記録・応援しあうアプリ',
+  ogDescription: user.value
+    ? undefined
+    : '仲間と一緒に、あなたの筋トレをもっと楽しく。トレーニング記録にリアクション・コメントし合いながらランキングで競い合えるアプリです。',
+  ogImage: user.value ? undefined : ogImageUrl,
+  twitterCard: user.value ? undefined : 'summary_large_image',
+})
 </script>
 
 <template>
