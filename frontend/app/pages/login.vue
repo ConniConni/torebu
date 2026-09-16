@@ -26,6 +26,7 @@ async function onSubmit() {
 <template>
   <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4">
     <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow">
+      <NuxtLink to="/" class="mb-4 inline-block text-sm text-gray-500">← トップに戻る</NuxtLink>
       <h1 class="mb-6 text-center text-xl font-bold text-gray-900">ログイン</h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
