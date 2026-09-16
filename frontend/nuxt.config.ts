@@ -12,6 +12,9 @@ export default defineNuxtConfig({
   // トップ画面（WelcomeScreen）の見出しに、元画像のマーカー体に寄せたGoogle Fontsを使う（Issue #176）
   app: {
     head: {
+      // 全ページ共通のデフォルトタイトル（未設定だとブラウザタブが無題になるため。Issue #204）。
+      // 未ログイン時のトップページはpages/index.vue側でuseSeoMetaによりサービス紹介用に上書きする
+      title: 'トレ部',
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
