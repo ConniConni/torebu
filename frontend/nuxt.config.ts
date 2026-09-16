@@ -15,6 +15,11 @@ export default defineNuxtConfig({
       // 全ページ共通のデフォルトタイトル（未設定だとブラウザタブが無題になるため。Issue #204）。
       // 未ログイン時のトップページはpages/index.vue側でuseSeoMetaによりサービス紹介用に上書きする
       title: 'トレ部',
+      meta: [
+        // Google Search Consoleの所有権確認用（Issue #208）。Vercelの無料サブドメイン運用で
+        // DNS設定ができないため、HTMLタグ方式で確認している
+        { name: 'google-site-verification', content: 'n-x0E8rYMi2AYod2Vw8NeIn_gTK9dqd3iq-OsZ2pPmA' },
+      ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },

@@ -178,6 +178,14 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす（`/`自体は対象外。下記参照）
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
 
+**Google検索対応（Issue #208）**
+- `frontend/public/sitemap.xml`には`auth`ミドルウェアの無い公開ページ（`/`・`/login`・`/register`・
+  `/terms`・`/privacy`）だけを載せる。`auth`が付いている非公開ページは`robots.txt`で個別に`Disallow`
+  にしてクロール対象から外す
+- Google Search Consoleの所有権確認用meta タグ（`google-site-verification`）は
+  [nuxt.config.ts](../frontend/nuxt.config.ts)に置く。Vercelの無料サブドメイン運用でDNS設定ができない
+  ため、HTMLタグ方式で確認している
+
 **下部固定タブバー（Issue #174）**
 - 主ナビゲーション（ホーム／ルーティン／統計／グループを行き来する導線）は下部固定タブバーに
   統一した。上部ヘッダーは主ナビを持たず、通知ベル・戻るリンク・タイトルなど画面固有の軽量な
