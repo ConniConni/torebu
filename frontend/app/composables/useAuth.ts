@@ -2,6 +2,8 @@ interface AuthUser {
   id: string
   email: string
   displayName: string
+  // Issue #158より前に登録したユーザーはnullのままの場合がある
+  gender: 'male' | 'female' | 'other' | 'no_answer' | null
 }
 
 interface RegisterPayload {
