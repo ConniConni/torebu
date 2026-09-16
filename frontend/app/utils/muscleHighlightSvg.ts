@@ -5,8 +5,10 @@
 // （経緯はdocs/muscle-highlight.md、決定経緯の詳細は元プロジェクトのdecision_log.md 31〜42節参照）。
 //
 // torebuは常時ライト背景のUIのため、プロトタイプのダーク/ライト切替のうちライト用パラメータのみを移植した
-// （ダーク/ライト・男性/女性図の切替はPhase2のスコープ外。docs/muscle-highlight.md参照）。
-import bodySvgData from '~/assets/data/muscle-body-svg.json'
+// （ダーク/ライトテーマの切替はPhase2のスコープ外。男性/女性図の切替はIssue #202で対応済み。
+// docs/muscle-highlight.md参照）。
+import bodySvgDataMale from '~/assets/data/muscle-body-svg.json'
+import bodySvgDataFemale from '~/assets/data/muscle-body-svg-female.json'
 import type { MuscleZone, SlugZone } from '~/utils/muscleSlugs'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -24,14 +26,33 @@ interface BodySvgData {
   viewBox: { front: string; back: string }
 }
 
-export const BODY_SVG_DATA = bodySvgData as BodySvgData
+// 新規登録の性別選択(Gender enum)のうち、女性図を使うのは"female"のみ。
+// male/other/no_answerは男性図にフォールバックする（女性図はプロトタイプにmale/femaleの
+// 2種類しか無いため）
+export type HighlightGender = 'male' | 'female' | 'other' | 'no_answer' | null | undefined
 
-export const FRONT_SLUGS = new Set(
-  BODY_SVG_DATA.front.map((p) => p.slug).filter((s) => s !== 'hair' && s !== 'head'),
-)
-export const BACK_SLUGS = new Set(
-  BODY_SVG_DATA.back.map((p) => p.slug).filter((s) => s !== 'hair' && s !== 'head'),
-)
+const BODY_SVG_DATA_MALE = bodySvgDataMale as BodySvgData
+const BODY_SVG_DATA_FEMALE = bodySvgDataFemale as BodySvgData
+
+export function getBodySvgData(gender: HighlightGender): BodySvgData {
+  return gender === 'female' ? BODY_SVG_DATA_FEMALE : BODY_SVG_DATA_MALE
+}
+
+function slugsOf(data: BodySvgData, side: 'front' | 'back'): Set<string> {
+  return new Set(data[side].map((p) => p.slug).filter((s) => s !== 'hair' && s !== 'head'))
+}
+
+export const FRONT_SLUGS = slugsOf(BODY_SVG_DATA_MALE, 'front')
+export const BACK_SLUGS = slugsOf(BODY_SVG_DATA_MALE, 'back')
+const FRONT_SLUGS_FEMALE = slugsOf(BODY_SVG_DATA_FEMALE, 'front')
+const BACK_SLUGS_FEMALE = slugsOf(BODY_SVG_DATA_FEMALE, 'back')
+
+function frontSlugsFor(gender: HighlightGender): Set<string> {
+  return gender === 'female' ? FRONT_SLUGS_FEMALE : FRONT_SLUGS
+}
+function backSlugsFor(gender: HighlightGender): Set<string> {
+  return gender === 'female' ? BACK_SLUGS_FEMALE : BACK_SLUGS
+}
 
 // ライト背景（13節・41節で確立したパラメータ）
 const COLORS = { glow: '255 94 58', base: '214 211 209' }
@@ -367,6 +388,7 @@ export interface SideMaps {
 export function computeHighlightMaps(
   ex: HighlightExercise,
   showRelated: boolean,
+  gender: HighlightGender = null,
 ): { front: SideMaps; back: SideMaps } {
   const related = showRelated ? ex.related : []
 
@@ -417,8 +439,10 @@ export function computeHighlightMaps(
     }
   }
 
-  const frontActive = Object.keys(frontIntensityMap).some((s) => FRONT_SLUGS.has(s))
-  const backActive = Object.keys(backIntensityMap).some((s) => BACK_SLUGS.has(s))
+  const frontSlugs = frontSlugsFor(gender)
+  const backSlugs = backSlugsFor(gender)
+  const frontActive = Object.keys(frontIntensityMap).some((s) => frontSlugs.has(s))
+  const backActive = Object.keys(backIntensityMap).some((s) => backSlugs.has(s))
 
   return {
     front: { intensityMap: frontIntensityMap, zoneSpecs, labelMap: frontLabelMap, active: frontActive },

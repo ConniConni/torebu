@@ -10,7 +10,7 @@
     bodyのスクロール自体は止まらず、閉じたときに一覧が別のスクロール位置になってしまうため
 -->
 <script setup lang="ts">
-import { BODY_SVG_DATA, ZONE_LABEL } from '~/utils/muscleHighlightSvg'
+import { getBodySvgData, ZONE_LABEL, type HighlightGender } from '~/utils/muscleHighlightSvg'
 import type { MuscleZone } from '~/utils/muscleSlugs'
 
 const props = defineProps<{
@@ -18,7 +18,12 @@ const props = defineProps<{
   mainMuscle: string | null
   relatedMuscles: string[]
   mainZone: string | null
+  // 女性図に切り替えるのは"female"のみ。それ以外(男性・その他・回答しない・未ログイン)は
+  // 男性図にフォールバックする(Issue #202)
+  gender?: HighlightGender
 }>()
+
+const bodySvgData = computed(() => getBodySvgData(props.gender))
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -50,6 +55,7 @@ const highlight = computed(() =>
       mainZone: props.mainZone,
     },
     showRelated.value,
+    props.gender,
   ),
 )
 
@@ -116,9 +122,9 @@ const mainZoneLabel = computed(() => {
       <div class="flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-2">
         <MuscleBodyDiagram
           :svg-id="`muscle-highlight-${side}`"
-          :parts="side === 'front' ? BODY_SVG_DATA.front : BODY_SVG_DATA.back"
-          :outline-d="side === 'front' ? BODY_SVG_DATA.outlineFront : BODY_SVG_DATA.outlineBack"
-          :view-box="side === 'front' ? BODY_SVG_DATA.viewBox.front : BODY_SVG_DATA.viewBox.back"
+          :parts="side === 'front' ? bodySvgData.front : bodySvgData.back"
+          :outline-d="side === 'front' ? bodySvgData.outlineFront : bodySvgData.outlineBack"
+          :view-box="side === 'front' ? bodySvgData.viewBox.front : bodySvgData.viewBox.back"
           :intensity-map="currentSide.intensityMap"
           :zone-specs="currentSide.zoneSpecs"
           :label-map="currentSide.labelMap"

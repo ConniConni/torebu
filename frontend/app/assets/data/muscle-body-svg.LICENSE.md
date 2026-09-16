@@ -1,4 +1,4 @@
-# muscle-body-svg.json の出典・ライセンス
+# muscle-body-svg.json / muscle-body-svg-female.json の出典・ライセンス
 
 このファイルのSVGパス座標・輪郭線データは、npmパッケージ
 [`react-native-body-highlighter`](https://github.com/HichamELBSI/react-native-body-highlighter)
@@ -32,6 +32,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-含めているのは男性図（front/back）のみ。女性図・ダーク/ライトテーマ切替は
+`muscle-body-svg.json`が男性図、`muscle-body-svg-female.json`が女性図（front/back）。
+どちらも移植元プロトタイプ（`muscle_highlight_proto.html`）の`DATA`/`DATA.female`から
+座標データのみを静的にコピーしたもの（Issue #202）。ダーク/ライトテーマ切替は
 プロトタイプでは実装済みだが、torebu Phase2の確定スコープには含めていない
 （`docs/muscle-highlight.md`参照）。

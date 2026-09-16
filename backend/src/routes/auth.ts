@@ -144,6 +144,7 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    gender: user.gender,
   })
 })
 
@@ -160,6 +161,7 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    gender: user.gender,
   })
 })
 
