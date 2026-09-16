@@ -437,13 +437,20 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - ロジック：[muscleHighlightSvg.ts](../frontend/app/utils/muscleHighlightSvg.ts)（発光・ゾーン塗り分け・ラベル配置。
   プロトタイプ由来のライトテーマ用パラメータのみ移植）、[muscleSlugs.ts](../frontend/app/utils/muscleSlugs.ts)
   （`mainMuscle`/`relatedMuscles`の日本語文字列 → SVGスラッグ・ゾーンの対応表）
-- SVG座標データ：[muscle-body-svg.json](../frontend/app/assets/data/muscle-body-svg.json)
-  （react-native-body-highlighter由来・MIT。ライセンス全文は同ディレクトリの`.LICENSE.md`）。男性図のみ
+- SVG座標データ：[muscle-body-svg.json](../frontend/app/assets/data/muscle-body-svg.json)（男性図）／
+  [muscle-body-svg-female.json](../frontend/app/assets/data/muscle-body-svg-female.json)（女性図）
+  （react-native-body-highlighter由来・MIT。ライセンス全文は同ディレクトリの`.LICENSE.md`）
 - `mainMuscle`が無い種目（カスタム種目、および対応表に無い想定外の値）はシートに
   「部位ハイライトのデータがありません」と表示する。光る部位が無い面を選んだ場合は図と
   「この面に光る部位はありません」を表示する（選択肢は隠さない）
 - 「関連筋も見る」トグルは初期状態オフ（主働筋のみ表示）。関連筋が無い種目ではボタン自体を出さない
-- 女性図・ダーク/ライトテーマ切替はプロトタイプには存在するがtorebuでは未実装（理由はdocs/backlog.md参照）
+- **男性図/女性図の切り替え（[Issue #202](https://github.com/ConniConni/torebu/issues/202)）**：
+  ログインユーザーの`gender`（新規登録の性別選択）が`"female"`のときのみ女性図、それ以外
+  （男性・その他・回答しない・未設定）は男性図にフォールバックする。`gender`は
+  `GET /auth/me`・`POST /auth/login`のレスポンスに含める（`useAuth`の`AuthUser`型に追加）。
+  `getBodySvgData(gender)`（`muscleHighlightSvg.ts`）が図の選択を担い、
+  `MuscleHighlightSheet`に`gender` propとして渡す
+- ダーク/ライトテーマ切替はプロトタイプには存在するがtorebuでは未実装（理由はdocs/backlog.md参照）
 
 **グループ機能（Phase4初弾、グループ基盤）の実装メモ**
 - スコープはグループの作成・招待コード発行/再発行・招待コードでの参加・メンバー一覧・退会・
