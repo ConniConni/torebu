@@ -68,6 +68,7 @@ model User {
   notifications     Notification[] @relation("NotificationRecipient")
   sentNotifications Notification[] @relation("NotificationActor")
 
+  @@index([passwordResetToken])
   @@map("users")
 }
 

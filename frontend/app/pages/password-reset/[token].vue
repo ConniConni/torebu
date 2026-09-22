@@ -1,20 +1,27 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'guest' })
 
-const { login } = useAuth()
+const route = useRoute()
+const token = route.params.token as string
 
-const email = ref('')
+const { resetPassword } = useAuth()
+
 const password = ref('')
+const passwordConfirmation = ref('')
 const errorMessage = ref('')
 const isSubmitting = ref(false)
 const isPasswordVisible = ref(false)
 
 async function onSubmit() {
   errorMessage.value = ''
+  if (password.value !== passwordConfirmation.value) {
+    errorMessage.value = 'パスワードが一致しません'
+    return
+  }
   isSubmitting.value = true
   try {
-    await login({ email: email.value, password: password.value })
-    await navigateTo('/')
+    await resetPassword(token, password.value)
+    await navigateTo('/login')
   } catch (error) {
     errorMessage.value = authErrorMessage(error)
   } finally {
@@ -26,27 +33,12 @@ async function onSubmit() {
 <template>
   <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4">
     <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow">
-      <NuxtLink to="/" class="mb-4 inline-block text-sm text-gray-500">← トップに戻る</NuxtLink>
-      <h1 class="mb-6 text-center text-xl font-bold text-gray-900">ログイン</h1>
+      <h1 class="mb-6 text-center text-xl font-bold text-gray-900">新しいパスワードの設定</h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div>
-          <label for="email" class="mb-1 block text-sm font-medium text-gray-700">
-            メールアドレス
-          </label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            required
-            autocomplete="email"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
-        </div>
-
-        <div>
           <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
-            パスワード
+            新しいパスワード
           </label>
           <div class="relative">
             <input
@@ -54,7 +46,7 @@ async function onSubmit() {
               v-model="password"
               :type="isPasswordVisible ? 'text' : 'password'"
               required
-              autocomplete="current-password"
+              autocomplete="new-password"
               class="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
             />
             <button
@@ -67,29 +59,33 @@ async function onSubmit() {
               <EyeIcon v-else class="h-5 w-5" />
             </button>
           </div>
+          <p class="mt-1 text-xs text-gray-500">8文字以上で入力してください</p>
+        </div>
+
+        <div>
+          <label for="passwordConfirmation" class="mb-1 block text-sm font-medium text-gray-700">
+            新しいパスワード（確認）
+          </label>
+          <input
+            id="passwordConfirmation"
+            v-model="passwordConfirmation"
+            :type="isPasswordVisible ? 'text' : 'password'"
+            required
+            autocomplete="new-password"
+            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          />
         </div>
 
         <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
-
-        <p class="text-right text-sm">
-          <NuxtLink to="/password-reset" class="text-brand-600 hover:underline">
-            パスワードをお忘れの方
-          </NuxtLink>
-        </p>
 
         <button
           type="submit"
           :disabled="isSubmitting"
           class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
-          ログイン
+          パスワードを再設定
         </button>
       </form>
-
-      <p class="mt-4 text-center text-sm text-gray-600">
-        アカウントをお持ちでない方は
-        <NuxtLink to="/register" class="text-brand-600 hover:underline">新規登録</NuxtLink>
-      </p>
     </div>
   </div>
 </template>
