@@ -38,10 +38,13 @@ await load()
 watch(period, load)
 
 // 上位3人は表彰台形式で強調表示する。表示上は中央に1位を置くため並び替える
-const top3 = computed(() => (ranking.value ?? []).filter((r) => r.rank <= 3))
+// 同着（同順位）のメンバーがいる場合はrankの値が重複するため、rankではなくAPIが返す
+// 順序（ranking配列のindex）で並び替える(同着2人が両方rank=2になるケースで、rankをMapの
+// キーにすると片方が上書きされ消えてしまう不具合があった)
+const top3 = computed(() => (ranking.value ?? []).filter((r) => r.rank <= 3).slice(0, 3))
 const podiumOrder = computed(() => {
-  const byRank = new Map(top3.value.map((r) => [r.rank, r]))
-  return [byRank.get(2), byRank.get(1), byRank.get(3)]
+  const [first, second, third] = top3.value
+  return [second, first, third]
 })
 
 // 表彰台の土台（棒グラフ部分）の高さ。1位の実績を基準に相対的な高さで実績差を見せる
