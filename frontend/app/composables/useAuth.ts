@@ -33,6 +33,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_request: '入力内容を確認してください',
   email_already_registered: 'このメールアドレスは既に登録されています',
   invalid_credentials: 'メールアドレスまたはパスワードが正しくありません',
+  invalid_or_expired_token: 'リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください',
 }
 
 export function authErrorMessage(error: unknown): string {
@@ -74,7 +75,16 @@ export function useAuth() {
     resetUserState()
   }
 
-  return { user, fetchMe, register, login, logout }
+  // 常に同じレスポンスを返すAPI（メールアドレス列挙対策）のため、成否を返さず完了を示すのみ
+  async function requestPasswordReset(email: string) {
+    await $fetch('/api/auth/password-reset-requests', { method: 'POST', body: { email } })
+  }
+
+  async function resetPassword(token: string, password: string) {
+    await $fetch('/api/auth/password-resets', { method: 'POST', body: { token, password } })
+  }
+
+  return { user, fetchMe, register, login, logout, requestPasswordReset, resetPassword }
 }
 
 // ユーザーに紐づくキャッシュ(useState)を初期値に戻す。ログアウト→ログインはnavigateTo()による
