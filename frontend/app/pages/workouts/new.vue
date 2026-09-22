@@ -118,6 +118,14 @@ async function onOpenRoutinePicker() {
   }
 }
 
+function onCloseRoutinePicker() {
+  showRoutinePicker.value = false
+  // 「0件追加」の通知（132行目）はピッカーを閉じずに出す想定のため、
+  // ユーザーが手動で閉じたらここでクリアする。一部除外の通知（139行目）は
+  // 適用成功と同時にピッカーが閉じるため影響しない
+  routineApplyNotice.value = ''
+}
+
 async function onApplyRoutine(routineId: string) {
   routineApplyError.value = ''
   routineApplyNotice.value = ''
@@ -474,7 +482,7 @@ async function onGoToExercisePicker() {
             type="button"
             :disabled="routineApplying"
             class="text-xs text-gray-500 disabled:opacity-50"
-            @click="showRoutinePicker = false"
+            @click="onCloseRoutinePicker"
           >
             閉じる
           </button>
