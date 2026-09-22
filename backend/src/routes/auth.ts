@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import bcrypt from 'bcrypt'
+import { randomBytes, createHash } from 'node:crypto'
 import { rateLimit } from 'express-rate-limit'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { sendPasswordResetEmail } from '../lib/mail.js'
 
 export const authRouter = Router()
 
@@ -163,6 +165,92 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     displayName: user.displayName,
     gender: user.gender,
   })
+})
+
+// パスワード再設定トークンの有効期限
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000 // 1時間
+
+// DB漏洩時にトークンをそのまま悪用されないよう、生の値ではなくハッシュを保存する
+// （セッションIDとは別物。express-sessionのセッション管理には関与しない）
+function hashPasswordResetToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+// パスワードリセットのメール送信を悪用した嫌がらせ（大量送信）対策のレート制限
+const passwordResetRequestRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15分間
+  limit: 5, // 同一IPから15分間に5回まで
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+})
+
+const passwordResetRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+})
+
+authRouter.post('/password-reset-requests', passwordResetRequestRateLimiter, async (req, res) => {
+  const parsed = passwordResetRequestSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const { email } = parsed.data
+
+  const user = await prisma.user.findUnique({ where: { email } })
+  // メールアドレス列挙対策：ユーザーが存在しない場合も同じレスポンスを返す
+  // （存在する場合とレスポンス内容を揃える。ログイン同様の方針）
+  if (user) {
+    const token = randomBytes(32).toString('hex')
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: hashPasswordResetToken(token),
+        passwordResetExpiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+      },
+    })
+    const resetUrl = `${process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000'}/password-reset/${token}`
+    await sendPasswordResetEmail(email, resetUrl)
+  }
+
+  res.status(202).json({ ok: true })
+})
+
+const passwordResetSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(72),
+})
+
+authRouter.post('/password-resets', async (req, res) => {
+  const parsed = passwordResetSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const { token, password } = parsed.data
+
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: hashPasswordResetToken(token),
+      passwordResetExpiresAt: { gt: new Date() },
+    },
+  })
+  if (!user) {
+    res.status(400).json({ error: 'invalid_or_expired_token' })
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    },
+  })
+
+  res.status(200).json({ ok: true })
 })
 
 authRouter.post('/logout', requireAuth, (req, res) => {
