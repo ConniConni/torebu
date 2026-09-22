@@ -42,6 +42,7 @@ describe('GET /auth/me', () => {
       id: expect.any(String),
       email: testEmail,
       displayName: 'meテストユーザー',
+      gender: null,
     })
   })
 })

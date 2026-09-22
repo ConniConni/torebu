@@ -36,6 +36,7 @@ describe('POST /auth/login', () => {
       id: expect.any(String),
       email: testEmail,
       displayName: 'ログインテストユーザー',
+      gender: null,
     })
     expect(res.headers['set-cookie']).toBeDefined()
   })
