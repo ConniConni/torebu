@@ -898,11 +898,11 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/workouts` | 要 | その日のworkoutを作る |
 | GET | `/workouts` | 要 | 自分のworkout一覧（`performedAt` 降順、同日内は`createdAt`降順で登録順に安定させる。`performedAt`は日付のみのためtie-breakが無いと同日内の順序が不定になる。Issue #222）。各要素に`hasSets`（セットが1件以上あるか）を含む（②ホームのカレンダー印・記録カードの表示振り分けに使う。Issue #99） |
 | GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧（`sets`。`setOrder`昇順、同値内は`createdAt`昇順。`setOrder`は種目ごとに1からリセットされる連番のため異なる種目間で頻繁に同値になり、tie-breakが無いと同じ種目内のセットの表示順が更新のたびに崩れる。Issue #226）＋種目カード一覧（`exercises`。`WorkoutExercise`を`sortOrder`昇順で返す。種目カード自体の並び順はこちらが正。Issue #228） |
-| PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照） |
+| PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照）。レスポンスに`deleted`（真偽値）を含む（下記「4-2」参照） |
 | DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
 | POST | `/workouts/:id/sets` | 要 | セットを1件追加する。その種目の`WorkoutExercise`（種目カード）がまだ無ければ、末尾の`sortOrder`で自動的に作る（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。レスポンスにはセット本体に加え、対応する`workoutExercise`（`id`/`sortOrder`）を含む |
 | PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する |
-| DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除）。種目カード（`WorkoutExercise`）自体は削除しない（最後の1件を消しても残る。再度同じ種目のセットを追加すると同じカードが復元される） |
+| DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除）。種目カード（`WorkoutExercise`）自体は削除しない（最後の1件を消しても残る。再度同じ種目のセットを追加すると同じカードが復元される）。レスポンスは`204`ではなく`{ deleted: boolean }`（下記「4-2」参照） |
 | PATCH | `/workouts/:id/exercises/:workoutExerciseId` | 要 | 種目カードの並び順（`sortOrder`）を変更する（[Issue #228](https://github.com/ConniConni/torebu/issues/228)。ルーティンの`PATCH /routines/:id/exercises/:routineExerciseId`と同じ方針） |
 | POST | `/workouts/:id/reactions` | 要 | いいねする（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）。**いずれかのアクティブなグループで同席しているメンバーの記録のみ**（`404`で存在を隠す）。**自分の記録には不可**（`400 cannot_react_to_own_workout`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）。冪等（`upsert`。既にいいね済みでも`200`） |
 | DELETE | `/workouts/:id/reactions` | 要 | いいねを取り消す。認可は`POST`と同じ。冪等（未いいねの状態で呼んでも`200`） |
@@ -973,6 +973,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`isExerciseVisible`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`isExerciseVisible`を呼ばないため削除済みでも編集できる） |
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
 | `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
+| `DELETE /workouts/:id/sets/:setId`<br>`PATCH /workouts/:id` の`deleted` | セットを削除、またはメモをクリアした結果、そのworkoutが**セット0件・メモ無し**（中身が空）になった場合、workout自体もソフトデリートする（Issue #234）。中身の無いworkoutを放置すると、②ホームの「記録がありません」判定（`GET /workouts`一覧の件数のみで判定）が中身の無い行を「記録あり」と誤判定し、実在しない記録の削除ボタンが機能してしまう不具合につながるため。レスポンスの`deleted: true`でこれをフロントに伝え、`useWorkoutSession.ts`の`removeSet`/`updateMemo`は`session.workoutId`を`null`に戻す（削除済みのworkoutIdを使い回して後続の保存操作が404になるのを防ぐため）。逆に、セットが無くてもメモがあれば（またはその逆）削除しない |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
 | `PATCH /workouts/:id` の `memo` | 空文字列・`null`を送るとメモを**クリア**（`null`化）できる。省略時のみ「変更しない」 |
