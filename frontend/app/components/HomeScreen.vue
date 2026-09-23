@@ -16,6 +16,12 @@ interface ExerciseGroup {
   sets: WorkoutSetSummary[]
 }
 
+// 種目カードの並び順(WorkoutExercise.sortOrder、Issue #228)
+interface WorkoutExerciseSummary {
+  exerciseId: string
+  sortOrder: number
+}
+
 const { user, logout } = useAuth()
 const { unreadCount, fetchUnreadCount } = useNotifications()
 await fetchUnreadCount()
@@ -135,17 +141,23 @@ async function loadSummary(workoutId: string) {
   if (workoutGroups.value[workoutId] || summaryPending.value[workoutId]) return
   summaryPending.value[workoutId] = true
   try {
-    const detail = await requestFetch<{ sets: WorkoutSetSummary[] }>(`/api/workouts/${workoutId}`)
-    // [id].vue・workouts/new.vueと同じ方針：種目ごとにグルーピングし、セット順に並べる
+    const detail = await requestFetch<{
+      sets: WorkoutSetSummary[]
+      exercises: WorkoutExerciseSummary[]
+    }>(`/api/workouts/${workoutId}`)
+    // workouts/new.vueと同じ方針：種目ごとにグルーピングし、セット順に並べる。
+    // カード自体の並びはexercises(WorkoutExercise.sortOrder昇順)を正とする(Issue #228)
     const byExercise = new Map<string, WorkoutSetSummary[]>()
     for (const set of detail.sets) {
       byExercise.set(set.exerciseId, [...(byExercise.get(set.exerciseId) ?? []), set])
     }
-    workoutGroups.value[workoutId] = [...byExercise.entries()].map(([exerciseId, sets]) => ({
-      exerciseId,
-      name: exerciseName(exerciseId),
-      sets: [...sets].sort((a, b) => a.setOrder - b.setOrder),
-    }))
+    workoutGroups.value[workoutId] = detail.exercises
+      .filter((e) => byExercise.has(e.exerciseId))
+      .map((e) => ({
+        exerciseId: e.exerciseId,
+        name: exerciseName(e.exerciseId),
+        sets: [...byExercise.get(e.exerciseId)!].sort((a, b) => a.setOrder - b.setOrder),
+      }))
   } catch {
     workoutGroups.value[workoutId] = []
   } finally {

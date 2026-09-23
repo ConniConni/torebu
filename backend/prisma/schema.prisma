@@ -96,6 +96,7 @@ model Exercise {
   creator          User?             @relation("ExerciseCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   workoutSets      WorkoutSet[]
   routineExercises RoutineExercise[]
+  workoutExercises WorkoutExercise[]
 
   @@index([createdBy])
   @@map("exercises")
@@ -110,11 +111,30 @@ model Workout {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。reactions/commentsを残すため
 
-  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sets WorkoutSet[]
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sets      WorkoutSet[]
+  exercises WorkoutExercise[]
 
   @@index([userId, performedAt])
   @@map("workouts")
+}
+
+// workout内の種目カード単位の並び順。RoutineExerciseと同じ役割(Issue #228)。
+// セット追加時(POST /workouts/:id/sets)に無ければ自動生成し、以後はカードのドラッグ並び替え
+// (PATCH /workouts/:id/exercises/:workoutExerciseId)でsortOrderを更新する
+model WorkoutExercise {
+  id         String @id @default(uuid())
+  workoutId  String @map("workout_id")
+  exerciseId String @map("exercise_id")
+  sortOrder  Int    @map("sort_order")
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([workoutId, exerciseId])
+  @@index([workoutId])
+  @@index([exerciseId])
+  @@map("workout_exercises")
 }
 
 model WorkoutSet {

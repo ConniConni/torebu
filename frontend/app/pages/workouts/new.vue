@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // ③ 記録作成。指定日(省略時は今日)のworkoutを開始し、種目ごとにセット(重量・回数)を
 // 積み上げていく本体画面
+import draggable from 'vuedraggable'
+
 definePageMeta({ middleware: 'auth' })
 
 const { exercises, fetchExercises } = useExercises()
@@ -8,7 +10,7 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
+const { session, startWorkout, fetchSets, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
   useWorkoutSession()
 
 // ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
@@ -72,17 +74,58 @@ function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
 }
 
+// 種目カードの並びはsession.exercises(WorkoutExercise.sortOrder順)を正とする(Issue #228)。
+// このworkoutで一度もセットが無くなった種目のカードはサーバー側に残り続ける設計のため
+// (useWorkoutSession.ts参照)、ここでセットが1件以上ある種目だけに絞り込んで表示する
 const groupedSets = computed(() => {
   const byExercise = new Map<string, typeof session.value.sets>()
   for (const set of session.value.sets) {
     byExercise.set(set.exerciseId, [...(byExercise.get(set.exerciseId) ?? []), set])
   }
-  return [...byExercise.entries()].map(([exerciseId, sets]) => ({
-    exerciseId,
-    name: exerciseName(exerciseId),
-    sets: [...sets].sort((a, b) => a.setOrder - b.setOrder),
-  }))
+  return session.value.exercises
+    .filter((e) => byExercise.has(e.exerciseId))
+    .map((e) => ({
+      exerciseId: e.exerciseId,
+      name: exerciseName(e.exerciseId),
+      sets: [...byExercise.get(e.exerciseId)!].sort((a, b) => a.setOrder - b.setOrder),
+    }))
 })
+
+function groupFor(exerciseId: string) {
+  return groupedSets.value.find((g) => g.exerciseId === exerciseId)
+}
+
+// vuedraggableの並び替え終了後、変化した行だけsortOrderをPATCHで反映する
+// (見た目上のindex(1始まり)をそのまま新しいsortOrderとして使う。ルーティン画面のonDragEndと同じ方針)
+const exerciseOrderError = ref('')
+async function onExerciseDragEnd() {
+  const workoutId = session.value.workoutId
+  if (!workoutId) return
+  exerciseOrderError.value = ''
+  const updates = groupedSets.value
+    .map((g, index) => ({ exerciseId: g.exerciseId, sortOrder: index + 1 }))
+    .flatMap(({ exerciseId, sortOrder }) => {
+      const item = session.value.exercises.find((e) => e.exerciseId === exerciseId)
+      return item && item.sortOrder !== sortOrder ? [{ item, sortOrder }] : []
+    })
+
+  try {
+    await Promise.all(
+      updates.map(({ item, sortOrder }) =>
+        $fetch(`/api/workouts/${workoutId}/exercises/${item.id}`, {
+          method: 'PATCH',
+          body: { sortOrder },
+        }),
+      ),
+    )
+    for (const { item, sortOrder } of updates) {
+      item.sortOrder = sortOrder
+    }
+  } catch {
+    exerciseOrderError.value = '並び替えの保存に失敗しました。時間をおいて再度お試しください'
+    await fetchSets()
+  }
+}
 
 // ⑤ルーティンから種目一式を展開する機能（Issue13→Issue #76で「即登録＋手直し」方式に変更）。
 // 目安セット（targetSets）が設定されている種目は、その場でworkout_setsとして即登録する
@@ -369,87 +412,110 @@ async function onGoToExercisePicker() {
         <p v-if="memoError" class="mt-1 text-xs text-red-600">{{ memoError }}</p>
       </section>
 
-      <section
-        v-for="group in groupedSets"
-        :key="group.exerciseId"
-        class="rounded-lg bg-white p-4 shadow"
-      >
-        <div class="mb-2 flex items-center justify-between">
-          <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
-          <button type="button" class="text-xs text-brand-600" @click="onAddSet(group.exerciseId)">
-            ＋セット追加
-          </button>
-        </div>
-        <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
-             各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。重量・回数の列は
-             frで種目カードの幅いっぱいまで伸ばし、右端に余白が余らないようにしている。それぞれの
-             入力欄の右に単位（kg・回）を添えることで、見出しの文言を短くできている。
-             列にminmaxで下限を設けているのは、画面幅が狭いと回数欄が数字の入る幅より縮んで
-             「10」が見切れて「1」に見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。
-             下限を割り込むほど狭い場合は個別にoverflow-x-autoで横スクロールさせ、他の要素を
-             巻き込んで崩れないようにする -->
-        <div class="overflow-x-auto">
-          <div class="min-w-[17rem] overflow-hidden rounded-lg">
-            <div
-              class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5"
-            >
-              <span class="text-xs font-semibold text-gray-500">セット</span>
-              <span class="text-xs font-semibold text-gray-500">重量</span>
-              <span class="text-xs font-semibold text-gray-500">回数</span>
-              <span></span>
-            </div>
-            <template v-for="(set, i) in group.sets" :key="set.id">
-              <div
-                v-if="setInputs[set.id]"
-                class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-                :class="i % 2 === 1 ? 'bg-gray-50' : ''"
-              >
-                <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
-                  set.setOrder
-                }}</span>
-                <span class="flex min-w-0 items-baseline gap-1.5">
-                  <input
-                    v-model="setInputs[set.id]!.weight"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    placeholder="自重"
-                    class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                    @blur="onSetFieldBlur(set.id)"
-                  />
-                  <span class="shrink-0 text-xs text-gray-500">kg</span>
+      <ClientOnly>
+        <draggable
+          v-model="session.exercises"
+          item-key="id"
+          handle=".drag-handle"
+          class="flex flex-col gap-4"
+          @end="onExerciseDragEnd"
+        >
+          <template #item="{ element }">
+            <section v-if="groupFor(element.exerciseId)" class="rounded-lg bg-white p-4 shadow">
+              <div class="mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                  <span class="drag-handle cursor-grab text-gray-400">⠿</span>
+                  <p class="text-sm font-semibold text-gray-900">
+                    {{ groupFor(element.exerciseId)!.name }}
+                  </p>
                 </span>
-                <span class="flex min-w-0 items-baseline gap-1.5">
-                  <input
-                    v-model="setInputs[set.id]!.reps"
-                    type="number"
-                    min="1"
-                    class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
-                    @blur="onSetFieldBlur(set.id)"
-                  />
-                  <span class="shrink-0 text-xs text-gray-500">回</span>
-                </span>
-                <span class="flex justify-center">
-                  <button
-                    type="button"
-                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
-                    aria-label="このセットを削除"
-                    @click="removeSet(set.id)"
-                  >
-                    <TrashIcon class="h-3.5 w-3.5" />
-                  </button>
-                </span>
+                <button
+                  type="button"
+                  class="text-xs text-brand-600"
+                  @click="onAddSet(element.exerciseId)"
+                >
+                  ＋セット追加
+                </button>
               </div>
-            </template>
-          </div>
-        </div>
-        <template v-for="set in group.sets" :key="`msg-${set.id}`">
-          <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400">
-            {{ set.setOrder }}セット目を保存中...
-          </p>
-          <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600">{{ setErrors[set.id] }}</p>
-        </template>
-      </section>
+              <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
+                   各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。重量・回数の列は
+                   frで種目カードの幅いっぱいまで伸ばし、右端に余白が余らないようにしている。それぞれの
+                   入力欄の右に単位（kg・回）を添えることで、見出しの文言を短くできている。
+                   列にminmaxで下限を設けているのは、画面幅が狭いと回数欄が数字の入る幅より縮んで
+                   「10」が見切れて「1」に見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。
+                   下限を割り込むほど狭い場合は個別にoverflow-x-autoで横スクロールさせ、他の要素を
+                   巻き込んで崩れないようにする -->
+              <div class="overflow-x-auto">
+                <div class="min-w-[17rem] overflow-hidden rounded-lg">
+                  <div
+                    class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5"
+                  >
+                    <span class="text-xs font-semibold text-gray-500">セット</span>
+                    <span class="text-xs font-semibold text-gray-500">重量</span>
+                    <span class="text-xs font-semibold text-gray-500">回数</span>
+                    <span></span>
+                  </div>
+                  <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
+                    <div
+                      v-if="setInputs[set.id]"
+                      class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                      :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+                    >
+                      <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
+                        set.setOrder
+                      }}</span>
+                      <span class="flex min-w-0 items-baseline gap-1.5">
+                        <input
+                          v-model="setInputs[set.id]!.weight"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          placeholder="自重"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                          @blur="onSetFieldBlur(set.id)"
+                        />
+                        <span class="shrink-0 text-xs text-gray-500">kg</span>
+                      </span>
+                      <span class="flex min-w-0 items-baseline gap-1.5">
+                        <input
+                          v-model="setInputs[set.id]!.reps"
+                          type="number"
+                          min="1"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                          @blur="onSetFieldBlur(set.id)"
+                        />
+                        <span class="shrink-0 text-xs text-gray-500">回</span>
+                      </span>
+                      <span class="flex justify-center">
+                        <button
+                          type="button"
+                          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                          aria-label="このセットを削除"
+                          @click="removeSet(set.id)"
+                        >
+                          <TrashIcon class="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
+                <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400">
+                  {{ set.setOrder }}セット目を保存中...
+                </p>
+                <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600">
+                  {{ setErrors[set.id] }}
+                </p>
+              </template>
+            </section>
+          </template>
+        </draggable>
+      </ClientOnly>
+
+      <p v-if="exerciseOrderError" class="text-center text-sm text-red-600">
+        {{ exerciseOrderError }}
+      </p>
 
       <p v-if="addSetError" class="text-center text-sm text-red-600">{{ addSetError }}</p>
 

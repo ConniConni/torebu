@@ -7,10 +7,19 @@ interface WorkoutSetItem {
   reps: number
 }
 
+// 種目カード単位の並び順(Issue #228)。ルーティンのRoutineExerciseと同じ役割
+interface WorkoutExerciseItem {
+  id: string
+  workoutId: string
+  exerciseId: string
+  sortOrder: number
+}
+
 interface SessionState {
   workoutId: string | null
   performedAt: string | null
   sets: WorkoutSetItem[]
+  exercises: WorkoutExerciseItem[]
   memo: string | null
 }
 
@@ -21,6 +30,7 @@ export function useWorkoutSession() {
     workoutId: null,
     performedAt: null,
     sets: [],
+    exercises: [],
     memo: null,
   }))
   const requestFetch = useRequestFetch()
@@ -47,12 +57,12 @@ export function useWorkoutSession() {
     }
     const existing = (workouts.value ?? []).find((w) => w.performedAt === performedAt)
     if (existing) {
-      session.value = { workoutId: existing.id, performedAt, sets: [], memo: null }
+      session.value = { workoutId: existing.id, performedAt, sets: [], exercises: [], memo: null }
       await fetchSets()
       return existing.id
     }
 
-    session.value = { workoutId: null, performedAt, sets: [], memo: null }
+    session.value = { workoutId: null, performedAt, sets: [], exercises: [], memo: null }
     return null
   }
 
@@ -76,10 +86,13 @@ export function useWorkoutSession() {
 
   async function fetchSets() {
     if (!session.value.workoutId) return
-    const workout = await requestFetch<{ sets: WorkoutSetItem[]; memo: string | null }>(
-      `/api/workouts/${session.value.workoutId}`,
-    )
+    const workout = await requestFetch<{
+      sets: WorkoutSetItem[]
+      exercises: WorkoutExerciseItem[]
+      memo: string | null
+    }>(`/api/workouts/${session.value.workoutId}`)
     session.value.sets = workout.sets
+    session.value.exercises = workout.exercises
     session.value.memo = workout.memo
   }
 
@@ -100,11 +113,18 @@ export function useWorkoutSession() {
 
   async function addSet(exerciseId: string, reps: number, weightKg?: number) {
     const workoutId = await ensureWorkout()
-    const set = await $fetch<WorkoutSetItem>(`/api/workouts/${workoutId}/sets`, {
+    const { workoutExercise, ...set } = await $fetch<
+      WorkoutSetItem & { workoutExercise: WorkoutExerciseItem }
+    >(`/api/workouts/${workoutId}/sets`, {
       method: 'POST',
       body: { exerciseId, reps, weightKg },
     })
     session.value.sets = [...session.value.sets, set]
+    // この種目の1set目の場合のみ、種目カード(WorkoutExercise)がサーバー側で新しく作られている。
+    // 既存カードへの追加(2set目以降)ではidが変わらないため、無条件pushだと重複してしまう(Issue #228)
+    if (!session.value.exercises.some((e) => e.id === workoutExercise.id)) {
+      session.value.exercises = [...session.value.exercises, workoutExercise]
+    }
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する。詳細はuseExercises.ts参照
     patchLastSet(exerciseId, { weightKg: set.weightKg, reps: set.reps })
     return set
@@ -145,7 +165,7 @@ export function useWorkoutSession() {
     if (session.value.workoutId) {
       await fetchWorkouts()
     }
-    session.value = { workoutId: null, performedAt: null, sets: [], memo: null }
+    session.value = { workoutId: null, performedAt: null, sets: [], exercises: [], memo: null }
   }
 
   return {
@@ -160,4 +180,4 @@ export function useWorkoutSession() {
   }
 }
 
-export type { WorkoutSetItem }
+export type { WorkoutSetItem, WorkoutExerciseItem }

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import type { WorkoutModel, WorkoutSetModel } from '../generated/prisma/models.js'
+import type { WorkoutModel, WorkoutSetModel, WorkoutExerciseModel } from '../generated/prisma/models.js'
 
 export const workoutsRouter = Router()
 
@@ -26,6 +26,15 @@ function serializeSet(set: WorkoutSetModel) {
     setOrder: set.setOrder,
     weightKg: set.weightKg === null ? null : Number(set.weightKg),
     reps: set.reps,
+  }
+}
+
+function serializeWorkoutExercise(workoutExercise: WorkoutExerciseModel) {
+  return {
+    id: workoutExercise.id,
+    workoutId: workoutExercise.workoutId,
+    exerciseId: workoutExercise.exerciseId,
+    sortOrder: workoutExercise.sortOrder,
   }
 }
 
@@ -180,17 +189,25 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
   }
 
   // setOrderは種目ごとに1からリセットされる連番のため、異なる種目間では頻繁に同値になる
-  // (例:5種目とも1セット目はsetOrder=1)。tie-breakにcreatedAtを追加し、種目の並び順
-  // (フロントは各種目の初出順でカードをグルーピングする。frontend/app/pages/workouts/new.vue参照)が
-  // 常に「その種目を最初に追加した順」で安定するようにする(Issue #226)
-  const sets = await prisma.workoutSet.findMany({
-    where: { workoutId: workout.id },
-    orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
-  })
+  // (例:5種目とも1セット目はsetOrder=1)。tie-breakにcreatedAtを追加し、同じ種目内のセットの
+  // 表示順が常に安定するようにする(Issue #226)。種目カード自体の並び順は下のexercises(sortOrder)
+  // が持つ(Issue #228)
+  const [sets, exercises] = await Promise.all([
+    prisma.workoutSet.findMany({
+      where: { workoutId: workout.id },
+      orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
+    }),
+    prisma.workoutExercise.findMany({
+      where: { workoutId: workout.id },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ])
 
-  res
-    .status(200)
-    .json({ ...serializeWorkout(workout, sets.length > 0), sets: sets.map(serializeSet) })
+  res.status(200).json({
+    ...serializeWorkout(workout, sets.length > 0),
+    sets: sets.map(serializeSet),
+    exercises: exercises.map(serializeWorkoutExercise),
+  })
 })
 
 // performedAtは編集不可(意図的)：③「今日の記録を始める」が「同じ日付のworkoutがあれば再開する」
@@ -267,6 +284,22 @@ async function nextSetOrder(workoutId: string, exerciseId: string) {
   return (aggregate._max.setOrder ?? 0) + 1
 }
 
+// 種目カード(WorkoutExercise)がこのworkoutに無ければ、末尾のsortOrderで作る(Issue #228)。
+// 既にある場合は何もしない(セットを追加しただけではカードの並びは動かさない)。
+// フロントが並び替え(PATCH .../exercises/:workoutExerciseId)に使うIDをその場で持てるよう、
+// 呼び出し側(POST /:id/sets)のレスポンスに含めて返す
+async function ensureWorkoutExercise(workoutId: string, exerciseId: string) {
+  const aggregate = await prisma.workoutExercise.aggregate({
+    where: { workoutId },
+    _max: { sortOrder: true },
+  })
+  return prisma.workoutExercise.upsert({
+    where: { workoutId_exerciseId: { workoutId, exerciseId } },
+    create: { workoutId, exerciseId, sortOrder: (aggregate._max.sortOrder ?? 0) + 1 },
+    update: {},
+  })
+}
+
 workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   const parsed = createSetSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -286,6 +319,7 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     return
   }
 
+  const workoutExercise = await ensureWorkoutExercise(workout.id, parsed.data.exerciseId)
   const setOrder = await nextSetOrder(workout.id, parsed.data.exerciseId)
   const set = await prisma.workoutSet.create({
     data: {
@@ -297,7 +331,9 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     },
   })
 
-  res.status(201).json(serializeSet(set))
+  res
+    .status(201)
+    .json({ ...serializeSet(set), workoutExercise: serializeWorkoutExercise(workoutExercise) })
 })
 
 const updateSetSchema = z
@@ -364,6 +400,42 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   })
 
   res.status(204).send()
+})
+
+// 種目カードの並び替え(Issue #228。ルーティン画面のPATCH /routines/:id/exercises/:idと同じ方針)
+const updateWorkoutExerciseSchema = z.object({
+  sortOrder: z.number().int().positive(),
+})
+
+async function findOwnWorkoutExercise(userId: string, workoutId: string, workoutExerciseId: string) {
+  const workout = await findOwnWorkout(userId, workoutId)
+  if (!workout) return null
+  return prisma.workoutExercise.findFirst({ where: { id: workoutExerciseId, workoutId: workout.id } })
+}
+
+workoutsRouter.patch('/:id/exercises/:workoutExerciseId', requireAuth, async (req, res) => {
+  const parsed = updateWorkoutExerciseSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workoutExercise = await findOwnWorkoutExercise(
+    userId,
+    req.params.id as string,
+    req.params.workoutExerciseId as string,
+  )
+  if (!workoutExercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const updated = await prisma.workoutExercise.update({
+    where: { id: workoutExercise.id },
+    data: { sortOrder: parsed.data.sortOrder },
+  })
+
+  res.status(200).json(serializeWorkoutExercise(updated))
 })
 
 // いいね(Phase4)。対象は所属グループで同席しているメンバーの記録(docs/schema.md参照)。
