@@ -267,6 +267,85 @@ describe('GET /workouts/:id', () => {
     const ids = (res.body.sets as Array<{ id: string }>).map((s) => s.id)
     expect(ids).toEqual([firstSet.id, secondSet.id])
   })
+
+  it('種目カードの並びはWorkoutExercise.sortOrder順で返る(Issue #228)', async () => {
+    const secondExercise = await prisma.exercise.create({
+      data: { name: 'スクワット', muscleGroup: 'legs' },
+    })
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    // 先にスクワットを追加してから、ベンチプレスを2番目に追加する
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId: secondExercise.id, reps: 8 })
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
+
+    const res = await agent.get(`/workouts/${workout.id}`)
+
+    expect(res.body.exercises).toEqual([
+      expect.objectContaining({ exerciseId: secondExercise.id, sortOrder: 1 }),
+      expect.objectContaining({ exerciseId, sortOrder: 2 }),
+    ])
+  })
+})
+
+describe('PATCH /workouts/:id/exercises/:workoutExerciseId', () => {
+  it('他人のworkoutの種目カードは編集できない(404)', async () => {
+    const workout = await createWorkout(otherId)
+    const workoutExercise = await prisma.workoutExercise.create({
+      data: { workoutId: workout.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/workouts/${workout.id}/exercises/${workoutExercise.id}`)
+      .send({ sortOrder: 2 })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('自分の別workoutに属するworkoutExerciseIdを指定すると404を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const anotherOwnWorkout = await createWorkout(ownerId)
+    const cardOfAnotherWorkout = await prisma.workoutExercise.create({
+      data: { workoutId: anotherOwnWorkout.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/workouts/${workout.id}/exercises/${cardOfAnotherWorkout.id}`)
+      .send({ sortOrder: 2 })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('sortOrderが無ければ400を返す', async () => {
+    const workout = await createWorkout(ownerId)
+    const workoutExercise = await prisma.workoutExercise.create({
+      data: { workoutId: workout.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/workouts/${workout.id}/exercises/${workoutExercise.id}`)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('sortOrderを変更できる(並び替え)', async () => {
+    const workout = await createWorkout(ownerId)
+    const workoutExercise = await prisma.workoutExercise.create({
+      data: { workoutId: workout.id, exerciseId, sortOrder: 1 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent
+      .patch(`/workouts/${workout.id}/exercises/${workoutExercise.id}`)
+      .send({ sortOrder: 2 })
+
+    expect(res.status).toBe(200)
+    expect(res.body.sortOrder).toBe(2)
+  })
 })
 
 describe('PATCH /workouts/:id', () => {
@@ -454,6 +533,7 @@ describe('POST /workouts/:id/sets', () => {
       setOrder: 1,
       weightKg: null,
       reps: 12,
+      workoutExercise: expect.objectContaining({ workoutId: workout.id, exerciseId, sortOrder: 1 }),
     })
   })
 
@@ -517,6 +597,38 @@ describe('POST /workouts/:id/sets', () => {
 
     expect(res.status).toBe(201)
     expect(res.body).toMatchObject({ weightKg: 62.5 })
+  })
+
+  it('種目の1set目を追加すると、種目カード(WorkoutExercise)が末尾のsortOrderで作られる(Issue #228)', async () => {
+    const secondExercise = await prisma.exercise.create({
+      data: { name: 'スクワット', muscleGroup: 'legs' },
+    })
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId: secondExercise.id, reps: 8 })
+
+    const cards = await prisma.workoutExercise.findMany({
+      where: { workoutId: workout.id },
+      orderBy: { sortOrder: 'asc' },
+    })
+    expect(cards.map((c) => ({ exerciseId: c.exerciseId, sortOrder: c.sortOrder }))).toEqual([
+      { exerciseId, sortOrder: 1 },
+      { exerciseId: secondExercise.id, sortOrder: 2 },
+    ])
+  })
+
+  it('同じ種目の2set目を追加しても、種目カードは増えずsortOrderも変わらない', async () => {
+    const workout = await createWorkout(ownerId)
+
+    const agent = await loginAsOwner()
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
+    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 8 })
+
+    const cards = await prisma.workoutExercise.findMany({ where: { workoutId: workout.id } })
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toMatchObject({ exerciseId, sortOrder: 1 })
   })
 })
 

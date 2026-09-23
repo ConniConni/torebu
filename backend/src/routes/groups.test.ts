@@ -229,6 +229,9 @@ describe('GET /groups/:id/workouts', () => {
     const ownerSet = await prisma.workoutSet.create({
       data: { workoutId: ownerWorkout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },
     })
+    await prisma.workoutExercise.create({
+      data: { workoutId: ownerWorkout.id, exerciseId, sortOrder: 1 },
+    })
     const memberWorkout = await prisma.workout.create({
       data: { userId: memberId, performedAt: new Date('2026-01-11') },
     })
@@ -265,12 +268,13 @@ describe('GET /groups/:id/workouts', () => {
     ])
   })
 
-  it('異なる種目のsetOrderが同値でも、種目を最初に追加した順(作成日時の古い順)でexercisesが安定して返る(Issue #226)', async () => {
+  it('種目カードの並びはWorkoutExercise.sortOrder順で返る。setの作成順やsetOrderの値には左右されない(Issue #228)', async () => {
     const group = await createGroup()
     const workout = await prisma.workout.create({
       data: { userId: ownerId, performedAt: new Date('2026-01-10') },
     })
-    // 2番目に追加した種目のsetを先に作る(=setOrder=1同値のtieを、作成順とは逆の入力順で発生させる)
+    // 2番目に追加した種目のsetを先に作る(=setOrder=1同値のtieを、作成順とは逆の入力順で発生させる)。
+    // それでもexercisesの並びはsortOrder(下のworkoutExercise)が決めることを確認する
     await prisma.workoutSet.create({
       data: {
         workoutId: workout.id,
@@ -289,6 +293,12 @@ describe('GET /groups/:id/workouts', () => {
         createdAt: new Date('2026-01-10T09:00:00Z'),
       },
     })
+    await prisma.workoutExercise.create({
+      data: { workoutId: workout.id, exerciseId: secondExerciseId, sortOrder: 1 },
+    })
+    await prisma.workoutExercise.create({
+      data: { workoutId: workout.id, exerciseId, sortOrder: 2 },
+    })
 
     const agent = await loginAs(ownerEmail)
     const res = await agent.get(`/groups/${group.id}/workouts`)
@@ -296,7 +306,7 @@ describe('GET /groups/:id/workouts', () => {
     const exerciseIds = (res.body[0].exercises as Array<{ exerciseId: string }>).map(
       (e) => e.exerciseId,
     )
-    expect(exerciseIds).toEqual([exerciseId, secondExerciseId])
+    expect(exerciseIds).toEqual([secondExerciseId, exerciseId])
   })
 
   it('同じ実施日の記録が複数あるときは、作成日時の新しい順(登録順)に返る(Issue #222)', async () => {

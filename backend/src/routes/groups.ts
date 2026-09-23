@@ -148,13 +148,12 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
     orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }],
     include: {
       user: { select: { displayName: true } },
-      // setOrderは種目ごとに1からリセットされる連番のため、異なる種目間では頻繁に同値になる。
-      // tie-breakにcreatedAtを追加し、種目のグルーピング順(下のsetsByExercise参照。
-      // 各種目の初出順で並ぶ)が常に安定するようにする(Issue #226)
       sets: {
         orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
         include: { exercise: { select: { name: true } } },
       },
+      // 種目カードの並び順の正(Issue #228)。下のexercisesByIdでこの順にグルーピングし直す
+      exercises: { orderBy: { sortOrder: 'asc' }, select: { exerciseId: true } },
     },
   })
 
@@ -197,6 +196,8 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         entry.sets.push(set)
         setsByExercise.set(set.exerciseId, entry)
       }
+      // 種目カードの並びはw.exercises(WorkoutExercise.sortOrder昇順)を正とする(Issue #228)
+      const orderedExerciseIds = w.exercises.map((e) => e.exerciseId)
       return {
         id: w.id,
         userId: w.userId,
@@ -209,18 +210,21 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         // いいねした人の表示名(#149)。いいねした順(古い順)に並ぶ
         reactorNames: reactorNamesByWorkoutId.get(w.id) ?? [],
         commentCount: commentCountByWorkoutId.get(w.id) ?? 0,
-        exercises: [...setsByExercise.entries()].map(([exerciseId, { name, sets }]) => ({
-          exerciseId,
-          name,
-          sets: sets
-            .sort((a, b) => a.setOrder - b.setOrder)
-            .map((s) => ({
-              id: s.id,
-              setOrder: s.setOrder,
-              weightKg: s.weightKg === null ? null : Number(s.weightKg),
-              reps: s.reps,
-            })),
-        })),
+        exercises: orderedExerciseIds.map((exerciseId) => {
+          const { name, sets } = setsByExercise.get(exerciseId)!
+          return {
+            exerciseId,
+            name,
+            sets: sets
+              .sort((a, b) => a.setOrder - b.setOrder)
+              .map((s) => ({
+                id: s.id,
+                setOrder: s.setOrder,
+                weightKg: s.weightKg === null ? null : Number(s.weightKg),
+                reps: s.reps,
+              })),
+          }
+        }),
       }
     }),
   )
