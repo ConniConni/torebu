@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/* ダークモードの土台（Issue #239）。既定のTailwindはOSのprefers-color-schemeで
+   dark:を切り替えるが、まだユーザー向けの切替UIを出していない段階でOS設定に連動すると
+   意図せずダーク表示になってしまう。そのため`data-theme="dark"`属性（useTheme composableが
+   documentElementに付与する）を明示的にセットしたときだけdark:が効くようにする */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ブランドカラー（方向性A「熱量系」、2026-09-08 Issue #127で導入）。
    blue-*を上書きするのではなくbrand-*として独立させ、後から色調整・
    ダークモード対応をする際に既定のTailwindパレットと混同しないようにしている。 */
