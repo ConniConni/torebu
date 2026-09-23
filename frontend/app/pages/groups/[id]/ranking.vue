@@ -88,7 +88,7 @@ function medalBarClass(rank: number): string {
         <h1 class="text-base font-semibold text-gray-900 dark:text-ink">ランキング</h1>
       </div>
 
-      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-brand-400">
+      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent">
         <button
           v-for="p in PERIODS"
           :key="p.value"
@@ -96,8 +96,8 @@ function medalBarClass(rank: number): string {
           class="flex-1 py-1.5 text-sm font-semibold"
           :class="
             period === p.value
-              ? 'bg-brand-600 text-white'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
           "
           @click="period = p.value"
         >
@@ -160,7 +160,7 @@ function medalBarClass(rank: number): string {
               class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
               :class="
                 entry.userId === user?.id
-                  ? '-mx-2 rounded-lg bg-brand-50 dark:bg-brand-900/30 px-2'
+                  ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
                   : ''
               "
             >
@@ -181,7 +181,7 @@ function medalBarClass(rank: number): string {
                 {{ entry.displayName }}
                 <span
                   v-if="entry.userId === user?.id"
-                  class="ml-1 rounded-full bg-brand-100 dark:bg-brand-900/40 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-brand-400"
+                  class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
                 >
                   自分
                 </span>

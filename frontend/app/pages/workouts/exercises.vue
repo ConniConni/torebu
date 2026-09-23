@@ -114,7 +114,7 @@ async function onDeleteExercise(id: string) {
           class="rounded-full border px-3 py-1 text-xs font-medium"
           :class="
             selectedEquipmentCategories.has(category)
-              ? 'border-brand-600 dark:border-brand-400 bg-brand-600 text-white'
+              ? 'border-brand-600 dark:border-accent bg-brand-600 text-white dark:bg-accent dark:text-surface'
               : 'border-gray-300 dark:border-border-dark bg-white dark:bg-panel text-gray-600 dark:text-muted'
           "
           @click="toggleEquipmentCategory(category)"
@@ -141,7 +141,7 @@ async function onDeleteExercise(id: string) {
                 path: '/workouts/exercises-new',
                 query: { muscleGroup: section.group, returnTo },
               }"
-              class="text-xs text-brand-600 dark:text-brand-400"
+              class="text-xs text-brand-600 dark:text-accent"
             >
               ＋種目を追加
             </NuxtLink>

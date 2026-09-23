@@ -100,7 +100,11 @@ const mainZoneLabel = computed(() => {
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'front' ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-muted'"
+          :class="
+            side === 'front'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'text-gray-600 dark:text-muted'
+          "
           @click="side = 'front'"
         >
           前面
@@ -108,7 +112,11 @@ const mainZoneLabel = computed(() => {
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'back' ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-muted'"
+          :class="
+            side === 'back'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'text-gray-600 dark:text-muted'
+          "
           @click="side = 'back'"
         >
           背面
@@ -143,8 +151,7 @@ const mainZoneLabel = computed(() => {
         class="border-t border-gray-200 dark:border-border-dark px-4 py-3 text-sm text-gray-700 dark:text-ink"
       >
         <p>
-          <span class="font-semibold text-brand-700 dark:text-brand-400">主働筋</span>：{{
-            mainMuscle
+          <span class="font-semibold text-brand-700 dark:text-accent">主働筋</span>：{{ mainMuscle
           }}<template v-if="mainZoneLabel">（{{ mainZoneLabel }}に効きやすい）</template>
         </p>
         <p v-if="relatedMuscles.length" class="mt-1" :class="{ invisible: !showRelated }">

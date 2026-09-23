@@ -49,7 +49,7 @@ async function onSubmit() {
               :type="isPasswordVisible ? 'text' : 'password'"
               required
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
             />
             <button
               type="button"
@@ -77,7 +77,7 @@ async function onSubmit() {
             :type="isPasswordVisible ? 'text' : 'password'"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           />
         </div>
 
@@ -86,7 +86,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         >
           パスワードを再設定
         </button>

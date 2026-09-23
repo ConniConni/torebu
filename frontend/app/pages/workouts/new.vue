@@ -458,7 +458,7 @@ async function onGoToExercisePicker() {
                 </span>
                 <button
                   type="button"
-                  class="text-xs text-brand-600 dark:text-brand-400"
+                  class="text-xs text-brand-600 dark:text-accent"
                   @click="onAddSet(element.exerciseId)"
                 >
                   ＋セット追加
@@ -606,7 +606,7 @@ async function onGoToExercisePicker() {
         </template>
         <p v-else class="text-sm text-gray-500 dark:text-muted">
           ルーティンがまだ登録されていません。
-          <NuxtLink to="/routines" class="text-brand-600 dark:text-brand-400"
+          <NuxtLink to="/routines" class="text-brand-600 dark:text-accent"
             >ルーティンを登録する</NuxtLink
           >
         </p>
@@ -630,14 +630,14 @@ async function onGoToExercisePicker() {
       <div class="flex gap-2">
         <button
           type="button"
-          class="flex-1 rounded border border-brand-600 dark:border-brand-400 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400"
+          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
           @click="onGoToExercisePicker"
         >
           ＋種目を追加
         </button>
         <button
           type="button"
-          class="flex-1 rounded border border-brand-600 dark:border-brand-400 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400"
+          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
           @click="onOpenRoutinePicker"
         >
           ＋ルーティンから選ぶ

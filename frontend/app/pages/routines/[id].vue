@@ -294,7 +294,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
             <p class="text-sm font-semibold text-gray-900 dark:text-ink">種目</p>
             <NuxtLink
               :to="{ path: '/workouts/exercises', query: { returnTo: `/routines/${routineId}` } }"
-              class="text-xs text-brand-600 dark:text-brand-400"
+              class="text-xs text-brand-600 dark:text-accent"
             >
               ＋種目を追加
             </NuxtLink>
@@ -399,7 +399,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                     </div>
                     <button
                       type="button"
-                      class="mt-1 text-xs text-brand-600 dark:text-brand-400"
+                      class="mt-1 text-xs text-brand-600 dark:text-accent"
                       @click="addTargetSet(element)"
                     >
                       ＋目安セットを追加

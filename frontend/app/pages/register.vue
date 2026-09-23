@@ -117,7 +117,7 @@ async function onSubmit() {
             required
             maxlength="50"
             autocomplete="nickname"
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           />
         </div>
 
@@ -131,7 +131,7 @@ async function onSubmit() {
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           />
         </div>
 
@@ -148,7 +148,7 @@ async function onSubmit() {
               minlength="8"
               maxlength="72"
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
             />
             <button
               type="button"
@@ -177,7 +177,7 @@ async function onSubmit() {
               :type="isPasswordConfirmationVisible ? 'text' : 'password'"
               required
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
             />
             <button
               type="button"
@@ -200,7 +200,7 @@ async function onSubmit() {
               v-model="birthYear"
               :disabled="birthDateNoAnswer"
               :required="!birthDateNoAnswer"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100 dark:disabled:bg-white/5"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent disabled:bg-gray-100 dark:disabled:bg-white/5"
             >
               <option value="" disabled>年</option>
               <option v-for="year in birthYearOptions" :key="year" :value="year">
@@ -211,7 +211,7 @@ async function onSubmit() {
               v-model="birthMonth"
               :disabled="birthDateNoAnswer"
               :required="!birthDateNoAnswer"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100 dark:disabled:bg-white/5"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent disabled:bg-gray-100 dark:disabled:bg-white/5"
             >
               <option value="" disabled>月</option>
               <option v-for="month in birthMonthOptions" :key="month" :value="month">
@@ -233,7 +233,7 @@ async function onSubmit() {
             id="gender"
             v-model="gender"
             required
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           >
             <option value="" disabled>選択してください</option>
             <option value="male">男性</option>
@@ -251,7 +251,7 @@ async function onSubmit() {
             id="occupation"
             v-model="occupation"
             required
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           >
             <option value="" disabled>選択してください</option>
             <option value="student">学生</option>
@@ -276,7 +276,7 @@ async function onSubmit() {
             <span>
               <button
                 type="button"
-                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-brand-400 hover:underline"
+                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-accent hover:underline"
                 @click="showTermsModal('terms')"
               >
                 利用規約
@@ -284,7 +284,7 @@ async function onSubmit() {
               ・
               <button
                 type="button"
-                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-brand-400 hover:underline"
+                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-accent hover:underline"
                 @click="showTermsModal('privacy')"
               >
                 プライバシーポリシー
@@ -308,7 +308,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         >
           登録する
         </button>
@@ -316,7 +316,7 @@ async function onSubmit() {
 
       <p class="mt-4 text-center text-sm text-gray-600 dark:text-muted">
         アカウントをお持ちの方は
-        <NuxtLink to="/login" class="text-brand-600 dark:text-brand-400 hover:underline"
+        <NuxtLink to="/login" class="text-brand-600 dark:text-accent hover:underline"
           >ログイン</NuxtLink
         >
       </p>

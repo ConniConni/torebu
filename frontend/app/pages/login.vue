@@ -42,7 +42,7 @@ async function onSubmit() {
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
           />
         </div>
 
@@ -57,7 +57,7 @@ async function onSubmit() {
               :type="isPasswordVisible ? 'text' : 'password'"
               required
               autocomplete="current-password"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
             />
             <button
               type="button"
@@ -74,7 +74,7 @@ async function onSubmit() {
         <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
 
         <p class="text-right text-sm">
-          <NuxtLink to="/password-reset" class="text-brand-600 dark:text-brand-400 hover:underline">
+          <NuxtLink to="/password-reset" class="text-brand-600 dark:text-accent hover:underline">
             パスワードをお忘れの方
           </NuxtLink>
         </p>
@@ -82,7 +82,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         >
           ログイン
         </button>
@@ -90,7 +90,7 @@ async function onSubmit() {
 
       <p class="mt-4 text-center text-sm text-gray-600 dark:text-muted">
         アカウントをお持ちでない方は
-        <NuxtLink to="/register" class="text-brand-600 dark:text-brand-400 hover:underline"
+        <NuxtLink to="/register" class="text-brand-600 dark:text-accent hover:underline"
           >新規登録</NuxtLink
         >
       </p>

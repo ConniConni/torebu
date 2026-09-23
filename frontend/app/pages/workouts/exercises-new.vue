@@ -125,7 +125,7 @@ async function onSubmit() {
         <button
           type="submit"
           :disabled="!name.trim() || submitting"
-          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
         >
           追加する
         </button>

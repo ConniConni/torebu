@@ -53,7 +53,7 @@ const title = computed(() => (props.type === 'terms' ? '利用規約' : 'プラ�
     <div class="border-t border-gray-200 dark:border-border-dark px-4 py-3">
       <button
         type="button"
-        class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         @click="emit('close')"
       >
         閉じる

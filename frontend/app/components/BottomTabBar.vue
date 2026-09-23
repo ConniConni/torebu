@@ -40,7 +40,7 @@ function isActive(to: string) {
         :to="tab.to"
         class="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold"
         :class="
-          isActive(tab.to) ? 'text-brand-700 dark:text-brand-400' : 'text-gray-400 dark:text-muted'
+          isActive(tab.to) ? 'text-brand-700 dark:text-accent' : 'text-gray-400 dark:text-muted'
         "
         :aria-current="isActive(tab.to) ? 'page' : undefined"
       >
@@ -50,7 +50,7 @@ function isActive(to: string) {
 
       <button
         type="button"
-        class="absolute left-1/2 -top-5 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg hover:bg-brand-700"
+        class="absolute left-1/2 -top-5 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         aria-label="記録を追加"
         @click="navigateTo('/workouts/new')"
       >

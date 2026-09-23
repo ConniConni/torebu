@@ -222,7 +222,7 @@ async function onDeleteWorkout(id: string) {
           class="flex min-w-0 items-center gap-2 text-sm text-gray-900 dark:text-ink"
         >
           <span
-            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-xs font-semibold text-brand-700 dark:text-brand-400"
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
           >
             {{ (user?.displayName ?? '?').slice(0, 1) }}
           </span>
@@ -280,7 +280,7 @@ async function onDeleteWorkout(id: string) {
                 class="flex-1 rounded py-1 text-[10px] font-bold"
                 :class="
                   selectedPeriod === period.key
-                    ? 'bg-brand-700 text-white'
+                    ? 'bg-brand-700 text-white dark:bg-accent dark:text-surface'
                     : 'bg-transparent text-gray-400 dark:text-muted'
                 "
                 @click="selectedPeriod = period.key"
@@ -291,7 +291,7 @@ async function onDeleteWorkout(id: string) {
             <div class="flex flex-col gap-2">
               <div>
                 <p
-                  class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-brand-400"
+                  class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
                 >
                   {{ formatTons(activeStats.volumeKg) }}
                 </p>
@@ -325,7 +325,7 @@ async function onDeleteWorkout(id: string) {
               </div>
               <div>
                 <p
-                  class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-brand-400"
+                  class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
                 >
                   {{ activeStats.days
                   }}<span class="ml-1 text-sm font-medium text-gray-700 dark:text-ink">日</span>
@@ -348,7 +348,7 @@ async function onDeleteWorkout(id: string) {
                   class="w-9 shrink-0 text-[10px] leading-none"
                   :class="
                     point.label === '今週'
-                      ? 'font-semibold text-brand-700 dark:text-brand-400'
+                      ? 'font-semibold text-brand-700 dark:text-accent'
                       : 'text-gray-500 dark:text-muted'
                   "
                 >
@@ -359,7 +359,7 @@ async function onDeleteWorkout(id: string) {
                 <div class="h-3 flex-1">
                   <div
                     v-if="point.volumeKg > 0"
-                    class="h-3 rounded-full bg-brand-600"
+                    class="h-3 rounded-full bg-brand-600 dark:bg-accent"
                     :class="point.label === '今週' ? '' : 'opacity-40'"
                     :style="{
                       width: `${Math.max(4, Math.round((point.volumeKg / weeklyVolumeTrendMax) * 100))}%`,
@@ -387,7 +387,7 @@ async function onDeleteWorkout(id: string) {
             <NuxtLink
               v-if="isTodayOrPastDate"
               :to="`/workouts/new?date=${selectedDate}`"
-              class="mt-2 block w-full rounded border border-brand-600 dark:border-brand-400 py-2 text-center text-sm font-semibold text-brand-600 dark:text-brand-400"
+              class="mt-2 block w-full rounded border border-brand-600 dark:border-accent py-2 text-center text-sm font-semibold text-brand-600 dark:text-accent"
             >
               ＋この日の記録を始める
             </NuxtLink>
@@ -427,7 +427,7 @@ async function onDeleteWorkout(id: string) {
               <div v-else class="flex items-start gap-2">
                 <NuxtLink
                   :to="`/workouts/new?date=${workout.performedAt}`"
-                  class="block flex-1 hover:text-brand-600 dark:hover:text-brand-400"
+                  class="block flex-1 hover:text-brand-600 dark:hover:text-accent"
                 >
                   <p v-if="workout.memo" class="mb-1 text-xs text-gray-500 dark:text-muted">
                     {{ workout.memo }}
@@ -444,7 +444,7 @@ async function onDeleteWorkout(id: string) {
                      表現にする（Issue #99。以前の「種目未登録」は受動的で分かりにくいという指摘） -->
                   <p
                     v-else-if="!workoutGroups[workout.id]?.length"
-                    class="text-sm font-medium text-brand-600 dark:text-brand-400"
+                    class="text-sm font-medium text-brand-600 dark:text-accent"
                   >
                     ＋種目を記録する
                   </p>

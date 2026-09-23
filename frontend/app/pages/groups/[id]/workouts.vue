@@ -250,11 +250,11 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
           :id="`workout-${workout.id}`"
           :key="workout.id"
           class="rounded-lg bg-white dark:bg-panel p-4 shadow"
-          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400' : ''"
+          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400 dark:ring-accent' : ''"
         >
           <div class="flex items-center gap-2.5">
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-sm font-semibold text-brand-700 dark:text-brand-400"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-sm font-semibold text-brand-700 dark:text-accent"
             >
               {{ workout.displayName.slice(0, 1) }}
             </span>
@@ -279,7 +279,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
             <div v-for="ex in workout.exercises" :key="ex.exerciseId" class="w-full">
               <button
                 type="button"
-                class="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-brand-400"
+                class="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-accent/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-accent"
                 :aria-expanded="isExerciseOpen(workout.id, ex.exerciseId)"
                 @click="toggleExercise(workout.id, ex.exerciseId)"
               >
@@ -350,7 +350,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
               :class="
                 isReactorsOpen(workout.id)
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400'
+                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
                   : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
               "
               :aria-expanded="isReactorsOpen(workout.id)"
@@ -365,7 +365,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
               :class="
                 workout.reactedByMe
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400'
+                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
                   : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
               "
               :disabled="likePending.has(workout.id)"
@@ -410,7 +410,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 class="flex items-center gap-2"
               >
                 <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-[10px] font-semibold text-brand-700 dark:text-brand-400"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
                 >
                   {{ name.slice(0, 1) }}
                 </span>
@@ -442,7 +442,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 class="flex items-start gap-2"
               >
                 <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-[10px] font-semibold text-brand-700 dark:text-brand-400"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
                 >
                   {{ comment.displayName.slice(0, 1) }}
                 </span>
@@ -451,7 +451,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                     class="rounded-lg px-2.5 py-1.5"
                     :class="
                       comment.userId === user?.id
-                        ? 'bg-brand-50 dark:bg-brand-900/30'
+                        ? 'bg-brand-50 dark:bg-accent/10'
                         : 'bg-gray-100 dark:bg-white/5'
                     "
                   >
@@ -459,7 +459,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                       class="text-xs font-medium"
                       :class="
                         comment.userId === user?.id
-                          ? 'text-brand-700 dark:text-brand-400'
+                          ? 'text-brand-700 dark:text-accent'
                           : 'text-gray-600 dark:text-muted'
                       "
                     >
@@ -503,7 +503,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               />
               <button
                 type="button"
-                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50"
+                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
                 :disabled="
                   commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()
                 "

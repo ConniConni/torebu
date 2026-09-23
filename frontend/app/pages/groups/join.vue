@@ -47,7 +47,7 @@ async function onJoin() {
         <button
           type="submit"
           :disabled="!inviteCode.trim() || submitting"
-          class="rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          class="rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
         >
           {{ submitting ? '参加中...' : '参加する' }}
         </button>

@@ -121,7 +121,11 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
           :key="slide.title"
           type="button"
           class="h-2 rounded-full transition-all"
-          :class="index === activeIndex ? 'w-5 bg-brand-600' : 'w-2 bg-gray-300 dark:bg-white/20'"
+          :class="
+            index === activeIndex
+              ? 'w-5 bg-brand-600 dark:bg-accent'
+              : 'w-2 bg-gray-300 dark:bg-white/20'
+          "
           :aria-label="`${index + 1}枚目のスライドを表示`"
           :aria-current="index === activeIndex"
           @click="scrollToSlide(index)"
@@ -130,7 +134,7 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
       <button
         v-if="!isLastSlide"
         type="button"
-        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         @click="scrollToSlide(activeIndex + 1)"
       >
         次へ
@@ -138,7 +142,7 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
       <button
         v-else
         type="button"
-        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         @click="emit('close')"
       >
         閉じる

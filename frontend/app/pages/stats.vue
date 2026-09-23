@@ -154,7 +154,7 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <h1 class="text-base font-semibold text-gray-900 dark:text-ink">統計</h1>
 
-      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-brand-400">
+      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent">
         <button
           v-for="r in RANGES"
           :key="r.value"
@@ -162,8 +162,8 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
           class="flex-1 py-1.5 text-sm font-semibold"
           :class="
             range === r.value
-              ? 'bg-brand-600 text-white'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
           "
           @click="range = r.value"
         >

@@ -112,7 +112,7 @@ async function onDelete() {
             <h2 class="flex-1 text-base font-bold text-gray-900 dark:text-ink">{{ group.name }}</h2>
             <span
               v-if="isOwner"
-              class="shrink-0 rounded-full bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-400"
+              class="shrink-0 rounded-full bg-brand-50 dark:bg-accent/10 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-accent"
             >
               オーナー
             </span>
@@ -122,13 +122,13 @@ async function onDelete() {
           </p>
           <NuxtLink
             :to="`/groups/${groupId}/workouts`"
-            class="mt-3 block rounded border border-brand-600 dark:border-brand-400 py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-brand-400"
+            class="mt-3 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
           >
             みんなの記録を見る
           </NuxtLink>
           <NuxtLink
             :to="`/groups/${groupId}/ranking`"
-            class="mt-2 block rounded border border-brand-600 dark:border-brand-400 py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-brand-400"
+            class="mt-2 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
           >
             ランキングを見る
           </NuxtLink>
@@ -144,7 +144,7 @@ async function onDelete() {
           <div class="mt-2 flex gap-2">
             <button
               type="button"
-              class="flex-1 rounded border border-brand-600 dark:border-brand-400 py-1.5 text-sm font-semibold text-brand-600 dark:text-brand-400"
+              class="flex-1 rounded border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold text-brand-600 dark:text-accent"
               @click="onCopyInviteCode"
             >
               {{ copied ? 'コピーしました' : 'コピー' }}
@@ -175,7 +175,7 @@ async function onDelete() {
               <span class="flex-1">{{ member.displayName }}</span>
               <span
                 v-if="member.role === 'owner'"
-                class="text-xs font-semibold text-brand-700 dark:text-brand-400"
+                class="text-xs font-semibold text-brand-700 dark:text-accent"
               >
                 オーナー
               </span>

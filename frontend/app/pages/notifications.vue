@@ -75,14 +75,14 @@ function targetLink(n: AppNotification) {
           <NuxtLink
             :to="targetLink(n)"
             class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
-            :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-brand-900/30'"
+            :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-accent/10'"
           >
             <span
               v-if="!n.isRead"
-              class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600"
+              class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-accent"
             />
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-xs font-semibold text-brand-700 dark:text-brand-400"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
             >
               {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
             </span>
@@ -91,14 +91,14 @@ function targetLink(n: AppNotification) {
               filled
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
               :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-brand-400'
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
               "
             />
             <CommentIcon
               v-else
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
               :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-brand-400'
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
               "
             />
             <div class="min-w-0 flex-1">

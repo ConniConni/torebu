@@ -9,11 +9,11 @@
       <TermsContent />
 
       <p class="mt-8 text-center text-sm text-gray-600 dark:text-muted">
-        <NuxtLink to="/privacy" class="text-brand-600 dark:text-brand-400 hover:underline"
+        <NuxtLink to="/privacy" class="text-brand-600 dark:text-accent hover:underline"
           >プライバシーポリシー</NuxtLink
         >
         ・
-        <NuxtLink to="/" class="text-brand-600 dark:text-brand-400 hover:underline"
+        <NuxtLink to="/" class="text-brand-600 dark:text-accent hover:underline"
           >トップへ戻る</NuxtLink
         >
       </p>

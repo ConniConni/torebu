@@ -113,11 +113,13 @@ function nextMonth() {
           class="flex h-6 w-6 items-center justify-center rounded-full"
           :class="[
             cell.date === selectedDate
-              ? 'bg-brand-600 text-white'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
               : cell.hasSets
-                ? 'bg-brand-100 dark:bg-brand-900/40 font-semibold text-brand-700 dark:text-brand-400'
+                ? 'bg-brand-100 dark:bg-accent/15 font-semibold text-brand-700 dark:text-accent'
                 : '',
-            cell.isToday && cell.date !== selectedDate ? 'ring-2 ring-brand-600' : '',
+            cell.isToday && cell.date !== selectedDate
+              ? 'ring-2 ring-brand-600 dark:ring-accent'
+              : '',
           ]"
         >
           {{ cell.day }}
@@ -131,7 +133,7 @@ function nextMonth() {
             cell.memoOnly
               ? cell.date === selectedDate
                 ? 'bg-white dark:bg-panel'
-                : 'bg-brand-600'
+                : 'bg-brand-600 dark:bg-accent'
               : 'bg-transparent'
           "
         />

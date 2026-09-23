@@ -35,7 +35,7 @@ async function onCreate() {
 
       <NuxtLink
         to="/groups/join"
-        class="rounded border border-brand-600 dark:border-brand-400 py-2 text-center text-sm font-semibold text-brand-600 dark:text-brand-400"
+        class="rounded border border-brand-600 dark:border-accent py-2 text-center text-sm font-semibold text-brand-600 dark:text-accent"
       >
         招待コードで参加する
       </NuxtLink>
@@ -54,7 +54,7 @@ async function onCreate() {
         <button
           type="submit"
           :disabled="!newName.trim() || submitting"
-          class="shrink-0 whitespace-nowrap rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          class="shrink-0 whitespace-nowrap rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
         >
           作成
         </button>
@@ -81,7 +81,7 @@ async function onCreate() {
             }}</span>
             <span
               v-if="group.role === 'owner'"
-              class="shrink-0 rounded-full bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-400"
+              class="shrink-0 rounded-full bg-brand-50 dark:bg-accent/10 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-accent"
             >
               オーナー
             </span>
