@@ -282,7 +282,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
             v-model="nameInput"
             type="text"
             maxlength="50"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
             @blur="onNameBlur"
           />
         </label>
@@ -369,7 +369,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                               step="0.5"
                               min="0"
                               placeholder="自重"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="saveTargetSets(element)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
@@ -379,7 +379,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                               v-model="set.reps"
                               type="number"
                               min="1"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="saveTargetSets(element)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>

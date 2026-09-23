@@ -426,7 +426,7 @@ async function onGoToExercisePicker() {
             rows="2"
             maxlength="500"
             placeholder="今日の体調・気づいたことなど"
-            class="rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
             @blur="onMemoBlur"
           />
         </label>
@@ -499,7 +499,7 @@ async function onGoToExercisePicker() {
                           step="0.5"
                           min="0"
                           placeholder="自重"
-                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                           @blur="onSetFieldBlur(set.id)"
                         />
                         <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
@@ -509,7 +509,7 @@ async function onGoToExercisePicker() {
                           v-model="setInputs[set.id]!.reps"
                           type="number"
                           min="1"
-                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                           @blur="onSetFieldBlur(set.id)"
                         />
                         <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>

@@ -41,7 +41,7 @@ async function onJoin() {
             v-model="inviteCode"
             type="text"
             placeholder="オーナーから共有された招待コードを貼り付け"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
           />
         </label>
         <button

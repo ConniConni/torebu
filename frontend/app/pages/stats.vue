@@ -196,7 +196,7 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
         <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">種目別推移</p>
         <select
           v-model="selectedExerciseId"
-          class="mb-3 w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm text-gray-900 dark:text-ink"
+          class="mb-3 w-full rounded border border-gray-300 dark:border-border-dark bg-white px-2 py-1.5 text-sm text-gray-900 dark:bg-panel dark:text-ink"
         >
           <option v-if="officialExercises.length === 0" value="">種目がありません</option>
           <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>

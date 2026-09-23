@@ -49,7 +49,7 @@ async function onSubmit() {
               :type="isPasswordVisible ? 'text' : 'password'"
               required
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent bg-white dark:bg-panel text-gray-900 dark:text-ink"
             />
             <button
               type="button"
@@ -77,7 +77,7 @@ async function onSubmit() {
             :type="isPasswordVisible ? 'text' : 'password'"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:focus:border-accent bg-white dark:bg-panel text-gray-900 dark:text-ink"
           />
         </div>
 

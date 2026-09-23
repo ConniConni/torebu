@@ -83,7 +83,7 @@ async function onSubmit() {
           部位
           <select
             v-model="muscleGroup"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
           >
             <option v-for="group in MUSCLE_GROUPS" :key="group" :value="group">
               {{ muscleGroupLabel(group) }}
@@ -98,7 +98,7 @@ async function onSubmit() {
             type="text"
             maxlength="50"
             placeholder="例：インクラインダンベルプレス"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
           />
         </label>
 

@@ -497,7 +497,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 type="text"
                 placeholder="コメントを入力"
                 maxlength="500"
-                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 dark:border-border-dark px-3 text-sm"
+                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 dark:border-border-dark px-3 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
                 @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
                 @keydown.enter="onCommentEnter($event, workout)"
               />

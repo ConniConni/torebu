@@ -61,7 +61,7 @@ async function onDeleteRoutine(id: string) {
             type="text"
             maxlength="50"
             placeholder="例：胸の日"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
           />
         </label>
         <button
