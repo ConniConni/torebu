@@ -10,8 +10,17 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-const { session, startWorkout, fetchSets, addSet, removeSet, updateSet, updateMemo, finishWorkout } =
-  useWorkoutSession()
+const {
+  session,
+  startWorkout,
+  fetchSets,
+  addSet,
+  removeSet,
+  updateSet,
+  updateMemo,
+  finishWorkout,
+  resetSession,
+} = useWorkoutSession()
 
 // ?date=YYYY-MM-DDで任意の日付のworkoutを開けるようにする（省略時は今日）。
 // startWorkout側は既に「同じ日付のworkoutがあれば再利用する」ロジックを持っているため、
@@ -356,8 +365,8 @@ if (initialPickedExerciseId) {
 }
 
 // ③記録作成を離れる操作（旧「今日の記録を完了」「ホームへ戻る」）。セット記録・削除は
-// 既に即APIへ反映されているため、finishWorkout自体は「②ホームのキャッシュを再取得し、
-// ホームへ遷移してからセッション状態をリセットする」だけの処理（workoutが未作成なら再取得もしない）。
+// 既に即APIへ反映されているため、finishWorkout自体は「②ホームのキャッシュを再取得してから
+// ホームへ遷移する」だけの処理（workoutが未作成なら再取得もしない）。
 // 「今日の記録を完了」だけがこの再取得をしていて、「ホームへ戻る」は素のリンクだったため
 // 遷移直後の②ホームに今回の変更が反映されないことがあった。実質同じ操作なので1つに統合する。
 // メモの自動保存がblur待ちで進行中の場合があるため、遷移前に必ず待ち合わせる。
@@ -365,14 +374,28 @@ if (initialPickedExerciseId) {
 // （ブラウザのイベント順序上、blur→clickの順になる）ため、この時点でpendingSetSavesには
 // 直前の編集の保存Promiseが積まれているはずだが、それを待たずに遷移すると
 // 直前の入力が保存されないまま失われる(気づいたことをその場で修正。Issue #116の動作確認中に発覚)
+//
+// セッション状態(session)のリセットはここでは行わず、下のonUnmounted(このページが実際に
+// アンマウントされるタイミング)で行う。isLeavingWorkoutはその橋渡し用のフラグで、
+// 「④種目選択へ一時的に離れる(onGoToExercisePicker)」等、resetSession()してはいけない
+// アンマウントと区別するために立てる（詳細はuseWorkoutSession.tsのfinishWorkoutのコメント参照）
+const isLeavingWorkout = ref(false)
+
 async function onLeaveWorkout() {
   await (pendingMemoSave ?? saveMemoIfChanged())
   await Promise.all(pendingSetSaves.values())
+  isLeavingWorkout.value = true
   await finishWorkout()
-  // 入力待ちの種目もworkout単位の状態のため、離脱と合わせてリセットする
-  // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）
-  pendingExercises.value = []
 }
+
+onUnmounted(() => {
+  if (!isLeavingWorkout.value) return
+  resetSession()
+  // 入力待ちの種目もworkout単位の状態のため、離脱と合わせてリセットする
+  // （そうしないと次回の記録開始時に前回分の入力待ち種目が残ってしまう）。
+  // sessionと同じ理由でアンマウント後に行う（pendingExercisesもこのページの表示に使っている）
+  pendingExercises.value = []
+})
 
 // 「＋種目を追加」も④への画面遷移(離脱)を伴うため、onLeaveWorkoutと同じ理由で
 // 保存中のセット編集を待ってから遷移する
