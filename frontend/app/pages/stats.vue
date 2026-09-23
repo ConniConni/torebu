@@ -11,6 +11,7 @@ import {
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 import type { StatsRange } from '~/composables/useStats'
+import type { LineChartData } from '~/utils/statsChart'
 
 definePageMeta({ middleware: 'auth', layout: 'tabbar' })
 
@@ -107,15 +108,53 @@ watch(range, () => {
 watch(selectedExerciseId, loadHistory, { immediate: true })
 await loadVolume()
 
-const chartOptions = { responsive: true, maintainAspectRatio: false }
+// Chart.jsはcanvas描画のためTailwindのdark:バリアントが効かず、テーマに応じた色を
+// options・datasetに明示的に渡す必要がある（Issue #241）。useThemeのtheme（'light'|'dark'）を
+// 見て、軸ラベル・グリッド線・線グラフ本体の色を出し分ける。線の色はダークモードのみ
+// アクセントのライム(#c8ff4d、WelcomeScreen.vue/Issue #239で導入した値)に変更し視認性を上げる。
+// ライト側は元々Chart.jsの既定色に任せていたため、そこは変更しない
+const { theme } = useTheme()
+const isDarkTheme = computed(() => theme.value === 'dark')
+
+const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: { color: isDarkTheme.value ? '#a3a29b' : undefined },
+    },
+  },
+  scales: {
+    x: {
+      ticks: { color: isDarkTheme.value ? '#a3a29b' : undefined },
+      grid: { color: isDarkTheme.value ? 'rgba(255,255,255,0.08)' : undefined },
+    },
+    y: {
+      ticks: { color: isDarkTheme.value ? '#a3a29b' : undefined },
+      grid: { color: isDarkTheme.value ? 'rgba(255,255,255,0.08)' : undefined },
+    },
+  },
+}))
+
+function withThemedColor(data: LineChartData): LineChartData {
+  if (!isDarkTheme.value) return data
+  return {
+    ...data,
+    datasets: [{ ...data.datasets[0], borderColor: '#c8ff4d', backgroundColor: '#c8ff4d' }],
+  }
+}
+
+const volumeChartDataThemed = computed(() => withThemedColor(volumeChartData.value))
+const maxWeightChartDataThemed = computed(() => withThemedColor(maxWeightChartData.value))
+const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolumeChartData.value))
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <h1 class="text-base font-semibold text-gray-900">統計</h1>
+      <h1 class="text-base font-semibold text-gray-900 dark:text-ink">統計</h1>
 
-      <div class="flex overflow-hidden rounded-lg border border-brand-600">
+      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-brand-400">
         <button
           v-for="r in RANGES"
           :key="r.value"
@@ -124,7 +163,7 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
           :class="
             range === r.value
               ? 'bg-brand-600 text-white'
-              : 'bg-white text-brand-600 hover:bg-brand-50'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30'
           "
           @click="range = r.value"
         >
@@ -132,57 +171,61 @@ const chartOptions = { responsive: true, maintainAspectRatio: false }
         </button>
       </div>
 
-      <div class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">合計負荷重量の推移</p>
-        <p v-if="volumePending" class="text-center text-sm text-gray-500">読み込み中...</p>
-        <p v-else-if="volumeError" class="text-center text-sm text-red-600">
+      <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+        <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">合計負荷重量の推移</p>
+        <p v-if="volumePending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="volumeError" class="text-center text-sm text-red-600 dark:text-red-400">
           データの取得に失敗しました。時間をおいて再度お試しください
         </p>
         <p
           v-else-if="volumeChartData.labels.length === 0"
-          class="py-6 text-center text-sm text-gray-500"
+          class="py-6 text-center text-sm text-gray-500 dark:text-muted"
         >
           この期間の記録がありません
         </p>
         <ClientOnly v-else>
           <div class="h-56">
-            <Line :data="volumeChartData" :options="chartOptions" />
+            <Line :data="volumeChartDataThemed" :options="chartOptions" />
           </div>
         </ClientOnly>
       </div>
 
-      <div class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">種目別推移</p>
+      <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+        <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">種目別推移</p>
         <select
           v-model="selectedExerciseId"
-          class="mb-3 w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          class="mb-3 w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm text-gray-900 dark:text-ink"
         >
           <option v-if="officialExercises.length === 0" value="">種目がありません</option>
           <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
 
-        <p v-if="historyPending" class="text-center text-sm text-gray-500">読み込み中...</p>
-        <p v-else-if="historyError" class="text-center text-sm text-red-600">
+        <p v-if="historyPending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="historyError" class="text-center text-sm text-red-600 dark:text-red-400">
           データの取得に失敗しました。時間をおいて再度お試しください
         </p>
         <template v-else-if="selectedExerciseId">
           <p
             v-if="maxWeightChartData.labels.length === 0"
-            class="py-6 text-center text-sm text-gray-500"
+            class="py-6 text-center text-sm text-gray-500 dark:text-muted"
           >
             この期間の記録がありません
           </p>
           <ClientOnly v-else>
             <div class="mb-4">
-              <p class="mb-1 text-xs font-semibold text-gray-500">最大重量</p>
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">最大重量</p>
               <div class="h-48">
-                <Line :data="maxWeightChartData" :options="chartOptions" />
+                <Line :data="maxWeightChartDataThemed" :options="chartOptions" />
               </div>
             </div>
             <div>
-              <p class="mb-1 text-xs font-semibold text-gray-500">合計負荷重量</p>
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
               <div class="h-48">
-                <Line :data="historyVolumeChartData" :options="chartOptions" />
+                <Line :data="historyVolumeChartDataThemed" :options="chartOptions" />
               </div>
             </div>
           </ClientOnly>
