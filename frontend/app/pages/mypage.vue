@@ -82,15 +82,15 @@ async function onLogout() {
         <p v-if="summaryPending" class="text-xs text-gray-400">読み込み中...</p>
         <p v-else-if="summaryError" class="text-xs text-red-600">サマリーの取得に失敗しました</p>
         <div v-else class="grid grid-cols-2 gap-2">
-          <div class="rounded bg-gray-50 p-2.5">
-            <p class="text-xs text-gray-500">負荷重量</p>
-            <p class="text-xl font-bold tabular-nums text-gray-900">
+          <div class="rounded bg-brand-50 p-2.5">
+            <p class="text-xs text-brand-700">負荷重量</p>
+            <p class="text-xl font-bold tabular-nums text-brand-900">
               {{ formatTons(recentVolumeKg) }}
             </p>
           </div>
-          <div class="rounded bg-gray-50 p-2.5">
-            <p class="text-xs text-gray-500">トレ日数</p>
-            <p class="text-xl font-bold tabular-nums text-gray-900">{{ recentTrainingDays }}日</p>
+          <div class="rounded bg-brand-50 p-2.5">
+            <p class="text-xs text-brand-700">トレ日数</p>
+            <p class="text-xl font-bold tabular-nums text-brand-900">{{ recentTrainingDays }}日</p>
           </div>
         </div>
       </div>
@@ -116,9 +116,13 @@ async function onLogout() {
           <li v-for="group in groups" :key="group.id">
             <NuxtLink
               :to="`/groups/${group.id}`"
-              class="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 hover:bg-gray-50"
+              class="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 hover:bg-brand-50"
             >
-              <GroupIcon class="h-5 w-5 shrink-0 text-gray-400" />
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50"
+              >
+                <GroupIcon class="h-4 w-4 text-brand-600" />
+              </span>
               <div class="min-w-0">
                 <p class="truncate text-sm text-gray-900">{{ group.name }}</p>
                 <p class="text-xs text-gray-500">
@@ -165,22 +169,25 @@ async function onLogout() {
         <p class="mb-2 text-sm font-semibold text-gray-900">サポート・情報</p>
         <ul class="flex flex-col divide-y divide-gray-100 text-sm text-gray-700">
           <li>
-            <NuxtLink to="/terms" class="flex items-center gap-3 py-2">
-              <InfoIcon class="h-5 w-5 shrink-0 text-gray-400" />
+            <NuxtLink to="/terms" class="flex items-center gap-3 py-2 hover:text-brand-700">
+              <InfoIcon class="h-5 w-5 shrink-0 text-brand-500" />
               <span class="flex-1">利用規約</span>
               <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-300" />
             </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/privacy" class="flex items-center gap-3 py-2">
-              <InfoIcon class="h-5 w-5 shrink-0 text-gray-400" />
+            <NuxtLink to="/privacy" class="flex items-center gap-3 py-2 hover:text-brand-700">
+              <InfoIcon class="h-5 w-5 shrink-0 text-brand-500" />
               <span class="flex-1">プライバシーポリシー</span>
               <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-300" />
             </NuxtLink>
           </li>
           <li>
-            <a href="mailto:torebu1442@gmail.com" class="flex items-center gap-3 py-2">
-              <EnvelopeIcon class="h-5 w-5 shrink-0 text-gray-400" />
+            <a
+              href="mailto:torebu1442@gmail.com"
+              class="flex items-center gap-3 py-2 hover:text-brand-700"
+            >
+              <EnvelopeIcon class="h-5 w-5 shrink-0 text-brand-500" />
               <span class="flex-1">お問い合わせ</span>
             </a>
           </li>
@@ -189,7 +196,7 @@ async function onLogout() {
 
       <button
         type="button"
-        class="flex items-center justify-center gap-2 rounded bg-gray-200 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300"
+        class="flex items-center justify-center gap-2 rounded border border-brand-200 bg-white py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
         @click="onLogout"
       >
         <ArrowRightOnRectangleIcon class="h-4 w-4" />
