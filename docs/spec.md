@@ -964,6 +964,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET /exercises` の `lastSet`（[Issue #116](https://github.com/ConniConni/torebu/issues/116)） | `{ weightKg, reps } \| null`。自分の削除されていない（`deletedAt: null`の）workoutの中で、その種目を一番新しく記録したセット1件（`performedAt`降順→`setOrder`降順で先頭）。記録が無ければ`null`。③記録作成でのセット追加のデフォルト値決定に使う（§3-2「＋セット追加」参照） |
 | `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`isExerciseVisible`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`isExerciseVisible`を呼ばないため削除済みでも編集できる） |
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
+| `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
 | `PATCH /workouts/:id` の `memo` | 空文字列・`null`を送るとメモを**クリア**（`null`化）できる。省略時のみ「変更しない」 |

@@ -341,7 +341,23 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
     return
   }
 
-  await prisma.workoutSet.delete({ where: { id: set.id } })
+  // 削除すると、その種目の残りのsetOrderに欠番ができる(例: 1,2,3から2を消すと1,3が残る)。
+  // 採番自体はnextSetOrderが最大値+1で拾うため壊れないが、表示上「1セット目から始まらない」
+  // 「セット数と連番がずれる」ことになるため、削除のたびに残りを1から連番に詰め直す
+  await prisma.$transaction(async (tx) => {
+    await tx.workoutSet.delete({ where: { id: set.id } })
+
+    const remaining = await tx.workoutSet.findMany({
+      where: { workoutId: set.workoutId, exerciseId: set.exerciseId },
+      orderBy: { setOrder: 'asc' },
+    })
+    for (const [index, s] of remaining.entries()) {
+      const setOrder = index + 1
+      if (s.setOrder !== setOrder) {
+        await tx.workoutSet.update({ where: { id: s.id }, data: { setOrder } })
+      }
+    }
+  })
 
   res.status(204).send()
 })
