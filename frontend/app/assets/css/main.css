@@ -17,4 +17,21 @@
   --color-brand-600: #d8531f;
   --color-brand-700: #b8431a;
   --color-brand-900: #3a2013;
+  /* ダーク背景専用の明るいブランドトーン（Issue #241）。brand-600/700/900はいずれも
+     ライト背景向けに暗めに作ってあり、暗背景ではそのまま使うとコントラストが不足するため、
+     ダーク側のテキスト・枠線色として追加した。brand-400は既存値（アイコンの淡色用途）を流用、
+     brand-300は数値強調（マイページの実績カード等、より明るさが要る箇所）用に新設した */
+  --color-brand-300: #f2b58c;
+
+  /* ダーク配色トークン（Issue #241）。WelcomeScreen.vue（Issue #239）で決めた
+     背景#15181c・アクセント#c8ff4d系統をベースに、ログイン後の一般画面向けに
+     surface/panel/ink/muted/borderの5トークンへ整理した。個々のクラスに
+     dark:bg-[#141414]のような生の16進値を毎回書くのではなく、dark:bg-surface
+     のようなセマンティックな名前で使うことで、504箇所規模の置き換えでも
+     色のブレ・表記ゆれを防ぐ狙い */
+  --color-surface: #141414;
+  --color-panel: #1f1f1d;
+  --color-ink: #f2f2ee;
+  --color-muted: #a3a29b;
+  --color-border-dark: #33322c;
 }
