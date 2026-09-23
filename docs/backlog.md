@@ -582,12 +582,15 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
     `#141414`/`#1f1f1d`/`#f2f2ee`/`#a3a29b`/`#33322c`で上記と同系統）として整理し直した
     （`frontend/app/assets/css/main.css`）。個々のクラスに生の16進値を毎回書くのではなく
     `dark:bg-surface`のような名前で使うことで、500箇所規模の置き換えでも表記ゆれを防ぐ狙い。
-    ブランドカラー（`bg-brand-50/100`のバッジ・カード、`text-brand-600/700/900`）は暗背景では
-    コントラスト不足になるため、暗背景専用の`brand-300`トークンを追加しつつ
-    `dark:bg-brand-900/30`等の半透明値で個別に上書きしている。統計画面のChart.js（canvas描画の
-    ためCSSの`dark:`が効かない）は`options`・datasetへ直接色を渡す形で別途対応した
-    （`frontend/app/pages/stats.vue`）。部位ハイライトシートのダーク配色は下記
-    「部位ハイライトシートで見送った機能」参照
+    ブランドカラー（ボタン・リンク・強調テキスト・バッジ等の`bg-brand-*`/`text-brand-*`/
+    `border-brand-*`）は暗背景ではそのままだとコントラスト不足になる上、ユーザー指摘で
+    「ダークのオレンジ系パーツはWelcomeScreen.vue（Issue #239）が確立したライム`#c8ff4d`基調に
+    揃える」方針に転換したため、暗背景専用の`--color-accent: #c8ff4d`トークンを追加し
+    `dark:bg-accent`/`dark:text-accent`/`dark:border-accent`で個別に上書きしている
+    （ライム地に乗る文字は`dark:text-surface`）。**部位ハイライトシートの発光色（「効く部位」の
+    表現）だけは対象外とし、暖色のまま据え置いた**（下記「部位ハイライトシートで見送った機能」
+    参照）。統計画面のChart.js（canvas描画のためCSSの`dark:`が効かない）は`options`・datasetへ
+    直接色を渡す形で別途対応し、線の色もダークはライムにしている（`frontend/app/pages/stats.vue`）
 
 - **`exercises.default_sort_order`の運用**：当面すべて`null`で運用し、値を設定する手段（管理API・
   シードスクリプトいずれも）は用意しない（Issue5で検討）。結果、MVP期間中は実質「使用回数→名前順」の
