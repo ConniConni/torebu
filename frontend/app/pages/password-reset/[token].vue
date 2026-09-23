@@ -31,13 +31,15 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-    <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow">
-      <h1 class="mb-6 text-center text-xl font-bold text-gray-900">新しいパスワードの設定</h1>
+  <div class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-surface px-4">
+    <div class="w-full max-w-sm rounded-lg bg-white dark:bg-panel p-6 shadow">
+      <h1 class="mb-6 text-center text-xl font-bold text-gray-900 dark:text-ink">
+        新しいパスワードの設定
+      </h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div>
-          <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
+          <label for="password" class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink">
             新しいパスワード
           </label>
           <div class="relative">
@@ -47,23 +49,26 @@ async function onSubmit() {
               :type="isPasswordVisible ? 'text' : 'password'"
               required
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
             />
             <button
               type="button"
               :aria-label="isPasswordVisible ? 'パスワードを非表示にする' : 'パスワードを表示する'"
-              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 dark:text-muted hover:text-gray-700 dark:hover:text-ink"
               @click="isPasswordVisible = !isPasswordVisible"
             >
               <EyeSlashIcon v-if="isPasswordVisible" class="h-5 w-5" />
               <EyeIcon v-else class="h-5 w-5" />
             </button>
           </div>
-          <p class="mt-1 text-xs text-gray-500">8文字以上で入力してください</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-muted">8文字以上で入力してください</p>
         </div>
 
         <div>
-          <label for="passwordConfirmation" class="mb-1 block text-sm font-medium text-gray-700">
+          <label
+            for="passwordConfirmation"
+            class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink"
+          >
             新しいパスワード（確認）
           </label>
           <input
@@ -72,11 +77,11 @@ async function onSubmit() {
             :type="isPasswordVisible ? 'text' : 'password'"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
-        <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
 
         <button
           type="submit"

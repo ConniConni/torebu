@@ -95,14 +95,19 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-    <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow">
-      <NuxtLink to="/" class="mb-4 inline-block text-sm text-gray-500">← トップに戻る</NuxtLink>
-      <h1 class="mb-6 text-center text-xl font-bold text-gray-900">新規登録</h1>
+  <div class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-surface px-4">
+    <div class="w-full max-w-sm rounded-lg bg-white dark:bg-panel p-6 shadow">
+      <NuxtLink to="/" class="mb-4 inline-block text-sm text-gray-500 dark:text-muted"
+        >← トップに戻る</NuxtLink
+      >
+      <h1 class="mb-6 text-center text-xl font-bold text-gray-900 dark:text-ink">新規登録</h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div>
-          <label for="displayName" class="mb-1 block text-sm font-medium text-gray-700">
+          <label
+            for="displayName"
+            class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink"
+          >
             表示名
           </label>
           <input
@@ -112,12 +117,12 @@ async function onSubmit() {
             required
             maxlength="50"
             autocomplete="nickname"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div>
-          <label for="email" class="mb-1 block text-sm font-medium text-gray-700">
+          <label for="email" class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink">
             メールアドレス
           </label>
           <input
@@ -126,12 +131,12 @@ async function onSubmit() {
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div>
-          <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
+          <label for="password" class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink">
             パスワード
           </label>
           <div class="relative">
@@ -143,23 +148,26 @@ async function onSubmit() {
               minlength="8"
               maxlength="72"
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
             />
             <button
               type="button"
               :aria-label="isPasswordVisible ? 'パスワードを非表示にする' : 'パスワードを表示する'"
-              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 dark:text-muted hover:text-gray-700 dark:hover:text-ink"
               @click="isPasswordVisible = !isPasswordVisible"
             >
               <EyeSlashIcon v-if="isPasswordVisible" class="h-5 w-5" />
               <EyeIcon v-else class="h-5 w-5" />
             </button>
           </div>
-          <p class="mt-1 text-xs text-gray-500">8文字以上で入力してください</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-muted">8文字以上で入力してください</p>
         </div>
 
         <div>
-          <label for="passwordConfirmation" class="mb-1 block text-sm font-medium text-gray-700">
+          <label
+            for="passwordConfirmation"
+            class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink"
+          >
             パスワード（確認）
           </label>
           <div class="relative">
@@ -169,12 +177,14 @@ async function onSubmit() {
               :type="isPasswordConfirmationVisible ? 'text' : 'password'"
               required
               autocomplete="new-password"
-              class="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none"
             />
             <button
               type="button"
-              :aria-label="isPasswordConfirmationVisible ? 'パスワードを非表示にする' : 'パスワードを表示する'"
-              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+              :aria-label="
+                isPasswordConfirmationVisible ? 'パスワードを非表示にする' : 'パスワードを表示する'
+              "
+              class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 dark:text-muted hover:text-gray-700 dark:hover:text-ink"
               @click="isPasswordConfirmationVisible = !isPasswordConfirmationVisible"
             >
               <EyeSlashIcon v-if="isPasswordConfirmationVisible" class="h-5 w-5" />
@@ -184,13 +194,13 @@ async function onSubmit() {
         </div>
 
         <div>
-          <span class="mb-1 block text-sm font-medium text-gray-700">生年月</span>
+          <span class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink">生年月</span>
           <div class="flex gap-2">
             <select
               v-model="birthYear"
               :disabled="birthDateNoAnswer"
               :required="!birthDateNoAnswer"
-              class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100 dark:disabled:bg-white/5"
             >
               <option value="" disabled>年</option>
               <option v-for="year in birthYearOptions" :key="year" :value="year">
@@ -201,7 +211,7 @@ async function onSubmit() {
               v-model="birthMonth"
               :disabled="birthDateNoAnswer"
               :required="!birthDateNoAnswer"
-              class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none disabled:bg-gray-100 dark:disabled:bg-white/5"
             >
               <option value="" disabled>月</option>
               <option v-for="month in birthMonthOptions" :key="month" :value="month">
@@ -209,19 +219,21 @@ async function onSubmit() {
               </option>
             </select>
           </div>
-          <label class="mt-1 flex items-center gap-1.5 text-sm text-gray-600">
+          <label class="mt-1 flex items-center gap-1.5 text-sm text-gray-600 dark:text-muted">
             <input v-model="birthDateNoAnswer" type="checkbox" />
             回答しない
           </label>
         </div>
 
         <div>
-          <label for="gender" class="mb-1 block text-sm font-medium text-gray-700">性別</label>
+          <label for="gender" class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink"
+            >性別</label
+          >
           <select
             id="gender"
             v-model="gender"
             required
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           >
             <option value="" disabled>選択してください</option>
             <option value="male">男性</option>
@@ -232,12 +244,14 @@ async function onSubmit() {
         </div>
 
         <div>
-          <label for="occupation" class="mb-1 block text-sm font-medium text-gray-700">職業</label>
+          <label for="occupation" class="mb-1 block text-sm font-medium text-gray-700 dark:text-ink"
+            >職業</label
+          >
           <select
             id="occupation"
             v-model="occupation"
             required
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            class="w-full rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           >
             <option value="" disabled>選択してください</option>
             <option value="student">学生</option>
@@ -251,7 +265,7 @@ async function onSubmit() {
         </div>
 
         <div>
-          <label class="flex items-start gap-2 text-sm text-gray-600">
+          <label class="flex items-start gap-2 text-sm text-gray-600 dark:text-muted">
             <input
               v-model="agreedToTerms"
               type="checkbox"
@@ -262,7 +276,7 @@ async function onSubmit() {
             <span>
               <button
                 type="button"
-                class="inline border-0 bg-transparent p-0 text-brand-600 hover:underline"
+                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-brand-400 hover:underline"
                 @click="showTermsModal('terms')"
               >
                 利用規約
@@ -270,7 +284,7 @@ async function onSubmit() {
               ・
               <button
                 type="button"
-                class="inline border-0 bg-transparent p-0 text-brand-600 hover:underline"
+                class="inline border-0 bg-transparent p-0 text-brand-600 dark:text-brand-400 hover:underline"
                 @click="showTermsModal('privacy')"
               >
                 プライバシーポリシー
@@ -278,7 +292,7 @@ async function onSubmit() {
               に同意する
             </span>
           </label>
-          <p v-if="!canAgreeToTerms" class="mt-1 text-xs text-gray-500">
+          <p v-if="!canAgreeToTerms" class="mt-1 text-xs text-gray-500 dark:text-muted">
             利用規約・プライバシーポリシーの両方を開くと、同意にチェックできるようになります
           </p>
         </div>
@@ -289,7 +303,7 @@ async function onSubmit() {
           @close="openTermsModal = null"
         />
 
-        <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
 
         <button
           type="submit"
@@ -300,9 +314,11 @@ async function onSubmit() {
         </button>
       </form>
 
-      <p class="mt-4 text-center text-sm text-gray-600">
+      <p class="mt-4 text-center text-sm text-gray-600 dark:text-muted">
         アカウントをお持ちの方は
-        <NuxtLink to="/login" class="text-brand-600 hover:underline">ログイン</NuxtLink>
+        <NuxtLink to="/login" class="text-brand-600 dark:text-brand-400 hover:underline"
+          >ログイン</NuxtLink
+        >
       </p>
     </div>
   </div>

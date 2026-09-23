@@ -4,14 +4,18 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-8">
-    <div class="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-8">
+    <div class="mx-auto max-w-2xl rounded-lg bg-white dark:bg-panel p-6 shadow">
       <TermsContent />
 
-      <p class="mt-8 text-center text-sm text-gray-600">
-        <NuxtLink to="/privacy" class="text-brand-600 hover:underline">プライバシーポリシー</NuxtLink>
+      <p class="mt-8 text-center text-sm text-gray-600 dark:text-muted">
+        <NuxtLink to="/privacy" class="text-brand-600 dark:text-brand-400 hover:underline"
+          >プライバシーポリシー</NuxtLink
+        >
         ・
-        <NuxtLink to="/" class="text-brand-600 hover:underline">トップへ戻る</NuxtLink>
+        <NuxtLink to="/" class="text-brand-600 dark:text-brand-400 hover:underline"
+          >トップへ戻る</NuxtLink
+        >
       </p>
     </div>
   </div>

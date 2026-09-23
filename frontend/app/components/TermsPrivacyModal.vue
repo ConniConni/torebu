@@ -30,17 +30,17 @@ const title = computed(() => (props.type === 'terms' ? '利用規約' : 'プラ�
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex flex-col bg-white">
-    <div class="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+  <div class="fixed inset-0 z-50 flex flex-col bg-white dark:bg-panel">
+    <div class="flex items-center gap-3 border-b border-gray-200 dark:border-border-dark px-4 py-3">
       <button
         type="button"
-        class="text-lg text-gray-500"
+        class="text-lg text-gray-500 dark:text-muted"
         aria-label="閉じる"
         @click="emit('close')"
       >
         ✕
       </button>
-      <h2 class="truncate text-sm font-semibold text-gray-900">{{ title }}</h2>
+      <h2 class="truncate text-sm font-semibold text-gray-900 dark:text-ink">{{ title }}</h2>
     </div>
 
     <div class="flex-1 overflow-y-auto px-4 py-6">
@@ -50,7 +50,7 @@ const title = computed(() => (props.type === 'terms' ? '利用規約' : 'プラ�
       </div>
     </div>
 
-    <div class="border-t border-gray-200 px-4 py-3">
+    <div class="border-t border-gray-200 dark:border-border-dark px-4 py-3">
       <button
         type="button"
         class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700"
