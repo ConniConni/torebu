@@ -160,9 +160,11 @@ workoutsRouter.get('/', requireAuth, async (req, res) => {
 
   // ②ホームのカレンダー印・記録カードが「セットが1件以上あるか」を判定できるよう、
   // _countで件数だけ添える(sets本体は返さない。一覧では使わないため)
+  // performedAtは日付のみ(時刻を持たない)のため、同じ日に複数件記録すると
+  // performedAtだけでは同値行の順序が不定になる。createdAtをtie-breakにして登録順(新しい順)を保証する
   const workouts = await prisma.workout.findMany({
     where: { userId, deletedAt: null },
-    orderBy: { performedAt: 'desc' },
+    orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }],
     include: { _count: { select: { sets: true } } },
   })
 

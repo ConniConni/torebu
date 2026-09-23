@@ -104,13 +104,14 @@ async function createSharedGroup() {
 
 async function createWorkout(
   userId: string,
-  overrides: { performedAt?: Date; memo?: string } = {},
+  overrides: { performedAt?: Date; memo?: string; createdAt?: Date } = {},
 ) {
   return prisma.workout.create({
     data: {
       userId,
       performedAt: overrides.performedAt ?? new Date('2026-09-01'),
       memo: overrides.memo,
+      createdAt: overrides.createdAt,
     },
   })
 }
@@ -157,6 +158,23 @@ describe('GET /workouts', () => {
     expect(res.status).toBe(200)
     const ids = (res.body as Array<{ id: string }>).map((w) => w.id)
     expect(ids).toEqual([newer.id, older.id])
+  })
+
+  it('同じ実施日の記録が複数あるときは、作成日時の新しい順(登録順)に返る(Issue #222)', async () => {
+    const first = await createWorkout(ownerId, {
+      performedAt: new Date('2026-09-01'),
+      createdAt: new Date('2026-09-01T10:00:00Z'),
+    })
+    const second = await createWorkout(ownerId, {
+      performedAt: new Date('2026-09-01'),
+      createdAt: new Date('2026-09-01T11:00:00Z'),
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/workouts')
+
+    const ids = (res.body as Array<{ id: string }>).map((w) => w.id)
+    expect(ids).toEqual([second.id, first.id])
   })
 
   it('ソフトデリート済みのworkoutは含まれない', async () => {
