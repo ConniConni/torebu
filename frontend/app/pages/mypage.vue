@@ -103,9 +103,15 @@ async function onLogout() {
         <p v-else-if="groupsError" class="text-xs text-red-600">
           グループの取得に失敗しました
         </p>
-        <p v-else-if="!groups || groups.length === 0" class="text-xs text-gray-500">
-          所属しているグループはありません
-        </p>
+        <div v-else-if="!groups || groups.length === 0">
+          <p class="mb-2 text-xs text-gray-500">所属しているグループはありません</p>
+          <NuxtLink
+            to="/groups"
+            class="block rounded bg-brand-600 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            グループを作成・参加する
+          </NuxtLink>
+        </div>
         <ul v-else class="flex flex-col gap-2">
           <li v-for="group in groups" :key="group.id">
             <NuxtLink
