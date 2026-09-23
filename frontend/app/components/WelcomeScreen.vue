@@ -4,9 +4,15 @@
 // （Issue #176）。画像に文字を焼き込んで全画面objectcoverする方式だと、画面比率によって
 // 文字が見切れたり、絶対座標で重ねたボタンと画像内の文字が重なったりする問題があったため
 import topIllustration from '~/assets/images/top_illustration.jpeg'
+// ダーク時のイラスト（Issue #239）。配色トークンはdocs/backlog.md「配色の方向性B」節の
+// 未ログイントップ画面での再検討（2026-09-12追記）に決定済みの値をそのまま使っている
+import topIllustrationDark from '~/assets/images/top_image_dark.jpeg'
 
 // トレ部でできることを4枚のスクリーンショットで説明するオンボーディングモーダル（Issue #200）
 const isOnboardingOpen = ref(false)
+
+const { theme } = useTheme()
+const heroImage = computed(() => (theme.value === 'dark' ? topIllustrationDark : topIllustration))
 </script>
 
 <template>
@@ -17,8 +23,12 @@ const isOnboardingOpen = ref(false)
        高さの上限を設けないと、デスクトップの縦に長いウィンドウでは「幅440px×高さ全部」という
        実機のスマホではあり得ない縦長比率になり、イラストのobject-coverが左右を過剰にクロップ
        してしまう（切れて見える）ため -->
-  <div class="flex h-dvh w-full items-center justify-center overflow-hidden bg-brand-100">
-    <div class="flex h-full max-h-[932px] w-full max-w-[440px] flex-col overflow-hidden bg-brand-50">
+  <div
+    class="flex h-dvh w-full items-center justify-center overflow-hidden bg-brand-100 dark:bg-[#15181c]"
+  >
+    <div
+      class="flex h-full max-h-[932px] w-full max-w-[440px] flex-col overflow-hidden bg-brand-50 dark:bg-[#15181c]"
+    >
       <!-- 見出し・サブテキスト（HTML）。画面が小さいときも詰まりすぎないよう最小限のpaddingのみ -->
       <div class="shrink-0 px-6 pt-8 pb-4">
         <!-- 元画像に合わせて、スマホ幅では画面幅の6割程度（右端が64〜68%あたり）になるよう
@@ -29,7 +39,7 @@ const isOnboardingOpen = ref(false)
              vwの基準になる画面幅自体が広い画面でも実質440px相当を超えないため、この上限が
              効くのはウィンドウ幅が440pxに満たない場合のみ -->
         <h1
-          class="-rotate-6 inline-block text-[clamp(24px,11vw,48px)] leading-snug text-gray-900"
+          class="-rotate-6 inline-block text-[clamp(24px,11vw,48px)] leading-snug text-gray-900 dark:text-[#f6f5f0]"
           style="font-family: 'Yusei Magic', sans-serif"
         >
           一緒だから<br />
@@ -42,7 +52,7 @@ const isOnboardingOpen = ref(false)
             <svg
               viewBox="0 0 200 20"
               preserveAspectRatio="none"
-              class="absolute -bottom-2 left-0 h-3 w-full text-brand-500"
+              class="absolute -bottom-2 left-0 h-3 w-full text-brand-500 dark:text-[#c8ff4d]"
               aria-hidden="true"
             >
               <path
@@ -60,7 +70,7 @@ const isOnboardingOpen = ref(false)
              vwを含む値にしているが、見出し側のfont-sizeが48pxで頭打ちになるのに合わせて
              こちらも2.75remで頭打ちにし、広い画面で余白が際限なく広がらないようにしている -->
         <p
-          class="text-sm leading-relaxed text-gray-700"
+          class="text-sm leading-relaxed text-gray-700 dark:text-[#b7b6ad]"
           style="margin-top: clamp(1.25rem, calc(1.25rem + 6vw), 2.75rem)"
         >
           トレーニングの記録を仲間とシェアして、<br />
@@ -70,12 +80,12 @@ const isOnboardingOpen = ref(false)
 
       <!-- イラスト部分。残りの高さをすべて使い、画面比率に応じてobject-coverで自然にクロップする -->
       <div class="min-h-0 flex-1">
-        <img :src="topIllustration" alt="" class="h-full w-full object-cover object-top" />
+        <img :src="heroImage" alt="" class="h-full w-full object-cover object-top" />
       </div>
 
       <!-- 下部バー（HTML）。文言・ボタンとも画像から独立しているので重なりが起きない -->
       <div
-        class="shrink-0 bg-brand-600 px-6 pt-5 text-white"
+        class="shrink-0 bg-brand-600 px-6 pt-5 text-white dark:bg-[#c8ff4d] dark:text-[#15181c]"
         style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom))"
       >
         <div class="flex items-center gap-3 text-sm font-semibold">
@@ -99,7 +109,7 @@ const isOnboardingOpen = ref(false)
 
         <button
           type="button"
-          class="mt-4 block text-sm font-semibold text-white underline underline-offset-2"
+          class="mt-4 block text-sm font-semibold text-white underline underline-offset-2 dark:text-[#15181c]"
           @click="isOnboardingOpen = true"
         >
           トレ部でできることを見る →
@@ -108,13 +118,13 @@ const isOnboardingOpen = ref(false)
         <div class="mt-3 flex gap-3">
           <NuxtLink
             to="/login"
-            class="flex-1 rounded-full bg-white py-2.5 text-center text-sm font-semibold text-brand-700 shadow"
+            class="flex-1 rounded-full bg-white py-2.5 text-center text-sm font-semibold text-brand-700 shadow dark:bg-[#15181c] dark:text-[#c8ff4d]"
           >
             ログイン
           </NuxtLink>
           <NuxtLink
             to="/register"
-            class="flex-1 rounded-full border border-white py-2.5 text-center text-sm font-semibold text-white"
+            class="flex-1 rounded-full border border-white py-2.5 text-center text-sm font-semibold text-white dark:border-[#15181c] dark:text-[#15181c]"
           >
             新規登録
           </NuxtLink>
