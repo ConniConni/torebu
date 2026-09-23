@@ -110,7 +110,28 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
 - **データベースの設計変更（マイグレーション）を含むPRをマージするときは、マージの前後どちらかで
   忘れず本番DB（Neon）に`prisma migrate deploy`を手動実行する**。Vercelのビルドが自動で行うのは
   Prisma Client（コード側のDB操作ライブラリ）の生成だけで、実際のテーブル構造の変更は含まれない。
-  忘れると、新しいコードが古いテーブル構造に対して動くことになりエラーになる
+  忘れると、新しいコードが古いテーブル構造に対して動くことになりエラーになる。
+  **`prisma migrate deploy`を打つときは以下3点に注意する**（Issue #228のPR対応中、2026-09-23に
+  実際に詰まった。詳細はメモリ`neon-production-migrate-deploy`参照）：
+  1. 接続文字列は**Vercelではなく[Neonコンソール](https://console.neon.tech)から取る**
+     （Vercelの環境変数は一度セットすると値が再表示できないため）
+  2. **pooled（ホスト名に`-pooler`が付く）ではなくdirect接続を使う**。`migrate deploy`は
+     マイグレーション中にアドバイザリロックを取得し同一セッション前提で動くため、pooled接続だと
+     失敗・ハングしうる。Neonコンソールの接続ダイアログで「Pooled connection」をOFFにしてコピーする
+     （アプリ実行時のVercelの`DATABASE_URL`は逆にpooled推奨。torebuは`DIRECT_URL`を分けておらず
+     `DATABASE_URL`1本の構成なので、マイグレーションを打つときだけ一時的にdirect接続の値に差し替える）
+  3. Neonの接続文字列は`?sslmode=require&channel_binding=require`のように**`&`を含む**ため、
+     `DATABASE_URL=postgresql://... npx prisma migrate deploy`のようにクォートせず1行で渡すと、
+     シェルが`&`の位置でコマンドを分割してしまい、`DATABASE_URL`がセットされないまま実行される
+     （気づかずローカルDBに対して実行してしまう事故につながる）。必ず`export`＋ダブルクォートで
+     値全体を1つの文字列として渡し、`migrate status`で接続先（`Datasource`行のホスト名）が
+     本番Neonになっているか確認してから`migrate deploy`を実行する：
+     ```bash
+     cd backend
+     export DATABASE_URL="<Neonのdirect接続文字列>"
+     npx prisma migrate status   # 接続先を確認してから
+     npx prisma migrate deploy
+     ```
 - PRに新しい環境変数（`SESSION_SECRET`のような秘密情報や設定値）が必要になった場合は、
   マージ前にVercel側（バックエンド・フロントエンドそれぞれ）のダッシュボードで設定しておく
 - 現時点では、PR単位で作られるPreviewデプロイ環境もProductionと**同じNeonデータベース**を
