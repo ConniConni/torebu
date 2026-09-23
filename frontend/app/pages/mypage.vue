@@ -6,6 +6,7 @@ definePageMeta({ middleware: 'auth' })
 
 const { user, logout } = useAuth()
 const { groups, pending: groupsPending, error: groupsError, fetchGroups } = useGroups()
+const { workouts, fetchWorkouts } = useWorkouts()
 const { fetchVolume } = useStats()
 
 if (!groups.value) {
@@ -13,27 +14,33 @@ if (!groups.value) {
 }
 
 // 実績サマリーは直近28日のみ（②ホームの期間別サマリーカードと違い期間タブは持たない、
-// docs/backlog.md参照）。既存GET /stats/volume（range=all）をフロントで直近28日分に集計する
+// docs/backlog.md参照）。合計負荷重量は既存GET /stats/volume（range=all）、トレ日数は
+// 既存GET /workoutsのperformedAt一覧をそれぞれフロントで直近28日分に集計する
+// （②ホームと同じtrainingVolume.ts・trainingDays.tsを流用。HomeScreen.vue参照）
 const today = todayLocalDateString()
 const recentVolumeKg = ref(0)
-const volumePending = ref(true)
-const volumeError = ref(false)
+const recentTrainingDays = ref(0)
+const summaryPending = ref(true)
+const summaryError = ref(false)
 
-async function loadRecentVolume() {
-  volumePending.value = true
-  volumeError.value = false
+async function loadSummary() {
+  summaryPending.value = true
+  summaryError.value = false
   try {
-    const points = await fetchVolume('all')
+    const [points] = await Promise.all([fetchVolume('all'), fetchWorkouts()])
     recentVolumeKg.value = sumRecentVolume(points, today, 28)
+    recentTrainingDays.value = countRecentTrainingDays(
+      (workouts.value ?? []).map((w) => w.performedAt),
+      today,
+      28,
+    )
   } catch {
-    volumeError.value = true
+    summaryError.value = true
   } finally {
-    volumePending.value = false
+    summaryPending.value = false
   }
 }
-await loadRecentVolume()
-
-const recentAnimalCaption = computed(() => animalCaption(recentVolumeKg.value))
+await loadSummary()
 
 const ROLE_LABEL: Record<'owner' | 'member', string> = { owner: 'オーナー', member: 'メンバー' }
 
@@ -64,29 +71,25 @@ async function onLogout() {
         </div>
       </div>
 
-      <!-- 実績サマリー（直近28日、既存GET /stats/volumeを流用） -->
+      <!-- 実績サマリー（直近28日、既存GET /stats/volume・GET /workoutsを流用） -->
       <div class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">実績サマリー（直近28日）</p>
-        <p v-if="volumePending" class="text-xs text-gray-400">読み込み中...</p>
-        <p v-else-if="volumeError" class="text-xs text-red-600">サマリーの取得に失敗しました</p>
-        <div v-else>
-          <p class="text-2xl font-extrabold leading-none tabular-nums text-brand-700">
-            {{ formatTons(recentVolumeKg) }}
-          </p>
-          <div v-if="recentAnimalCaption" class="mt-1 flex items-center gap-1.5">
-            <span class="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-500"
-              >負荷重量</span
-            >
-            <SeaAnimalIcon
-              :name="recentAnimalCaption.animalKey"
-              :alt="recentAnimalCaption.animalName"
-              class="h-6 w-9 shrink-0"
-            />
-            <span class="whitespace-nowrap text-xs font-semibold tabular-nums text-gray-500">
-              × {{ recentAnimalCaption.multiplierText }}
-            </span>
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-sm text-gray-500">直近28日の実績</p>
+          <NuxtLink to="/stats" class="text-sm text-brand-600">統計を見る →</NuxtLink>
+        </div>
+        <p v-if="summaryPending" class="text-xs text-gray-400">読み込み中...</p>
+        <p v-else-if="summaryError" class="text-xs text-red-600">サマリーの取得に失敗しました</p>
+        <div v-else class="grid grid-cols-2 gap-2">
+          <div class="rounded bg-gray-50 p-2.5">
+            <p class="text-xs text-gray-500">負荷重量</p>
+            <p class="text-xl font-bold tabular-nums text-gray-900">
+              {{ formatTons(recentVolumeKg) }}
+            </p>
           </div>
-          <p v-else class="mt-1 text-xs text-gray-500">負荷重量</p>
+          <div class="rounded bg-gray-50 p-2.5">
+            <p class="text-xs text-gray-500">トレ日数</p>
+            <p class="text-xl font-bold tabular-nums text-gray-900">{{ recentTrainingDays }}日</p>
+          </div>
         </div>
       </div>
 
