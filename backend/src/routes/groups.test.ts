@@ -260,6 +260,32 @@ describe('GET /groups/:id/workouts', () => {
     ])
   })
 
+  it('同じ実施日の記録が複数あるときは、作成日時の新しい順(登録順)に返る(Issue #222)', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const first = await prisma.workout.create({
+      data: {
+        userId: ownerId,
+        performedAt: new Date('2026-01-10'),
+        createdAt: new Date('2026-01-10T10:00:00Z'),
+      },
+    })
+    const second = await prisma.workout.create({
+      data: {
+        userId: memberId,
+        performedAt: new Date('2026-01-10'),
+        createdAt: new Date('2026-01-10T11:00:00Z'),
+      },
+    })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    const ids = (res.body as Array<{ id: string }>).map((w) => w.id)
+    expect(ids).toEqual([second.id, first.id])
+  })
+
   it('いいねの件数と自分がいいね済みかを含める', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId)

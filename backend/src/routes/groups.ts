@@ -141,9 +141,11 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
     })
   ).map((m) => m.userId)
 
+  // performedAtは日付のみ(時刻を持たない)のため、同じ日に複数件記録すると
+  // performedAtだけでは同値行の順序が不定になる。createdAtをtie-breakにして登録順(新しい順)を保証する
   const workouts = await prisma.workout.findMany({
     where: { userId: { in: memberIds }, deletedAt: null },
-    orderBy: { performedAt: 'desc' },
+    orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }],
     include: {
       user: { select: { displayName: true } },
       sets: { include: { exercise: { select: { name: true } } } },
