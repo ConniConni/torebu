@@ -74,29 +74,33 @@ const mainZoneLabel = computed(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex flex-col bg-white">
-    <div class="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+  <div class="fixed inset-0 z-50 flex flex-col bg-white dark:bg-panel">
+    <div class="flex items-center gap-3 border-b border-gray-200 dark:border-border-dark px-4 py-3">
       <button
         type="button"
-        class="text-lg text-gray-500"
+        class="text-lg text-gray-500 dark:text-muted"
         aria-label="閉じる"
         @click="emit('close')"
       >
         ✕
       </button>
-      <h2 class="truncate text-sm font-semibold text-gray-900">{{ exerciseName }}</h2>
+      <h2 class="truncate text-sm font-semibold text-gray-900 dark:text-ink">{{ exerciseName }}</h2>
     </div>
 
     <div v-if="!highlight.hasHighlightData" class="flex flex-1 items-center justify-center px-6">
-      <p class="text-center text-sm text-gray-500">部位ハイライトのデータがありません</p>
+      <p class="text-center text-sm text-gray-500 dark:text-muted">
+        部位ハイライトのデータがありません
+      </p>
     </div>
 
     <template v-else>
-      <div class="flex justify-center gap-1 border-b border-gray-200 bg-gray-50 p-2">
+      <div
+        class="flex justify-center gap-1 border-b border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-surface p-2"
+      >
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'front' ? 'bg-brand-600 text-white' : 'text-gray-600'"
+          :class="side === 'front' ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-muted'"
           @click="side = 'front'"
         >
           前面
@@ -104,7 +108,7 @@ const mainZoneLabel = computed(() => {
         <button
           type="button"
           class="rounded-full px-4 py-1 text-xs font-medium"
-          :class="side === 'back' ? 'bg-brand-600 text-white' : 'text-gray-600'"
+          :class="side === 'back' ? 'bg-brand-600 text-white' : 'text-gray-600 dark:text-muted'"
           @click="side = 'back'"
         >
           背面
@@ -112,7 +116,7 @@ const mainZoneLabel = computed(() => {
         <button
           v-if="relatedMuscles.length"
           type="button"
-          class="ml-2 rounded-full border border-gray-300 px-4 py-1 text-xs font-medium text-gray-600"
+          class="ml-2 rounded-full border border-gray-300 dark:border-border-dark px-4 py-1 text-xs font-medium text-gray-600 dark:text-muted"
           @click="showRelated = !showRelated"
         >
           {{ showRelated ? '主働筋のみ表示' : '関連筋も見る' }}
@@ -130,14 +134,17 @@ const mainZoneLabel = computed(() => {
           :label-map="currentSide.labelMap"
           class="max-h-full"
         />
-        <p v-if="!currentSide.active" class="mt-2 text-xs text-gray-400">
+        <p v-if="!currentSide.active" class="mt-2 text-xs text-gray-400 dark:text-muted">
           この面に光る部位はありません
         </p>
       </div>
 
-      <div class="border-t border-gray-200 px-4 py-3 text-sm text-gray-700">
+      <div
+        class="border-t border-gray-200 dark:border-border-dark px-4 py-3 text-sm text-gray-700 dark:text-ink"
+      >
         <p>
-          <span class="font-semibold text-brand-700">主働筋</span>：{{ mainMuscle
+          <span class="font-semibold text-brand-700 dark:text-brand-400">主働筋</span>：{{
+            mainMuscle
           }}<template v-if="mainZoneLabel">（{{ mainZoneLabel }}に効きやすい）</template>
         </p>
         <p v-if="relatedMuscles.length" class="mt-1" :class="{ invisible: !showRelated }">
