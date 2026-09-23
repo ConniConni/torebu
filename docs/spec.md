@@ -161,7 +161,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/password-reset/[token]` | - | 新しいパスワードの設定。メール内のリンクからアクセスする（Issue #213） | `POST /auth/password-resets` | `guest` |
 | `/terms` | - | 利用規約（Issue #160） | なし | なし |
 | `/privacy` | - | プライバシーポリシー（Issue #160）。収集する情報・利用目的・第三者提供の有無・運営者情報を明示 | なし | なし |
-| `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。下部バーには実画面のスクリーンショットで機能を紹介するオンボーディングスライド（4枚）への導線も置く（Issue #200、下記参照）。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。下記2-1・backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
+| `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。下部バーには実画面のスクリーンショットで機能を紹介するオンボーディングスライド（4枚）への導線も置く（Issue #200、下記参照）。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。ログイン後の全画面はIssue #241でダーク対応済み、backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない | `GET /exercises` | `auth` |
@@ -175,7 +175,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」の通知を新しい順に表示する。開いた時点で全件既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
-| `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アプリの見た目（ダークモード）／アカウント（パスワード変更）は非活性の「準備中」表示のみ・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモード・パスワード変更の実処理はそれぞれ別Issueで追加予定（下記参照） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
+| `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アプリの見た目（ダークモードの切替UI自体）／アカウント（パスワード変更）は非活性の「準備中」表示のみ
+（配色自体はIssue #241で全画面対応済み。切替UIはStripe連携着手Issueで追加予定）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモード・パスワード変更の実処理はそれぞれ別Issueで追加予定（下記参照） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす（`/`自体は対象外。下記参照）
@@ -461,10 +462,15 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   `GET /auth/me`・`POST /auth/login`のレスポンスに含める（`useAuth`の`AuthUser`型に追加）。
   `getBodySvgData(gender)`（`muscleHighlightSvg.ts`）が図の選択を担い、
   `MuscleHighlightSheet`に`gender` propとして渡す
-- ダーク/ライトテーマ切替はプロトタイプには存在するがtorebuでは未実装（理由はdocs/backlog.md参照）。
-  **切替の仕組み自体（`data-theme`属性ベースのTailwind `dark:`バリアント・`useTheme` composable、
-  Issue #239）は用意済み**。ユーザー向けの切替UIはまだ無く、実際にdarkへ対応しているのは
-  トップ画面（`WelcomeScreen.vue`）のみ。他画面の配色見直しは引き続き未着手
+- ダーク/ライトテーマ切替の仕組み（`data-theme`属性ベースのTailwind `dark:`バリアント・
+  `useTheme` composable、Issue #239）を使い、[Issue #241](https://github.com/ConniConni/torebu/issues/241)で
+  部位ハイライトシートもダーク配色に対応した。発光色(glow)はライトと同じ暖色（オレンジ〜赤系、
+  `rgb(255 94 58)`）を流用し、グラデーション外側(base)のみ暗背景に溶け込む暗い暖色グレー
+  （`rgb(45 42 38)`）に差し替えている（移植元プロトタイプのダークテーマ案`rgb(156 47 47)`は
+  発光色と同系統の赤で見分けにくくなるため採用しなかった。docs/backlog.md「部位ハイライトシートで
+  見送った機能」参照）。輪郭線・ラベル文字色もダーク用に上書きする
+  （`frontend/app/utils/muscleHighlightSvg.ts`・`MuscleBodyDiagram.vue`）。canvasへのSVG直描画のため
+  Tailwindの`dark:`バリアントが効かず、`useTheme`のtheme変更を`watch`して再描画する形で対応した
 
 **グループ機能（Phase4初弾、グループ基盤）の実装メモ**
 - スコープはグループの作成・招待コード発行/再発行・招待コードでの参加・メンバー一覧・退会・

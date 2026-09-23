@@ -69,28 +69,28 @@ function nextMonth() {
 </script>
 
 <template>
-  <div class="rounded-lg bg-white p-4 shadow">
+  <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
     <div class="mb-3 flex items-center justify-between">
       <button
         type="button"
         aria-label="前の月"
-        class="rounded px-2 py-1 text-gray-500 hover:bg-gray-100"
+        class="rounded px-2 py-1 text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5"
         @click="prevMonth"
       >
         ＜
       </button>
-      <p class="text-sm font-semibold text-gray-900">{{ monthLabel }}</p>
+      <p class="text-sm font-semibold text-gray-900 dark:text-ink">{{ monthLabel }}</p>
       <button
         type="button"
         aria-label="次の月"
-        class="rounded px-2 py-1 text-gray-500 hover:bg-gray-100"
+        class="rounded px-2 py-1 text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5"
         @click="nextMonth"
       >
         ＞
       </button>
     </div>
 
-    <div class="grid grid-cols-7 gap-1 text-center text-xs text-gray-500">
+    <div class="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 dark:text-muted">
       <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
     </div>
 
@@ -101,8 +101,8 @@ function nextMonth() {
         type="button"
         class="flex aspect-square flex-col items-center justify-center rounded text-sm"
         :class="[
-          cell.inCurrentMonth ? 'text-gray-900' : 'text-gray-300',
-          cell.date === selectedDate ? '' : 'hover:bg-gray-100',
+          cell.inCurrentMonth ? 'text-gray-900 dark:text-ink' : 'text-gray-300 dark:text-white/20',
+          cell.date === selectedDate ? '' : 'hover:bg-gray-100 dark:hover:bg-white/5',
         ]"
         @click="emit('select', cell.date)"
       >
@@ -113,11 +113,13 @@ function nextMonth() {
           class="flex h-6 w-6 items-center justify-center rounded-full"
           :class="[
             cell.date === selectedDate
-              ? 'bg-brand-600 text-white'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
               : cell.hasSets
-                ? 'bg-brand-100 font-semibold text-brand-700'
+                ? 'bg-brand-100 dark:bg-accent/15 font-semibold text-brand-700 dark:text-accent'
                 : '',
-            cell.isToday && cell.date !== selectedDate ? 'ring-2 ring-brand-600' : '',
+            cell.isToday && cell.date !== selectedDate
+              ? 'ring-2 ring-brand-600 dark:ring-accent'
+              : '',
           ]"
         >
           {{ cell.day }}
@@ -130,8 +132,8 @@ function nextMonth() {
           :class="
             cell.memoOnly
               ? cell.date === selectedDate
-                ? 'bg-white'
-                : 'bg-brand-600'
+                ? 'bg-white dark:bg-panel'
+                : 'bg-brand-600 dark:bg-accent'
               : 'bg-transparent'
           "
         />

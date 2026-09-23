@@ -409,29 +409,31 @@ async function onGoToExercisePicker() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <button type="button" class="text-sm text-gray-500" @click="onLeaveWorkout">
+        <button type="button" class="text-sm text-gray-500 dark:text-muted" @click="onLeaveWorkout">
           ← ホームに戻る
         </button>
-        <h1 class="text-base font-semibold text-gray-900">{{ targetDate }}の記録</h1>
+        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">{{ targetDate }}の記録</h1>
       </div>
 
-      <section class="rounded-lg bg-white p-4 shadow">
-        <label class="flex flex-col gap-1 text-sm text-gray-700">
+      <section class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
           メモ
           <textarea
             v-model="memoInput"
             rows="2"
             maxlength="500"
             placeholder="今日の体調・気づいたことなど"
-            class="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
             @blur="onMemoBlur"
           />
         </label>
-        <p class="mt-1 text-xs text-gray-400">{{ memoSaving ? '保存中...' : '' }}</p>
-        <p v-if="memoError" class="mt-1 text-xs text-red-600">{{ memoError }}</p>
+        <p class="mt-1 text-xs text-gray-400 dark:text-muted">
+          {{ memoSaving ? '保存中...' : '' }}
+        </p>
+        <p v-if="memoError" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ memoError }}</p>
       </section>
 
       <ClientOnly>
@@ -443,17 +445,20 @@ async function onGoToExercisePicker() {
           @end="onExerciseDragEnd"
         >
           <template #item="{ element }">
-            <section v-if="groupFor(element.exerciseId)" class="rounded-lg bg-white p-4 shadow">
+            <section
+              v-if="groupFor(element.exerciseId)"
+              class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+            >
               <div class="mb-2 flex items-center justify-between">
                 <span class="flex items-center gap-2">
-                  <span class="drag-handle cursor-grab text-gray-400">⠿</span>
-                  <p class="text-sm font-semibold text-gray-900">
+                  <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-ink">
                     {{ groupFor(element.exerciseId)!.name }}
                   </p>
                 </span>
                 <button
                   type="button"
-                  class="text-xs text-brand-600"
+                  class="text-xs text-brand-600 dark:text-accent"
                   @click="onAddSet(element.exerciseId)"
                 >
                   ＋セット追加
@@ -470,22 +475,23 @@ async function onGoToExercisePicker() {
               <div class="overflow-x-auto">
                 <div class="min-w-[17rem] overflow-hidden rounded-lg">
                   <div
-                    class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 px-3 py-1.5"
+                    class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                   >
-                    <span class="text-xs font-semibold text-gray-500">セット</span>
-                    <span class="text-xs font-semibold text-gray-500">重量</span>
-                    <span class="text-xs font-semibold text-gray-500">回数</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">セット</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
                     <span></span>
                   </div>
                   <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
                     <div
                       v-if="setInputs[set.id]"
                       class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-                      :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+                      :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                     >
-                      <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
-                        set.setOrder
-                      }}</span>
+                      <span
+                        class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                        >{{ set.setOrder }}</span
+                      >
                       <span class="flex min-w-0 items-baseline gap-1.5">
                         <input
                           v-model="setInputs[set.id]!.weight"
@@ -493,25 +499,25 @@ async function onGoToExercisePicker() {
                           step="0.5"
                           min="0"
                           placeholder="自重"
-                          class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                           @blur="onSetFieldBlur(set.id)"
                         />
-                        <span class="shrink-0 text-xs text-gray-500">kg</span>
+                        <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
                       </span>
                       <span class="flex min-w-0 items-baseline gap-1.5">
                         <input
                           v-model="setInputs[set.id]!.reps"
                           type="number"
                           min="1"
-                          class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                          class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                           @blur="onSetFieldBlur(set.id)"
                         />
-                        <span class="shrink-0 text-xs text-gray-500">回</span>
+                        <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
                       </span>
                       <span class="flex justify-center">
                         <button
                           type="button"
-                          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                           aria-label="このセットを削除"
                           @click="removeSet(set.id)"
                         >
@@ -523,10 +529,10 @@ async function onGoToExercisePicker() {
                 </div>
               </div>
               <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
-                <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400">
+                <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
                   {{ set.setOrder }}セット目を保存中...
                 </p>
-                <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600">
+                <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600 dark:text-red-400">
                   {{ setErrors[set.id] }}
                 </p>
               </template>
@@ -535,26 +541,31 @@ async function onGoToExercisePicker() {
         </draggable>
       </ClientOnly>
 
-      <p v-if="exerciseOrderError" class="text-center text-sm text-red-600">
+      <p v-if="exerciseOrderError" class="text-center text-sm text-red-600 dark:text-red-400">
         {{ exerciseOrderError }}
       </p>
 
-      <p v-if="addSetError" class="text-center text-sm text-red-600">{{ addSetError }}</p>
+      <p v-if="addSetError" class="text-center text-sm text-red-600 dark:text-red-400">
+        {{ addSetError }}
+      </p>
 
       <p
         v-if="groupedSets.length === 0 && pendingExercises.length === 0"
-        class="text-center text-sm text-gray-500"
+        class="text-center text-sm text-gray-500 dark:text-muted"
       >
         まだ種目が追加されていません
       </p>
 
-      <section v-if="pendingExercises.length > 0" class="rounded-lg bg-white p-4 shadow">
-        <p class="mb-2 text-sm font-semibold text-gray-900">入力待ちの種目</p>
+      <section
+        v-if="pendingExercises.length > 0"
+        class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+      >
+        <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">入力待ちの種目</p>
         <ul class="space-y-1">
           <li v-for="p in pendingExercises" :key="p.exerciseId">
             <button
               type="button"
-              class="w-full rounded border border-gray-300 px-2 py-1.5 text-left text-sm text-gray-700"
+              class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink"
               @click="onStartPendingExercise(p.exerciseId)"
             >
               {{ p.name }}
@@ -563,27 +574,29 @@ async function onGoToExercisePicker() {
         </ul>
       </section>
 
-      <section v-if="showRoutinePicker" class="rounded-lg bg-white p-4 shadow">
+      <section v-if="showRoutinePicker" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
         <div class="mb-2 flex items-center justify-between">
-          <p class="text-sm font-semibold text-gray-900">ルーティンを選ぶ</p>
+          <p class="text-sm font-semibold text-gray-900 dark:text-ink">ルーティンを選ぶ</p>
           <button
             type="button"
             :disabled="routineApplying"
-            class="text-xs text-gray-500 disabled:opacity-50"
+            class="text-xs text-gray-500 dark:text-muted disabled:opacity-50"
             @click="onCloseRoutinePicker"
           >
             閉じる
           </button>
         </div>
-        <p v-if="routinePickerPending" class="text-sm text-gray-500">読み込み中...</p>
-        <p v-else-if="routineApplying" class="text-sm text-gray-500">適用中...</p>
+        <p v-if="routinePickerPending" class="text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="routineApplying" class="text-sm text-gray-500 dark:text-muted">適用中...</p>
         <template v-else-if="routines && routines.length > 0">
           <ul class="space-y-1">
             <li v-for="r in routines" :key="r.id">
               <button
                 type="button"
                 :disabled="routineApplying"
-                class="w-full rounded border border-gray-300 px-2 py-1.5 text-left text-sm text-gray-700 disabled:opacity-50"
+                class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink disabled:opacity-50"
                 @click="onApplyRoutine(r.id)"
               >
                 {{ r.name }}
@@ -591,19 +604,25 @@ async function onGoToExercisePicker() {
             </li>
           </ul>
         </template>
-        <p v-else class="text-sm text-gray-500">
+        <p v-else class="text-sm text-gray-500 dark:text-muted">
           ルーティンがまだ登録されていません。
-          <NuxtLink to="/routines" class="text-brand-600">ルーティンを登録する</NuxtLink>
+          <NuxtLink to="/routines" class="text-brand-600 dark:text-accent"
+            >ルーティンを登録する</NuxtLink
+          >
         </p>
-        <p v-if="routineApplyError" class="mt-2 text-sm text-red-600">{{ routineApplyError }}</p>
-        <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600">{{ routineApplyNotice }}</p>
+        <p v-if="routineApplyError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+          {{ routineApplyError }}
+        </p>
+        <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600 dark:text-muted">
+          {{ routineApplyNotice }}
+        </p>
       </section>
 
       <!-- 一部の種目のみ重複除外された場合の通知（Issue #84）。適用成功でピッカーは閉じるため、
            ピッカーの外に置いてピッカーが閉じた後も表示され続けるようにする -->
       <p
         v-if="routineApplyNotice && !showRoutinePicker"
-        class="rounded-lg bg-white p-4 text-sm text-gray-600 shadow"
+        class="rounded-lg bg-white dark:bg-panel p-4 text-sm text-gray-600 dark:text-muted shadow"
       >
         {{ routineApplyNotice }}
       </p>
@@ -611,14 +630,14 @@ async function onGoToExercisePicker() {
       <div class="flex gap-2">
         <button
           type="button"
-          class="flex-1 rounded border border-brand-600 py-2 text-sm font-semibold text-brand-600"
+          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
           @click="onGoToExercisePicker"
         >
           ＋種目を追加
         </button>
         <button
           type="button"
-          class="flex-1 rounded border border-brand-600 py-2 text-sm font-semibold text-brand-600"
+          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
           @click="onOpenRoutinePicker"
         >
           ＋ルーティンから選ぶ

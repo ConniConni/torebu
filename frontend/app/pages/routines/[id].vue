@@ -264,41 +264,43 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink to="/routines" class="text-sm text-gray-500">← ルーティン一覧に戻る</NuxtLink>
+      <NuxtLink to="/routines" class="text-sm text-gray-500 dark:text-muted"
+        >← ルーティン一覧に戻る</NuxtLink
+      >
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="error || !routine" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="error || !routine" class="text-center text-sm text-red-600 dark:text-red-400">
         ルーティンの取得に失敗しました。時間をおいて再度お試しください
       </p>
 
       <template v-else>
-        <label class="flex flex-col gap-1 text-sm text-gray-700">
+        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
           ルーティン名
           <input
             v-model="nameInput"
             type="text"
             maxlength="50"
-            class="rounded border border-gray-300 px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
             @blur="onNameBlur"
           />
         </label>
-        <p v-if="savingName" class="text-xs text-gray-400">保存中...</p>
-        <p v-if="nameError" class="text-sm text-red-600">{{ nameError }}</p>
+        <p v-if="savingName" class="text-xs text-gray-400 dark:text-muted">保存中...</p>
+        <p v-if="nameError" class="text-sm text-red-600 dark:text-red-400">{{ nameError }}</p>
 
-        <div class="rounded-lg bg-white p-4 shadow">
+        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
           <div class="mb-2 flex items-center justify-between">
-            <p class="text-sm font-semibold text-gray-900">種目</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-ink">種目</p>
             <NuxtLink
               :to="{ path: '/workouts/exercises', query: { returnTo: `/routines/${routineId}` } }"
-              class="text-xs text-brand-600"
+              class="text-xs text-brand-600 dark:text-accent"
             >
               ＋種目を追加
             </NuxtLink>
           </div>
 
-          <p v-if="routine.exercises.length === 0" class="text-sm text-gray-500">
+          <p v-if="routine.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
             種目がまだ登録されていません
           </p>
           <ClientOnly v-else>
@@ -310,11 +312,13 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
               @end="onDragEnd"
             >
               <template #item="{ element }">
-                <div class="rounded py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+                <div
+                  class="rounded py-1.5 text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
+                >
                   <span class="flex items-center gap-2 px-2">
-                    <span class="drag-handle cursor-grab text-gray-400">⠿</span>
+                    <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
                     {{ element.exercise.name }}
-                    <span class="text-xs text-gray-400"
+                    <span class="text-xs text-gray-400 dark:text-muted"
                       >（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span
                     >
                   </span>
@@ -335,22 +339,29 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                     <div v-if="element.targetSets.length > 0" class="overflow-x-auto">
                       <div class="min-w-[15rem] overflow-hidden rounded-lg">
                         <div
-                          class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2 bg-gray-100 px-2 py-1.5"
+                          class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-2 py-1.5"
                         >
-                          <span class="text-xs font-semibold text-gray-500">セット</span>
-                          <span class="text-xs font-semibold text-gray-500">重量</span>
-                          <span class="text-xs font-semibold text-gray-500">回数</span>
+                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                            >セット</span
+                          >
+                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                            >重量</span
+                          >
+                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                            >回数</span
+                          >
                           <span></span>
                         </div>
                         <div
                           v-for="(set, index) in element.targetSets"
                           :key="index"
                           class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2 px-2 py-1.5"
-                          :class="Number(index) % 2 === 1 ? 'bg-gray-50' : ''"
+                          :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                         >
-                          <span class="text-center text-lg font-bold tabular-nums text-gray-900">{{
-                            Number(index) + 1
-                          }}</span>
+                          <span
+                            class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                            >{{ Number(index) + 1 }}</span
+                          >
                           <span class="flex min-w-0 items-baseline gap-1.5">
                             <input
                               v-model="set.weightKg"
@@ -358,25 +369,25 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                               step="0.5"
                               min="0"
                               placeholder="自重"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="saveTargetSets(element)"
                             />
-                            <span class="shrink-0 text-xs text-gray-500">kg</span>
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
                           </span>
                           <span class="flex min-w-0 items-baseline gap-1.5">
                             <input
                               v-model="set.reps"
                               type="number"
                               min="1"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-right text-base tabular-nums"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="saveTargetSets(element)"
                             />
-                            <span class="shrink-0 text-xs text-gray-500">回</span>
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
                           </span>
                           <span class="flex justify-center">
                             <button
                               type="button"
-                              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                               aria-label="この目安セットを削除"
                               @click="removeTargetSet(element, index)"
                             >
@@ -388,15 +399,21 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                     </div>
                     <button
                       type="button"
-                      class="mt-1 text-xs text-brand-600"
+                      class="mt-1 text-xs text-brand-600 dark:text-accent"
                       @click="addTargetSet(element)"
                     >
                       ＋目安セットを追加
                     </button>
-                    <p v-if="targetSetsSaving[element.id]" class="mt-1 text-xs text-gray-400">
+                    <p
+                      v-if="targetSetsSaving[element.id]"
+                      class="mt-1 text-xs text-gray-400 dark:text-muted"
+                    >
                       保存中...
                     </p>
-                    <p v-if="targetSetsErrors[element.id]" class="mt-1 text-xs text-red-600">
+                    <p
+                      v-if="targetSetsErrors[element.id]"
+                      class="mt-1 text-xs text-red-600 dark:text-red-400"
+                    >
                       {{ targetSetsErrors[element.id] }}
                     </p>
                   </div>
@@ -404,7 +421,9 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
               </template>
             </draggable>
           </ClientOnly>
-          <p v-if="exerciseError" class="mt-2 text-sm text-red-600">{{ exerciseError }}</p>
+          <p v-if="exerciseError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+            {{ exerciseError }}
+          </p>
         </div>
       </template>
     </div>

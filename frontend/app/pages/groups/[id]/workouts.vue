@@ -224,20 +224,23 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500"
+        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500 dark:text-muted"
           >← グループに戻る</NuxtLink
         >
-        <h1 class="text-base font-semibold text-gray-900">みんなの記録</h1>
+        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">みんなの記録</h1>
       </div>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
         記録の取得に失敗しました。時間をおいて再度お試しください
       </p>
-      <p v-else-if="!workouts || workouts.length === 0" class="text-center text-sm text-gray-500">
+      <p
+        v-else-if="!workouts || workouts.length === 0"
+        class="text-center text-sm text-gray-500 dark:text-muted"
+      >
         まだ記録がありません
       </p>
 
@@ -246,30 +249,37 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
           v-for="workout in workouts"
           :id="`workout-${workout.id}`"
           :key="workout.id"
-          class="rounded-lg bg-white p-4 shadow"
-          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400' : ''"
+          class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400 dark:ring-accent' : ''"
         >
           <div class="flex items-center gap-2.5">
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-sm font-semibold text-brand-700 dark:text-accent"
             >
               {{ workout.displayName.slice(0, 1) }}
             </span>
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold text-gray-900">{{ workout.displayName }}</p>
-              <p class="text-xs text-gray-500">{{ workout.performedAt }}</p>
+              <p class="truncate text-sm font-semibold text-gray-900 dark:text-ink">
+                {{ workout.displayName }}
+              </p>
+              <p class="text-xs text-gray-500 dark:text-muted">{{ workout.performedAt }}</p>
             </div>
           </div>
-          <p v-if="workout.memo" class="mt-2 text-xs text-gray-500">{{ workout.memo }}</p>
+          <p v-if="workout.memo" class="mt-2 text-xs text-gray-500 dark:text-muted">
+            {{ workout.memo }}
+          </p>
 
-          <p v-if="workout.exercises.length === 0" class="mt-2 text-xs text-gray-400">
+          <p
+            v-if="workout.exercises.length === 0"
+            class="mt-2 text-xs text-gray-400 dark:text-muted"
+          >
             記録内容はまだありません
           </p>
           <div v-else class="mt-3 flex flex-wrap gap-1.5">
             <div v-for="ex in workout.exercises" :key="ex.exerciseId" class="w-full">
               <button
                 type="button"
-                class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
+                class="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-accent/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-accent"
                 :aria-expanded="isExerciseOpen(workout.id, ex.exerciseId)"
                 @click="toggleExercise(workout.id, ex.exerciseId)"
               >
@@ -286,34 +296,43 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               <div v-if="isExerciseOpen(workout.id, ex.exerciseId)" class="mt-1.5 overflow-x-auto">
                 <div class="min-w-[15rem] overflow-hidden rounded-lg">
                   <div
-                    class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 px-3 py-1"
+                    class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1"
                   >
-                    <span class="text-xs font-semibold text-gray-500">セット</span>
-                    <span class="text-xs font-semibold text-gray-500">重量</span>
-                    <span class="text-xs font-semibold text-gray-500">回数</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">セット</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
+                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
                   </div>
                   <div
                     v-for="(set, i) in ex.sets"
                     :key="set.id"
                     class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
-                    :class="i % 2 === 1 ? 'bg-gray-50' : ''"
+                    :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                   >
-                    <span class="text-center text-sm font-bold tabular-nums text-gray-900">
+                    <span
+                      class="text-center text-sm font-bold tabular-nums text-gray-900 dark:text-ink"
+                    >
                       {{ set.setOrder }}
                     </span>
                     <span class="flex min-w-0 items-baseline justify-end gap-1">
-                      <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">
+                      <span
+                        class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
+                      >
                         {{ set.weightKg ?? '自重' }}
                       </span>
-                      <span v-if="set.weightKg !== null" class="shrink-0 text-xs text-gray-500">
+                      <span
+                        v-if="set.weightKg !== null"
+                        class="shrink-0 text-xs text-gray-500 dark:text-muted"
+                      >
                         kg
                       </span>
                     </span>
                     <span class="flex min-w-0 items-baseline justify-end gap-1">
-                      <span class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900">
+                      <span
+                        class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
+                      >
                         {{ set.reps }}
                       </span>
-                      <span class="shrink-0 text-xs text-gray-500">回</span>
+                      <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
                     </span>
                   </div>
                 </div>
@@ -321,7 +340,9 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
             </div>
           </div>
 
-          <div class="mt-3 flex items-center gap-1 border-t border-gray-100 pt-2.5">
+          <div
+            class="mt-3 flex items-center gap-1 border-t border-gray-100 dark:border-white/5 pt-2.5"
+          >
             <!-- 自分の記録：いいねボタンは押せず(トグル無し)、いいねしてくれた人の一覧を開閉する専用ボタンになる(#149) -->
             <button
               v-if="isOwnWorkout(workout)"
@@ -329,8 +350,8 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
               :class="
                 isReactorsOpen(workout.id)
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
+                  : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
               "
               :aria-expanded="isReactorsOpen(workout.id)"
               @click="toggleReactorsPanel(workout.id)"
@@ -344,8 +365,8 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
               :class="
                 workout.reactedByMe
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
+                  : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
               "
               :disabled="likePending.has(workout.id)"
               :aria-pressed="workout.reactedByMe"
@@ -359,7 +380,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
             </button>
             <button
               type="button"
-              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100"
+              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium text-gray-500 dark:text-muted transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
               :aria-expanded="isCommentsOpen(workout.id)"
               @click="toggleComments(workout.id)"
             >
@@ -374,9 +395,12 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
           <!-- いいねしてくれた人の一覧(#149)。自分の記録でのみ開ける -->
           <div
             v-if="isOwnWorkout(workout) && isReactorsOpen(workout.id)"
-            class="mt-2.5 border-t border-gray-100 pt-2.5"
+            class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
           >
-            <p v-if="workout.reactorNames.length === 0" class="text-xs text-gray-500">
+            <p
+              v-if="workout.reactorNames.length === 0"
+              class="text-xs text-gray-500 dark:text-muted"
+            >
               まだいいねがありません
             </p>
             <ul v-else class="flex flex-col gap-2">
@@ -386,20 +410,29 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 class="flex items-center gap-2"
               >
                 <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
                 >
                   {{ name.slice(0, 1) }}
                 </span>
-                <span class="text-sm text-gray-700">{{ name }}</span>
+                <span class="text-sm text-gray-700 dark:text-ink">{{ name }}</span>
               </li>
             </ul>
           </div>
 
-          <div v-if="isCommentsOpen(workout.id)" class="mt-2.5 border-t border-gray-100 pt-2.5">
-            <p v-if="commentLoadError.has(workout.id)" class="text-xs text-red-600">
+          <div
+            v-if="isCommentsOpen(workout.id)"
+            class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
+          >
+            <p
+              v-if="commentLoadError.has(workout.id)"
+              class="text-xs text-red-600 dark:text-red-400"
+            >
               コメントの取得に失敗しました。時間をおいて再度お試しください
             </p>
-            <p v-else-if="!commentsByWorkoutId.has(workout.id)" class="text-xs text-gray-500">
+            <p
+              v-else-if="!commentsByWorkoutId.has(workout.id)"
+              class="text-xs text-gray-500 dark:text-muted"
+            >
               読み込み中...
             </p>
             <ul v-else class="flex flex-col gap-2">
@@ -409,22 +442,32 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 class="flex items-start gap-2"
               >
                 <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
                 >
                   {{ comment.displayName.slice(0, 1) }}
                 </span>
                 <div class="min-w-0 flex-1">
                   <div
                     class="rounded-lg px-2.5 py-1.5"
-                    :class="comment.userId === user?.id ? 'bg-brand-50' : 'bg-gray-100'"
+                    :class="
+                      comment.userId === user?.id
+                        ? 'bg-brand-50 dark:bg-accent/10'
+                        : 'bg-gray-100 dark:bg-white/5'
+                    "
                   >
                     <p
                       class="text-xs font-medium"
-                      :class="comment.userId === user?.id ? 'text-brand-700' : 'text-gray-600'"
+                      :class="
+                        comment.userId === user?.id
+                          ? 'text-brand-700 dark:text-accent'
+                          : 'text-gray-600 dark:text-muted'
+                      "
                     >
                       {{ comment.displayName }}{{ comment.userId === user?.id ? '（自分）' : '' }}
                     </p>
-                    <p class="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">
+                    <p
+                      class="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900 dark:text-ink"
+                    >
                       {{ comment.body }}
                     </p>
                   </div>
@@ -432,7 +475,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 <button
                   v-if="comment.userId === user?.id"
                   type="button"
-                  class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                   aria-label="このコメントを削除"
                   :disabled="commentDeleting.has(comment.id)"
                   @click="onDeleteComment(workout, comment)"
@@ -442,7 +485,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               </li>
               <li
                 v-if="commentsByWorkoutId.get(workout.id)?.length === 0"
-                class="text-xs text-gray-500"
+                class="text-xs text-gray-500 dark:text-muted"
               >
                 まだコメントがありません
               </li>
@@ -454,13 +497,13 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 type="text"
                 placeholder="コメントを入力"
                 maxlength="500"
-                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 px-3 text-sm"
+                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 dark:border-border-dark px-3 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
                 @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
                 @keydown.enter="onCommentEnter($event, workout)"
               />
               <button
                 type="button"
-                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50"
+                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
                 :disabled="
                   commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()
                 "

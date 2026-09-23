@@ -55,7 +55,14 @@ function backSlugsFor(gender: HighlightGender): Set<string> {
 }
 
 // ライト背景（13節・41節で確立したパラメータ）
-const COLORS = { glow: '255 94 58', base: '214 211 209' }
+const LIGHT_COLORS = { glow: '255 94 58', base: '214 211 209' }
+// ダーク背景（Issue #241）。グラデーション外側(base)は低不透明度でページ背景に溶け込ませる用途
+// なので、ライトの淡いグレーのままだと暗背景に対して逆に浮いて見える。暗い背景(--color-surface
+// #141414系)に溶け込む暗めの暖色グレーに変更する。発光色(glow)は暗背景でもコントラストが出るため
+// そのまま流用する（移植元プロトタイプのダークテーマ値と一致。docs/backlog.md
+// 「部位ハイライトシートで見送った機能」参照）
+const DARK_COLORS = { glow: '255 94 58', base: '45 42 38' }
+let COLORS = LIGHT_COLORS
 
 const I_MAIN = 1.0
 // パターン1：主働筋のうちゾーン以外の部分・関連筋は同じ明るさ(フラット)にする
@@ -289,7 +296,9 @@ export function buildSvg(
   intensityMap: IntensityMap,
   zoneSpecs: ZoneSpec[],
   labelMap: LabelMap,
+  isDark = false,
 ) {
+  COLORS = isDark ? DARK_COLORS : LIGHT_COLORS
   svgEl.innerHTML = ''
 
   const defs = document.createElementNS(SVG_NS, 'defs')

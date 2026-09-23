@@ -31,22 +31,26 @@ const slides = [
   {
     image: recordImage,
     title: '毎日の記録をサクッと管理',
-    description: 'カレンダーと期間別サマリーで、今日やったトレーニングも過去の記録もひと目で振り返れる。',
+    description:
+      'カレンダーと期間別サマリーで、今日やったトレーニングも過去の記録もひと目で振り返れる。',
   },
   {
     image: muscleImage,
     title: '種目がどこに効くか一目で確認',
-    description: '種目一覧の「ⓘ」から、その種目が効く部位を体のイラストでハイライト表示。狙った部位を鍛えられているか確認できる。',
+    description:
+      '種目一覧の「ⓘ」から、その種目が効く部位を体のイラストでハイライト表示。狙った部位を鍛えられているか確認できる。',
   },
   {
     image: feedImage,
     title: '仲間の記録にいいね・コメント',
-    description: 'グループのメンバーの記録がフィードに流れてくる。いいねやコメントで応援し合いながら続けられる。',
+    description:
+      'グループのメンバーの記録がフィードに流れてくる。いいねやコメントで応援し合いながら続けられる。',
   },
   {
     image: rankingImage,
     title: 'ランキングで競い合う',
-    description: '週間・月間・通算の合計挙上重量でグループ内ランキング。仲間と競い合うから、もうひと踏ん張りできる。',
+    description:
+      '週間・月間・通算の合計挙上重量でグループ内ランキング。仲間と競い合うから、もうひと踏ん張りできる。',
   },
 ]
 
@@ -69,10 +73,15 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex flex-col bg-white">
+  <div class="fixed inset-0 z-50 flex flex-col bg-white dark:bg-panel">
     <div class="flex items-center justify-between px-4 py-3">
-      <span class="text-sm font-semibold text-gray-900">トレ部でできること</span>
-      <button type="button" class="text-lg text-gray-500" aria-label="閉じる" @click="emit('close')">
+      <span class="text-sm font-semibold text-gray-900 dark:text-ink">トレ部でできること</span>
+      <button
+        type="button"
+        class="text-lg text-gray-500 dark:text-muted"
+        aria-label="閉じる"
+        @click="emit('close')"
+      >
         ✕
       </button>
     </div>
@@ -91,23 +100,32 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
         <img
           :src="slide.image"
           alt=""
-          class="w-full max-w-[280px] rounded-2xl border border-gray-200 shadow-lg"
+          class="w-full max-w-[280px] rounded-2xl border border-gray-200 dark:border-border-dark shadow-lg"
         />
-        <h3 class="mt-6 text-center text-lg font-bold text-gray-900">{{ slide.title }}</h3>
-        <p class="mt-2 max-w-xs text-center text-sm leading-relaxed text-gray-600">
+        <h3 class="mt-6 text-center text-lg font-bold text-gray-900 dark:text-ink">
+          {{ slide.title }}
+        </h3>
+        <p class="mt-2 max-w-xs text-center text-sm leading-relaxed text-gray-600 dark:text-muted">
           {{ slide.description }}
         </p>
       </div>
     </div>
 
-    <div class="shrink-0 px-6 pb-6" style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))">
+    <div
+      class="shrink-0 px-6 pb-6"
+      style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
+    >
       <div class="mb-4 flex items-center justify-center gap-2">
         <button
           v-for="(slide, index) in slides"
           :key="slide.title"
           type="button"
           class="h-2 rounded-full transition-all"
-          :class="index === activeIndex ? 'w-5 bg-brand-600' : 'w-2 bg-gray-300'"
+          :class="
+            index === activeIndex
+              ? 'w-5 bg-brand-600 dark:bg-accent'
+              : 'w-2 bg-gray-300 dark:bg-white/20'
+          "
           :aria-label="`${index + 1}枚目のスライドを表示`"
           :aria-current="index === activeIndex"
           @click="scrollToSlide(index)"
@@ -116,7 +134,7 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
       <button
         v-if="!isLastSlide"
         type="button"
-        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         @click="scrollToSlide(activeIndex + 1)"
       >
         次へ
@@ -124,7 +142,7 @@ const isLastSlide = computed(() => activeIndex.value === slides.length - 1)
       <button
         v-else
         type="button"
-        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+        class="w-full rounded-full bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         @click="emit('close')"
       >
         閉じる

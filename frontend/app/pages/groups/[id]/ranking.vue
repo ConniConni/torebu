@@ -79,21 +79,25 @@ function medalBarClass(rank: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500">← グループに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900">ランキング</h1>
+        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500 dark:text-muted"
+          >← グループに戻る</NuxtLink
+        >
+        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">ランキング</h1>
       </div>
 
-      <div class="flex overflow-hidden rounded-lg border border-brand-600">
+      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent">
         <button
           v-for="p in PERIODS"
           :key="p.value"
           type="button"
           class="flex-1 py-1.5 text-sm font-semibold"
           :class="
-            period === p.value ? 'bg-brand-600 text-white' : 'bg-white text-brand-600 hover:bg-brand-50'
+            period === p.value
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
           "
           @click="period = p.value"
         >
@@ -101,16 +105,19 @@ function medalBarClass(rank: number): string {
         </button>
       </div>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
         ランキングの取得に失敗しました。時間をおいて再度お試しください
       </p>
-      <p v-else-if="!ranking || ranking.length === 0" class="text-center text-sm text-gray-500">
+      <p
+        v-else-if="!ranking || ranking.length === 0"
+        class="text-center text-sm text-gray-500 dark:text-muted"
+      >
         メンバーがいません
       </p>
 
       <template v-else>
-        <div v-if="top3.length > 0" class="rounded-lg bg-white p-4 shadow">
+        <div v-if="top3.length > 0" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
           <div class="grid grid-cols-3 items-end gap-2">
             <div
               v-for="entry in podiumOrder"
@@ -120,14 +127,17 @@ function medalBarClass(rank: number): string {
               <template v-if="entry">
                 <div
                   class="flex items-center justify-center rounded-full font-bold tabular-nums"
-                  :class="[entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm', medalClasses(entry.rank)]"
+                  :class="[
+                    entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm',
+                    medalClasses(entry.rank),
+                  ]"
                 >
                   {{ entry.rank }}
                 </div>
-                <p class="max-w-[80px] truncate text-xs font-semibold text-gray-900">
+                <p class="max-w-[80px] truncate text-xs font-semibold text-gray-900 dark:text-ink">
                   {{ entry.displayName }}
                 </p>
-                <p class="text-xs font-bold tabular-nums text-gray-700">
+                <p class="text-xs font-bold tabular-nums text-gray-700 dark:text-ink">
                   {{ formatVolume(entry.totalVolumeKg) }}kg
                 </p>
                 <!-- 実績（合計挙上重量）を1位比の相対的な高さで示す棒。実際の値でこそ意味があるため
@@ -142,13 +152,17 @@ function medalBarClass(rank: number): string {
           </div>
         </div>
 
-        <div class="rounded-lg bg-white p-4 shadow">
+        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
           <ul class="flex flex-col">
             <li
               v-for="entry in ranking"
               :key="entry.userId"
-              class="flex items-center gap-2.5 border-t border-gray-100 py-2.5 first:border-t-0"
-              :class="entry.userId === user?.id ? '-mx-2 rounded-lg bg-brand-50 px-2' : ''"
+              class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
+              :class="
+                entry.userId === user?.id
+                  ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
+                  : ''
+              "
             >
               <span
                 v-if="entry.rank <= 3"
@@ -157,25 +171,29 @@ function medalBarClass(rank: number): string {
               >
                 {{ entry.rank }}
               </span>
-              <span v-else class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400">
+              <span
+                v-else
+                class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400 dark:text-muted"
+              >
                 {{ entry.rank }}
               </span>
-              <span class="flex-1 truncate text-sm font-semibold text-gray-900">
+              <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
                 {{ entry.displayName }}
                 <span
                   v-if="entry.userId === user?.id"
-                  class="ml-1 rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700"
+                  class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
                 >
                   自分
                 </span>
               </span>
-              <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700">
-                {{ formatVolume(entry.totalVolumeKg) }}<span class="text-xs font-medium text-gray-400">kg</span>
+              <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
+                {{ formatVolume(entry.totalVolumeKg)
+                }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
               </span>
             </li>
           </ul>
         </div>
-        <p class="text-center text-xs text-gray-400">
+        <p class="text-center text-xs text-gray-400 dark:text-muted">
           合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています
         </p>
       </template>
