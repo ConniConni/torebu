@@ -23,20 +23,29 @@ const IMAGE_PATHS: Record<SeaAnimal['key'], string> = {
   orca: '/images/animals/orca.png',
   whale: '/images/animals/whale.png',
 }
+
+// PNGが黒一色のため、CSSフィルターで着色している（下記style参照）。ライト/ダークで色を
+// 出し分ける必要があるが、`<style scoped>`の`[data-theme="dark"]`祖先セレクタ+`:global()`は
+// Vueのscoped CSSコンパイルでスコープが想定通りに効かず、filterがimg要素ではなく
+// ページ全体に適用されてしまう不具合が実機確認で見つかった（Issue #241フォローアップ）。
+// CSSだけで出し分けるのを諦め、useThemeのtheme（'light'|'dark'）を見てJS側でfilterの値
+// そのものを切り替える方式にした
+const { theme } = useTheme()
+const FILTERS: Record<'light' | 'dark', string> = {
+  // ブランドカラー(--color-brand-700 #b8431a)に寄せる値。「元画像の黒ピクセルをcanvasに
+  // 読み込み、フィルター適用後の色との距離を総当たり比較する」方法で決めた（2026-09-11）
+  light: 'invert(28%) sepia(90%) saturate(1100%) hue-rotate(348deg) brightness(95%) contrast(90%)',
+  // ダークのアクセント色--color-accent(#c8ff4d)に寄せる値。同じ総当たり方式で求めた
+  // （実測誤差はRGB距離ほぼ0）
+  dark: 'invert(86%) sepia(30%) saturate(900%) hue-rotate(27deg) brightness(110%) contrast(100%)',
+}
 </script>
 
 <template>
-  <img :src="IMAGE_PATHS[props.name]" :alt="props.alt" :class="[props.class, 'object-contain']" />
+  <img
+    :src="IMAGE_PATHS[props.name]"
+    :alt="props.alt"
+    :class="[props.class, 'object-contain']"
+    :style="{ filter: FILTERS[theme] }"
+  />
 </template>
-
-<style scoped>
-/* PNGが黒一色のため、ブランドカラー(--color-brand-700 #b8431a)に寄せるCSSフィルター。
-   hue-rotate等は純粋な黒には効かない(黒は色相を持たない)ため、まずinvertで暗いグレーに
-   起こしてからsepia/saturate/hue-rotateで色付けしている。数値は「元画像の黒ピクセルを
-   canvasに読み込み、フィルター適用後の色と#b8431aの距離をJSで総当たり比較する」方法で
-   決めた（人力の色合わせではなく実測、2026-09-11）。フィルターでは完全に同じ色にはならない
-   近似値だが、実測でのズレは数値程度（RGB距離6前後）で視覚的にはほぼ一致する */
-img {
-  filter: invert(28%) sepia(90%) saturate(1100%) hue-rotate(348deg) brightness(95%) contrast(90%);
-}
-</style>
