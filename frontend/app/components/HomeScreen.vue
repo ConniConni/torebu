@@ -212,8 +212,17 @@ async function onDeleteWorkout(id: string) {
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
         <!-- ⑨マイページへの導線（Issue #237）。ヘッダーの表示名クリックから遷移する想定
-             （docs/backlog.md「マイページ（⑨）の新設・設計」参照） -->
-        <NuxtLink to="/mypage" class="text-sm text-gray-900">{{ user?.displayName }}さん</NuxtLink>
+             （docs/backlog.md「マイページ（⑨）の新設・設計」参照）。アバター（マイページの
+             プロフィールカードと同じイニシャル丸）を添えて、名前がタップ可能な導線だと
+             分かりやすくしている -->
+        <NuxtLink to="/mypage" class="flex items-center gap-2 text-sm text-gray-900">
+          <span
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700"
+          >
+            {{ (user?.displayName ?? '?').slice(0, 1) }}
+          </span>
+          {{ user?.displayName }}さん
+        </NuxtLink>
         <div class="flex items-center gap-2">
           <NuxtLink
             to="/notifications"

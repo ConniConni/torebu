@@ -76,7 +76,7 @@ async function onLogout() {
       <!-- 実績サマリー（直近28日、既存GET /stats/volume・GET /workoutsを流用） -->
       <div class="rounded-lg bg-white p-4 shadow">
         <div class="mb-2 flex items-center justify-between">
-          <p class="text-sm text-gray-500">直近28日の実績</p>
+          <p class="text-sm font-semibold text-gray-900">直近28日の実績</p>
           <NuxtLink to="/stats" class="text-sm text-brand-600">統計を見る →</NuxtLink>
         </div>
         <p v-if="summaryPending" class="text-xs text-gray-400">読み込み中...</p>
