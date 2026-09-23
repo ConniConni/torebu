@@ -179,9 +179,13 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
     return
   }
 
+  // setOrderは種目ごとに1からリセットされる連番のため、異なる種目間では頻繁に同値になる
+  // (例:5種目とも1セット目はsetOrder=1)。tie-breakにcreatedAtを追加し、種目の並び順
+  // (フロントは各種目の初出順でカードをグルーピングする。frontend/app/pages/workouts/new.vue参照)が
+  // 常に「その種目を最初に追加した順」で安定するようにする(Issue #226)
   const sets = await prisma.workoutSet.findMany({
     where: { workoutId: workout.id },
-    orderBy: { setOrder: 'asc' },
+    orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
   })
 
   res
