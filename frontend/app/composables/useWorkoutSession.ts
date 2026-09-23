@@ -158,17 +158,25 @@ export function useWorkoutSession() {
     return updated
   }
 
-  // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してから
-  // ホームへ遷移し、遷移完了後にセッション状態をリセットする。何も保存していなければ
-  // (workoutId未作成)、反映すべきものが無いのでAPIは呼ばずリセットだけする。
-  // セッションのリセットをnavigateTo後に行っているのは、遷移前に行うと、まだ画面に残っている
-  // ③記録作成ページ(session.value.sets/exercisesを参照して表示している)が一瞬空の状態で
-  // 再描画されてしまうため（「ホームに戻る」でその日の記録が一瞬消えて見える不具合の原因だった）
+  // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してからホームへ
+  // 遷移する。何も保存していなければ(workoutId未作成)、反映すべきものが無いのでAPIは呼ばない。
+  // セッション状態のリセットはここではせず、呼び出し元(③記録作成ページ)がonUnmounted等
+  // 「実際にページが画面から外れたタイミング」で行う(resetSession参照)。
+  // 以前はここで`await navigateTo('/')`の直後にリセットしていたが、navigateTo()のPromiseは
+  // Nuxtの<Suspense>がホーム側の非同期setup(fetchWorkouts等の複数API呼び出し)を解決し終える
+  // 前に解決することがあり、その場合まだ③記録作成ページがSuspense配下で表示され続けている間に
+  // session(sets/exercises)が空になり、結局ホームへの切り替わり前に記録が一瞬消えて見える
+  // 不具合が再現していた(Issue #231の1回目の修正では直りきらなかった原因)
   async function finishWorkout() {
     if (session.value.workoutId) {
       await fetchWorkouts()
     }
     await navigateTo('/')
+  }
+
+  // ③記録作成ページが実際にアンマウントされたタイミングでのみ呼ぶ(onUnmounted等)。
+  // navigateTo()完了後ではなく「アンマウント」を待つのは上記finishWorkoutのコメント参照
+  function resetSession() {
     session.value = { workoutId: null, performedAt: null, sets: [], exercises: [], memo: null }
   }
 
@@ -181,6 +189,7 @@ export function useWorkoutSession() {
     updateSet,
     updateMemo,
     finishWorkout,
+    resetSession,
   }
 }
 
