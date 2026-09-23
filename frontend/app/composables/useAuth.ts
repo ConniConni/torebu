@@ -69,10 +69,18 @@ export function useAuth() {
     return user.value
   }
 
+  // ログアウト後はフルリロード（external: true）で/loginへ遷移する（Issue #245）。
+  // - 遷移前にuserをnullにすると、表示中の画面が「未ログイン状態」で再描画されてしまう
+  //   （②ホームがWelcomeScreenに切り替わる、⑨マイページの表示名等が空になる等）ため、
+  //   stateには一切触らずに遷移する。かといってSPA内遷移だとuserが残っているため、
+  //   /loginのguestミドルウェアに「ログイン済み」とみなされて/へ戻されてしまう
+  // - フルリロードでuseStateは全て初期化されるため、ユーザーに紐づくキャッシュ
+  //   （種目・記録・ルーティン・グループ一覧等）が次にログインしたアカウントへ残ることもない
+  //   （Issue #111。以前はSPA内遷移のため、ここで各useStateを明示的にリセットしていた）
+  // location.hrefの変更後、navigateTo()のPromiseは解決しない（ページが破棄されるまで待つ）
   async function logout() {
     await $fetch('/api/auth/logout', { method: 'POST' })
-    user.value = null
-    resetUserState()
+    await navigateTo('/login', { external: true })
   }
 
   // 常に同じレスポンスを返すAPI（メールアドレス列挙対策）のため、成否を返さず完了を示すのみ
@@ -85,25 +93,4 @@ export function useAuth() {
   }
 
   return { user, fetchMe, register, login, logout, requestPasswordReset, resetPassword }
-}
-
-// ユーザーに紐づくキャッシュ(useState)を初期値に戻す。ログアウト→ログインはnavigateTo()による
-// SPA内遷移(フルリロード無し)のため、ここで明示的にリセットしないと、各ページの
-// 「まだ取得済みでなければfetchする」実装(if (!exercises.value)等)により、
-// 同じブラウザタブで別アカウントにログインし直したとき前のユーザーのデータが
-// 残ったまま表示されてしまう(Issue #111)。
-// useStateはキーで共有される単一のrefのため、各composable側の初期値と同じ値を入れ直せばよい
-function resetUserState() {
-  useState<unknown[] | null>('exercises', () => null).value = null
-  useState<unknown[] | null>('workouts', () => null).value = null
-  useState<unknown[] | null>('routines', () => null).value = null
-  useState<unknown[] | null>('groups', () => null).value = null
-  useState<unknown[]>('pending-exercises', () => []).value = []
-  useState<string | null>('picked-exercise-id', () => null).value = null
-  useState('workout-session', () => ({
-    workoutId: null as string | null,
-    performedAt: null as string | null,
-    sets: [] as unknown[],
-    memo: null as string | null,
-  })).value = { workoutId: null, performedAt: null, sets: [], memo: null }
 }

@@ -173,9 +173,9 @@ watch(
   { immediate: true },
 )
 
+// /loginへの遷移はlogout()内でフルリロードにより行う（Issue #245、useAuth.ts参照）
 async function onLogout() {
   await logout()
-  await navigateTo('/login')
 }
 
 // 記録本体の削除（Issue #127で③記録本体画面から移設）。③の画面内で見た目上「ホームへ戻る」と

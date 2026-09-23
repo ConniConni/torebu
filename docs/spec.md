@@ -490,8 +490,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   「先に他のメンバーをオーナーにするか、グループを削除してください」と案内するが、
   他メンバーをオーナーに任命するUIはこのIssueのスコープ外（次のIssue以降）
 - グループ一覧・詳細は`useGroups`（[useGroups.ts](../frontend/app/composables/useGroups.ts)）で
-  取得。`groups`一覧は`useState`でセッション中キャッシュし、ログアウト時に`useAuth.ts`の
-  `resetUserState()`でリセットする（他のuseState一覧と同じ理由。Issue #111参照）
+  取得。`groups`一覧は`useState`でセッション中キャッシュし、ログアウト時のフルリロードで
+  破棄される（他のuseState一覧と同じ。§3-3「注意点」・Issue #111・#245参照）
 - **バグ修正（2026-09-08、Issue #138の作業中に発覚）**：`fetchGroupDetail`/`fetchGroupWorkouts`が
   素の`$fetch`を使っていたため、SSR時にブラウザのCookieが転送されず`401`になり、SSRは
   「グループの取得に失敗しました」のエラー表示を返す一方、ハイドレーション後のクライアント側
@@ -820,9 +820,9 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 
 | 仕組み | 実体 | 何を運ぶか | ページを離れると |
 |---|---|---|---|
-| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutId・performedAt・登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだとき、またはログアウト時にリセット） |
-| `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため。ログアウト時にもリセット） |
-| `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだとき、またはログアウト時にリセット） |
+| `useWorkoutSession` | `useState('workout-session')` | 進行中のworkoutId・performedAt・登録済みのセット一覧 | **残る**（`finishWorkout` を呼んだときにリセット。ログアウト時はフルリロードで破棄） |
+| `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため。ログアウト時はフルリロードで破棄） |
+| `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときにリセット。ログアウト時はフルリロードで破棄） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
 
 **なぜ4つあるのか**
@@ -836,13 +836,20 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 
 `ref` はそのページ専用なので、ページを離れた瞬間に中身が消える。`useState` はアプリ全体で共有されるので残る。
 
-**注意点：`useState` はログアウトしても自動では消えない。** ログアウト→ログインは`navigateTo()`による
-SPA内遷移（フルリロード無し）のため、上記3つに加えて `useExercises`（`exercises`）・`useWorkouts`
-（`workouts`）・`useRoutines`（`routines`）のキャッシュも、明示的にリセットしないと同じブラウザタブで
-別アカウントにログインし直したときに前のユーザーのデータが残ったまま表示されてしまう
-（[Issue #111](https://github.com/ConniConni/torebu/issues/111)で発覚・修正）。そのため
-[useAuth.ts](../frontend/app/composables/useAuth.ts)の`logout()`で、ユーザーに紐づく`useState`を
-まとめてリセットしている。**新しく画面をまたぐ`useState`を追加したら、ここにも追記が必要。**
+**注意点：ログアウトはフルリロードで`/login`へ遷移する（SPA内遷移ではない）。**
+`useState`はSPA内遷移では消えないため、以前は[useAuth.ts](../frontend/app/composables/useAuth.ts)の
+`logout()`でユーザーに紐づく`useState`（`exercises`・`workouts`・`routines`・`groups`・上記3つ等）を
+明示的にリセットしていた（リセットしないと、同じブラウザタブで別アカウントにログインし直したときに
+前のユーザーのデータが残ったまま表示される。[Issue #111](https://github.com/ConniConni/torebu/issues/111)）。
+しかし「`user`・キャッシュを消してから`navigateTo('/login')`」の順だと、遷移が始まる前に表示中の画面が
+未ログイン状態で再描画され、②ホームならトップ画面（WelcomeScreen）が、⑨マイページなら空の表示名・
+「所属グループなし」が一瞬見えてしまう。かといって先にSPA内遷移すると、`user`が残っているため
+`/login`の`guest`ミドルウェアに`/`へ戻される。そこで`logout()`は**ログアウトAPIを呼んだ後、stateには
+触らず`navigateTo('/login', { external: true })`でフルリロードする**方式にした
+（[Issue #245](https://github.com/ConniConni/torebu/issues/245)）。フルリロードで`useState`は全て初期化
+されるため、Issue #111の対策も兼ねる。**そのため、新しく画面をまたぐ`useState`を追加しても、
+ログアウト用のリセット処理を書き足す必要はない**（ログアウトをSPA内遷移に戻す場合は、この前提が崩れる）。
+なお、テーマ（`useTheme`）は`localStorage`に保存しているため、フルリロード後も引き継がれる。
 
 ### 3-4. 日付の扱い
 

@@ -46,9 +46,9 @@ await loadSummary()
 
 const ROLE_LABEL: Record<'owner' | 'member', string> = { owner: 'オーナー', member: 'メンバー' }
 
+// /loginへの遷移はlogout()内でフルリロードにより行う（Issue #245、useAuth.ts参照）
 async function onLogout() {
   await logout()
-  await navigateTo('/login')
 }
 </script>
 
