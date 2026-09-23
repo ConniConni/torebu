@@ -7,6 +7,9 @@ interface Group {
   createdAt: string
   updatedAt: string
   role: 'owner' | 'member'
+  // マイページの所属グループ一覧で使う現在の所属人数(GET /groupsのみ持つ。GET /groups/:idは
+  // 持たないため、それを継承するGroupDetailでは実際には入らない点に注意、Issue #237)
+  memberCount?: number
 }
 
 interface GroupMember {

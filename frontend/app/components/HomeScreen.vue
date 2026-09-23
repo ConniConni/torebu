@@ -211,8 +211,21 @@ async function onDeleteWorkout(id: string) {
   <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <p class="text-sm text-gray-900">{{ user?.displayName }}さん</p>
-        <div class="flex items-center gap-2">
+        <!-- ⑨マイページへの導線（Issue #237）。ヘッダーの表示名クリックから遷移する想定
+             （docs/backlog.md「マイページ（⑨）の新設・設計」参照）。アバター（マイページの
+             プロフィールカードと同じイニシャル丸）を添えて、名前がタップ可能な導線だと
+             分かりやすくしている。表示名は最大50文字（backend/src/routes/auth.ts）まで
+             許容されるため、min-w-0+truncateで1行に収め、右側の通知・ログアウトを
+             押し出さないようにする（マイページのプロフィールカードと同じtruncate処理） -->
+        <NuxtLink to="/mypage" class="flex min-w-0 items-center gap-2 text-sm text-gray-900">
+          <span
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700"
+          >
+            {{ (user?.displayName ?? '?').slice(0, 1) }}
+          </span>
+          <span class="truncate">{{ user?.displayName }}さん</span>
+        </NuxtLink>
+        <div class="flex shrink-0 items-center gap-2">
           <NuxtLink
             to="/notifications"
             class="relative flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700"

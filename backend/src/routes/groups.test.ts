@@ -132,6 +132,18 @@ describe('GET /groups', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual([expect.objectContaining({ id: group.id, role: 'member' })])
   })
+
+  it('memberCountに退会済みメンバーを含めない', async () => {
+    const group = await createGroup() // オーナー1名で作成
+    await addMember(group.id, memberId)
+    await addMember(group.id, outsiderId, { leftAt: new Date() })
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get('/groups')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([expect.objectContaining({ id: group.id, memberCount: 2 })])
+  })
 })
 
 describe('GET /groups/:id', () => {
