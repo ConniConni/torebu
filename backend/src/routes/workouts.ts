@@ -240,7 +240,15 @@ workoutsRouter.patch('/:id', requireAuth, async (req, res) => {
   })
   const setCount = await prisma.workoutSet.count({ where: { workoutId: workout.id } })
 
-  res.status(200).json(serializeWorkout(updated, setCount > 0))
+  // セット0件・メモ無しになった場合、中身の無いworkoutをホームに残さないためソフトデリートする
+  // (Issue #234)。フロント(useWorkoutSession.tsのupdateMemo)はdeleted:trueを見てセッションを
+  // リセットし、既に削除済みのworkoutIdを使い回して後続のAPI呼び出しが404になるのを防ぐ
+  const shouldDelete = setCount === 0 && updated.memo === null
+  if (shouldDelete) {
+    await prisma.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+  }
+
+  res.status(200).json({ ...serializeWorkout(updated, false), deleted: shouldDelete })
 })
 
 workoutsRouter.delete('/:id', requireAuth, async (req, res) => {
@@ -375,7 +383,12 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
 
 workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
-  const set = await findOwnSet(userId, req.params.id as string, req.params.setId as string)
+  const workout = await findOwnWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  const set = await prisma.workoutSet.findFirst({ where: { id: req.params.setId as string, workoutId: workout.id } })
   if (!set) {
     res.status(404).json({ error: 'not_found' })
     return
@@ -384,7 +397,7 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
   // 削除すると、その種目の残りのsetOrderに欠番ができる(例: 1,2,3から2を消すと1,3が残る)。
   // 採番自体はnextSetOrderが最大値+1で拾うため壊れないが、表示上「1セット目から始まらない」
   // 「セット数と連番がずれる」ことになるため、削除のたびに残りを1から連番に詰め直す
-  await prisma.$transaction(async (tx) => {
+  const shouldDelete = await prisma.$transaction(async (tx) => {
     await tx.workoutSet.delete({ where: { id: set.id } })
 
     const remaining = await tx.workoutSet.findMany({
@@ -397,9 +410,21 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
         await tx.workoutSet.update({ where: { id: s.id }, data: { setOrder } })
       }
     }
+
+    // このworkout全体でセットが0件・メモ無しになった場合、中身の無いworkoutをホームに
+    // 残さないためソフトデリートする(Issue #234)。上のremainingは「同じ種目」のみを見て
+    // いるため、ここでは他種目分も含めたworkout全体のセット数を数え直す
+    const totalSetCount = await tx.workoutSet.count({ where: { workoutId: set.workoutId } })
+    if (totalSetCount === 0 && workout.memo === null) {
+      await tx.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+      return true
+    }
+    return false
   })
 
-  res.status(204).send()
+  // フロント(useWorkoutSession.tsのremoveSet)はdeleted:trueを見てセッションをリセットし、
+  // 既に削除済みのworkoutIdを使い回して後続のAPI呼び出しが404になるのを防ぐ
+  res.status(200).json({ deleted: shouldDelete })
 })
 
 // 種目カードの並び替え(Issue #228。ルーティン画面のPATCH /routines/:id/exercises/:idと同じ方針)

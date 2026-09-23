@@ -369,7 +369,41 @@ describe('PATCH /workouts/:id', () => {
     expect(res.body.hasSets).toBe(false)
   })
 
-  it('memoを空文字列で送るとnull(メモ無し)にクリアできる', async () => {
+  it('setがある状態でmemoを空文字列で送るとnull(メモ無し)にクリアできる(workoutは削除されない)', async () => {
+    const workout = await createWorkout(ownerId, { memo: '元のメモ' })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({ memo: '' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.memo).toBeNull()
+    expect(res.body.deleted).toBe(false)
+
+    const getRes = await agent.get(`/workouts/${workout.id}`)
+    expect(getRes.status).toBe(200)
+  })
+
+  it('memoをnullで送ってもクリアできる', async () => {
+    const workout = await createWorkout(ownerId, { memo: '元のメモ' })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.patch(`/workouts/${workout.id}`).send({ memo: null })
+
+    expect(res.status).toBe(200)
+    expect(res.body.memo).toBeNull()
+  })
+
+  // Issue #234: 種目選択画面から何も選ばずに戻る操作自体はworkoutを作らないため再現しないが、
+  // 「一度セットを追加してから削除する」「メモを入力してからクリアする」等でセット0件・
+  // メモ無しの中身が空のworkoutが残ると、ホームに「記録あり」として表示され続け、
+  // 実在しない記録が削除できてしまう不具合につながっていた
+  it('セット0件の状態でmemoを空文字列にクリアすると、workoutごとソフトデリートされる', async () => {
     const workout = await createWorkout(ownerId, { memo: '元のメモ' })
 
     const agent = await loginAsOwner()
@@ -377,16 +411,16 @@ describe('PATCH /workouts/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.memo).toBeNull()
-  })
+    expect(res.body.deleted).toBe(true)
 
-  it('memoをnullで送ってもクリアできる', async () => {
-    const workout = await createWorkout(ownerId, { memo: '元のメモ' })
+    const getRes = await agent.get(`/workouts/${workout.id}`)
+    expect(getRes.status).toBe(404)
 
-    const agent = await loginAsOwner()
-    const res = await agent.patch(`/workouts/${workout.id}`).send({ memo: null })
+    const listRes = await agent.get('/workouts')
+    expect(listRes.body.map((w: { id: string }) => w.id)).not.toContain(workout.id)
 
-    expect(res.status).toBe(200)
-    expect(res.body.memo).toBeNull()
+    const stored = await prisma.workout.findUnique({ where: { id: workout.id } })
+    expect(stored?.deletedAt).not.toBeNull()
   })
 
   // performedAtは編集不可(意図的、backend/src/routes/workouts.tsのupdateWorkoutSchema参照)。
@@ -730,6 +764,23 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
   })
 
   it('自分のsetを削除できる', async () => {
+    const workout = await createWorkout(ownerId, { memo: '削除しても残すメモ' })
+    const set = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/workouts/${workout.id}/sets/${set.id}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ deleted: false })
+
+    const stored = await prisma.workoutSet.findUnique({ where: { id: set.id } })
+    expect(stored).toBeNull()
+  })
+
+  // Issue #234: 最後の1セットを削除した結果、workoutがセット0件・メモ無しになった場合、
+  // ホームに中身の無い記録が残らないようworkoutごとソフトデリートする
+  it('最後のsetを削除し、メモも無ければworkoutごとソフトデリートされる', async () => {
     const workout = await createWorkout(ownerId)
     const set = await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
@@ -737,14 +788,54 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
 
     const agent = await loginAsOwner()
     const res = await agent.delete(`/workouts/${workout.id}/sets/${set.id}`)
-    expect(res.status).toBe(204)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ deleted: true })
 
-    const stored = await prisma.workoutSet.findUnique({ where: { id: set.id } })
-    expect(stored).toBeNull()
+    const getRes = await agent.get(`/workouts/${workout.id}`)
+    expect(getRes.status).toBe(404)
+
+    const listRes = await agent.get('/workouts')
+    expect(listRes.body.map((w: { id: string }) => w.id)).not.toContain(workout.id)
+
+    const stored = await prisma.workout.findUnique({ where: { id: workout.id } })
+    expect(stored?.deletedAt).not.toBeNull()
+  })
+
+  it('最後のsetを削除してもmemoがあればworkoutは削除されない', async () => {
+    const workout = await createWorkout(ownerId, { memo: 'メモあり' })
+    const set = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/workouts/${workout.id}/sets/${set.id}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ deleted: false })
+
+    const getRes = await agent.get(`/workouts/${workout.id}`)
+    expect(getRes.status).toBe(200)
+  })
+
+  it('他の種目にsetが残っていれば、ある種目のsetを全て削除してもworkoutは削除されない', async () => {
+    const secondExercise = await prisma.exercise.create({
+      data: { name: 'スクワット(削除判定テスト用)', muscleGroup: 'legs' },
+    })
+    const workout = await createWorkout(ownerId)
+    const set = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: secondExercise.id, setOrder: 1, reps: 8 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.delete(`/workouts/${workout.id}/sets/${set.id}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ deleted: false })
   })
 
   it('先頭・中間のsetを削除すると、残りのsetOrderが1から連番に詰め直される', async () => {
-    const workout = await createWorkout(ownerId)
+    const workout = await createWorkout(ownerId, { memo: '削除中もworkoutを残すためのメモ' })
     const set1 = await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
     })
@@ -759,7 +850,7 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
 
     // 中間(2セット目)を削除 → 残りは1, 3 ではなく 1, 2 に詰め直される
     const res1 = await agent.delete(`/workouts/${workout.id}/sets/${set2.id}`)
-    expect(res1.status).toBe(204)
+    expect(res1.status).toBe(200)
     const afterMiddleDelete = await prisma.workoutSet.findMany({
       where: { workoutId: workout.id },
       orderBy: { setOrder: 'asc' },
@@ -771,7 +862,7 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
 
     // 先頭(元set1、今は1セット目)を削除 → 残りが1セット目から始まる
     const res2 = await agent.delete(`/workouts/${workout.id}/sets/${set1.id}`)
-    expect(res2.status).toBe(204)
+    expect(res2.status).toBe(200)
     const afterFirstDelete = await prisma.workoutSet.findMany({
       where: { workoutId: workout.id },
       orderBy: { setOrder: 'asc' },
