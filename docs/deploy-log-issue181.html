@@ -1,0 +1,628 @@
+<title>torebuデプロイ日誌</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap');
+
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #262220;
+    --ink-soft: #6b6560;
+    --ink-faint: #a39c92;
+    --accent: #c2542f;
+    --accent-soft: #f0ddd2;
+    --ok: #3f7d58;
+    --ok-soft: #e1ede4;
+    --err: #b23a3a;
+    --err-soft: #f3dfdc;
+    --line: #ded7cc;
+    --code-bg: #2b2622;
+    --code-ink: #efe6da;
+    --code-err: #ff9d8a;
+    --code-comment: #9c9186;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1c1a17;
+      --paper-raised: #252220;
+      --ink: #efe9e1;
+      --ink-soft: #b3aa9e;
+      --ink-faint: #7c7468;
+      --accent: #e07a4c;
+      --accent-soft: #3a2a20;
+      --ok: #6fb98a;
+      --ok-soft: #24352a;
+      --err: #e07272;
+      --err-soft: #3a2624;
+      --line: #3a352f;
+      --code-bg: #14120f;
+      --code-ink: #ece3d6;
+      --code-err: #ff9d8a;
+      --code-comment: #857b6d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1c1a17;
+    --paper-raised: #252220;
+    --ink: #efe9e1;
+    --ink-soft: #b3aa9e;
+    --ink-faint: #7c7468;
+    --accent: #e07a4c;
+    --accent-soft: #3a2a20;
+    --ok: #6fb98a;
+    --ok-soft: #24352a;
+    --err: #e07272;
+    --err-soft: #3a2624;
+    --line: #3a352f;
+    --code-bg: #14120f;
+    --code-ink: #ece3d6;
+    --code-err: #ff9d8a;
+    --code-comment: #857b6d;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans JP", "IBM Plex Sans", sans-serif;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  h1, h2, h3 {
+    font-family: "IBM Plex Mono", monospace;
+    text-wrap: balance;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+
+  a { color: var(--accent); }
+
+  /* ---------- Header ---------- */
+
+  .masthead {
+    margin-bottom: 8px;
+  }
+  .masthead .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .masthead .kicker::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    flex-shrink: 0;
+  }
+  h1.title {
+    font-size: clamp(28px, 5vw, 38px);
+    font-weight: 700;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .dek {
+    font-family: "IBM Plex Sans JP", sans-serif;
+    color: var(--ink-soft);
+    font-size: 16.5px;
+    max-width: 60ch;
+    margin: 0 0 28px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0;
+    margin-bottom: 40px;
+  }
+  .meta-row span:not(:last-child)::after {
+    content: "·";
+    margin-left: 10px;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- Section scaffolding ---------- */
+
+  section { margin-bottom: 52px; }
+
+  .section-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 6px;
+  }
+  h2.section-title {
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 16px;
+  }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  .lede { color: var(--ink-soft); }
+
+  /* ---------- Architecture diagram ---------- */
+
+  .diagram-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 20px 8px;
+  }
+  .diagram-card svg { display: block; width: 100%; height: auto; }
+  .diagram-caption {
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 12px 4px 4px;
+    margin: 0;
+  }
+
+  /* ---------- Steps (procedure) ---------- */
+
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .steps li:last-child { border-bottom: none; }
+  .steps li::before {
+    content: counter(step);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-body strong {
+    display: block;
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+  .step-body span {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 13.5px;
+  }
+  .step-body code { font-size: 12.5px; }
+
+  /* ---------- Timeline of incidents ---------- */
+
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-left: 2px solid var(--line);
+    margin-left: 13px;
+  }
+
+  .incident {
+    position: relative;
+    padding: 0 0 40px 32px;
+  }
+  .incident:last-child { padding-bottom: 4px; }
+  .incident::before {
+    content: attr(data-n);
+    position: absolute;
+    left: -14px;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--paper);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .incident-head {
+    font-size: 16.5px;
+    font-weight: 600;
+    margin: 2px 0 12px;
+    padding-top: 2px;
+  }
+
+  .tag-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    padding: 3px 9px;
+    border-radius: 100px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tag.err { background: var(--err-soft); color: var(--err); }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); }
+
+  .kv {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    gap: 6px 14px;
+    font-size: 14.5px;
+    margin-bottom: 4px;
+  }
+  .kv dt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: 3px;
+  }
+  .kv dd { margin: 0; }
+
+  .code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+  }
+  .code .err-line { color: var(--code-err); }
+  .code .comment { color: var(--code-comment); }
+
+  /* ---------- Checklist ---------- */
+
+  .checklist-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 24px 26px;
+  }
+  .checklist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .checklist li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 15px;
+  }
+  .checklist .box {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    border-radius: 4px;
+    border: 1.5px solid var(--ink-faint);
+  }
+  .checklist strong { font-weight: 600; }
+  .checklist .sub { color: var(--ink-soft); font-size: 13.5px; display: block; margin-top: 2px; }
+
+  /* ---------- Glossary ---------- */
+
+  .glossary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+  .term {
+    display: grid;
+    grid-template-columns: minmax(120px, 160px) 1fr;
+    gap: 20px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .term dt {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent);
+  }
+  .term dd { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+
+  /* ---------- Security note ---------- */
+
+  .note-card {
+    background: var(--ok-soft);
+    border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line));
+    border-radius: 10px;
+    padding: 20px 22px;
+  }
+  .note-card h3 {
+    font-size: 14px;
+    color: var(--ok);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .note-card ul { margin: 0; padding-left: 20px; }
+  .note-card li { margin-bottom: 8px; font-size: 14.5px; }
+  .note-card li:last-child { margin-bottom: 0; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 520px) {
+    .term { grid-template-columns: 1fr; gap: 4px; }
+    .kv { grid-template-columns: 1fr; }
+    .kv dt { padding-top: 8px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="kicker">Deploy Log &middot; Issue #181</div>
+    <h1 class="title">torebuデプロイ日誌</h1>
+    <p class="dek">Vercel・Neonのアカウントを初めて作るところから、実際に本番で新規登録が通るまで。つまずいた場所とその理由を、次に見返す自分のために記録しておく。</p>
+    <div class="meta-row">
+      <span>2026-09-14 &ndash; 09-15</span>
+      <span>Backend: Express &rarr; Vercel Functions</span>
+      <span>DB: Neon (Sydney)</span>
+      <span>PR #186 #187 #188</span>
+    </div>
+  </header>
+
+  <section id="overview">
+    <p class="section-label">00 &nbsp;全体像</p>
+    <h2 class="section-title">何を、何の上に建てたか</h2>
+    <p class="lede">今回組んだのは3つのピース。ブラウザは常にNuxt（フロント）としか話さず、Nuxtの中継役（プロキシ）がバックエンドに転送する。バックエンドはExpressだが、Vercel上では「サーバー」ではなく「呼ばれた時だけ動く関数」として動く。</p>
+
+    <div class="diagram-card">
+      <svg viewBox="0 0 680 210" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-faint)"></path>
+          </marker>
+        </defs>
+
+        <!-- Browser -->
+        <rect x="10" y="70" width="130" height="70" rx="8" fill="var(--paper)" stroke="var(--line)"></rect>
+        <text x="75" y="100" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">ブラウザ</text>
+        <text x="75" y="118" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)">torebu-7gf1</text>
+
+        <line x1="140" y1="105" x2="182" y2="105" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+        <!-- Vercel box -->
+        <rect x="184" y="20" width="330" height="170" rx="10" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 4"></rect>
+        <text x="200" y="14" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="0.08em" fill="var(--accent)">VERCEL</text>
+
+        <!-- Nuxt -->
+        <rect x="204" y="70" width="130" height="70" rx="8" fill="var(--paper-raised)" stroke="var(--line)"></rect>
+        <text x="269" y="96" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">Nuxt</text>
+        <text x="269" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)">/api/** を中継</text>
+        <text x="269" y="126" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)">torebu-7gf1</text>
+
+        <line x1="334" y1="105" x2="366" y2="105" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+        <!-- Express fn -->
+        <rect x="368" y="70" width="130" height="70" rx="8" fill="var(--paper-raised)" stroke="var(--line)"></rect>
+        <text x="433" y="96" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">Express</text>
+        <text x="433" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)">api/index.ts</text>
+        <text x="433" y="126" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)">torebu-gules</text>
+
+        <line x1="514" y1="105" x2="556" y2="105" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+        <!-- Neon -->
+        <rect x="558" y="70" width="112" height="70" rx="8" fill="var(--paper)" stroke="var(--line)"></rect>
+        <text x="614" y="100" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">Neon</text>
+        <text x="614" y="118" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)">Postgres</text>
+      </svg>
+      <p class="diagram-caption">ブラウザが触れるのはNuxtの1オリジンだけ。Express・Neonは背後に隠れている（CSRF対策を「同一サイト」の前提のまま保てる理由）。</p>
+    </div>
+  </section>
+
+  <section id="steps">
+    <p class="section-label">01 &nbsp;実際にやった手順</p>
+    <h2 class="section-title">アカウント作成から本番確認まで</h2>
+    <p class="lede">エラー対応の前に、まず素直にやった作業の流れ。02の「つまずいた場所」は、主に手順4・6の途中で起きたこと。</p>
+    <div class="diagram-card">
+      <ol class="steps">
+        <li><div class="step-body"><strong>Neonでアカウント作成・プロジェクト作成</strong><span>本番用データベースとして。リージョンはシンガポール（日本から一番近い）を選択</span></div></li>
+        <li><div class="step-body"><strong>Vercelでアカウント作成</strong><span>GitHub連携でサインアップ。リポジトリへのアクセスを許可</span></div></li>
+        <li><div class="step-body"><strong>バックエンド用のVercelプロジェクトを作成</strong><span>Root Directoryを<code>backend</code>に指定。環境変数<code>DATABASE_URL</code>（Neonの接続文字列）・<code>SESSION_SECRET</code>（ランダムな文字列）を設定してデプロイ</span></div></li>
+        <li><div class="step-body"><strong>デプロイエラーに対応</strong><span>ビルドが通って実際にアクセスできるようになるまで、5回ほど原因を調べては直す、を繰り返した（詳しくは次の章）</span></div></li>
+        <li><div class="step-body"><strong>フロントエンド用のVercelプロジェクトを作成</strong><span>Root Directoryを<code>frontend</code>に指定。環境変数<code>BACKEND_ORIGIN</code>（手順3で発行されたバックエンドのURL）を設定してデプロイ</span></div></li>
+        <li><div class="step-body"><strong>本番データベースにテーブルを作成</strong><span><code>npx prisma migrate deploy</code>を、Neonの直接接続の接続文字列に対して実行</span></div></li>
+        <li><div class="step-body"><strong>実際に本番サイトで動作確認</strong><span>新規登録→ホーム画面表示→別ページへ移動→ページ再読み込み→ログアウト→再ログイン、が全部通ることを確認</span></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <p class="section-label">02 &nbsp;つまずいた場所</p>
+    <h2 class="section-title">起きたこと・原因・直し方</h2>
+
+    <div class="timeline">
+
+      <div class="incident" data-n="1">
+        <p class="incident-head">生成されるはずのPrisma Clientが無いままビルドされる</p>
+        <div class="tag-row"><span class="tag err">Build failed</span></div>
+        <dl class="kv">
+          <dt>症状</dt><dd>ビルドログに<code>Cannot find module '../generated/prisma/enums.js'</code></dd>
+          <dt>原因</dt><dd>Prisma Clientはgit管理外で、毎回のインストール時に作り直す設計。生成コマンドの実行タイミングが保証されていなかった</dd>
+          <dt>対処</dt><dd><code>vercel-build</code>スクリプトで<code>prisma generate</code>を明示的に実行するようにした</dd>
+        </dl>
+      </div>
+
+      <div class="incident" data-n="2">
+        <p class="incident-head">既存の小さな型エラーが、実は本番を止めていた</p>
+        <div class="tag-row"><span class="tag err">Build failed</span></div>
+        <dl class="kv">
+          <dt>症状</dt><dd>「ローカルの<code>typecheck</code>だけ通らない軽微なバグ」と思っていたものが、Vercelのビルドも巻き込んで止めていた</dd>
+          <dt>原因</dt><dd>Vercelは呼び出し先も含めて全ファイルを型チェックする。1箇所だけ型のキャストが漏れていた</dd>
+          <dt>対処</dt><dd>他の場所と同じキャストを1行追加</dd>
+        </dl>
+      </div>
+
+      <div class="incident" data-n="3">
+        <p class="incident-head">Vercelが、頼んでもいないExpressの自動変換をしてくる</p>
+        <div class="tag-row"><span class="tag err">500 crash</span></div>
+        <div class="code">FUNCTION_INVOCATION_FAILED<br><span class="err-line">Invalid export found in module "src/index.js".</span><br>The default export must be a function or server.</div>
+        <dl class="kv" style="margin-top:14px">
+          <dt>原因</dt><dd>依存関係に<code>express</code>があると、Vercelは「Express製アプリだ」と判断して、こちらが用意した経路とは別に、もう1つ勝手に関数を組み立てようとする</dd>
+          <dt>対処</dt><dd><code>vercel.json</code>に「関数として使うのはこのファイルだけ」と明示して、自動変換を止めた</dd>
+        </dl>
+      </div>
+
+      <div class="incident" data-n="4">
+        <p class="incident-head">ビルド手順を指定すると、今度は「公開フォルダが無い」と怒られる</p>
+        <div class="tag-row"><span class="tag err">Build failed</span></div>
+        <div class="code">Error: No Output Directory named <span class="err-line">"public"</span> found after the Build completed.</div>
+        <dl class="kv" style="margin-top:14px">
+          <dt>原因</dt><dd>APIしか無いプロジェクトなのに、ビルド手順を指定すると「画面（静的ファイル）を作るはず」という前提でチェックされてしまう</dd>
+          <dt>対処</dt><dd>ビルド手順自体を空にした。Prisma Clientの生成は、インストール時に自動で走る仕組み（<code>postinstall</code>）に任せた</dd>
+        </dl>
+      </div>
+
+      <div class="incident" data-n="5">
+        <p class="incident-head">新しく作ったデータベースは、当然だけど空っぽ</p>
+        <div class="tag-row"><span class="tag err">500 at runtime</span></div>
+        <div class="code"><span class="comment">// 新規登録APIを呼ぶと…</span><br><span class="err-line">The table `public.users` does not exist</span> in the current database.</div>
+        <dl class="kv" style="margin-top:14px">
+          <dt>原因</dt><dd>ローカルでは開発中にほぼ習慣で<code>migrate dev</code>を実行するため、テーブルが無い状態を意識する機会が無い。Neonのような新しいデータベースには、この「表の設計図を流し込む」作業を誰も一度もしていなかった</dd>
+          <dt>対処</dt><dd><code>npx prisma migrate deploy</code>を本番データベースに向けて実行</dd>
+        </dl>
+      </div>
+
+      <div class="incident" data-n="6">
+        <p class="incident-head">操作しているうちに、データベースを2つ作ってしまっていた</p>
+        <div class="tag-row"><span class="tag ok">実害なし</span></div>
+        <dl class="kv">
+          <dt>状況</dt><dd>接続情報を探している間に、シドニーとシンガポール、同じ名前のプロジェクトが2つできていた</dd>
+          <dt>切り分け</dt><dd>片方にだけマイグレーションを流して登録を試す → 失敗すればもう片方、という消去法で「Vercelに設定されているのはシドニーの方」だと特定した</dd>
+        </dl>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="security">
+    <p class="section-label">03 &nbsp;セキュリティの確認</p>
+    <h2 class="section-title">パスワード、大丈夫？という素朴な疑問</h2>
+    <p class="lede">「昔AWSで簡単なパスワードのせいで不正アクセスされた」という経験を踏まえて、今回の構成を確認した。</p>
+    <div class="note-card">
+      <h3>&#9989; 確認できたこと</h3>
+      <ul>
+        <li>データベースのパスワードは自分で決めていない。Neonが作成時に自動生成した長いランダム文字列が入っている</li>
+        <li>接続情報が実際に存在するのは「Vercelの環境変数」と「Neonのダッシュボード」だけ。手元のファイルやこの会話には一度も残していない</li>
+        <li>ターミナルの実行履歴（<code>history</code>・<code>~/.bash_history</code>）にも残っていないことを確認済み</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="checklist">
+    <p class="section-label">04 &nbsp;次にまた新しいプロジェクトをデプロイするなら</p>
+    <h2 class="section-title">先にやっておくと詰まらない4つ</h2>
+    <div class="checklist-card">
+      <ul class="checklist">
+        <li><span class="box"></span><div><strong>Vercelの「Framework Preset」を最初に確認する</strong><span class="sub">Express・Node.jsなど、自動判定が独自の挙動を持つプリセットになっていないか。APIだけのプロジェクトなら基本は素の設定のままでよい</span></div></li>
+        <li><span class="box"></span><div><strong>ビルド手順は「無し」から始める</strong><span class="sub">画面の出力が無いプロジェクトに独自のビルド手順を足すと、思わぬ前提（公開フォルダ必須など）を呼び込みやすい</span></div></li>
+        <li><span class="box"></span><div><strong>データベースは「作った直後は空」だと覚えておく</strong><span class="sub">本番用のマイグレーション適用を、デプロイ手順のチェックリストに必ず入れる</span></div></li>
+        <li><span class="box"></span><div><strong>接続文字列は「どこに存在するか」を都度把握する</strong><span class="sub">ダッシュボード・環境変数・ターミナル履歴、思ったより色々な場所に残りうる</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="glossary">
+    <p class="section-label">05 &nbsp;出てきた言葉</p>
+    <h2 class="section-title">用語集</h2>
+    <dl class="glossary">
+      <div class="term">
+        <dt>フロントエンド／バックエンド</dt>
+        <dd>torebuは実は2つの別プロジェクト。フロントエンド（Nuxt）はボタンや画面などユーザーが見て触るもの全部。バックエンド（Express）は画面を一切持たず、「ログインして」「記録を保存して」と頼まれたらデータ（JSON）を返すだけの係。今回の一連のトラブルは、この「画面を持たない」バックエンド特有の事情が原因だった</dd>
+      </div>
+      <div class="term">
+        <dt>サーバーレス関数</dt>
+        <dd>常時起動しているサーバーではなく、リクエストが来た瞬間だけ立ち上がって処理し、終わったら消えるプログラム。使った分だけ課金される代わりに、待機コストが（無料枠では）ゼロになる</dd>
+      </div>
+      <div class="term">
+        <dt>Framework Preset</dt>
+        <dd>Vercelが「これはNext.jsだ」「これはExpressだ」などプロジェクトの種類を自動判定し、それに応じたビルド方法を選ぶ仕組み。判定が外れると、今回のような食い違いが起きる</dd>
+      </div>
+      <div class="term">
+        <dt>環境変数</dt>
+        <dd>パスワードや接続先など、コードには書きたくない値を、実行環境側に外から渡す仕組み。同じコードでもローカル用・本番用で違う値を渡せる</dd>
+      </div>
+      <div class="term">
+        <dt>Prisma Client</dt>
+        <dd>「このテーブルにこの値を入れて」というSQL文を手で書く代わりに、<code>prisma.user.findUnique(...)</code>のような読みやすいコードでデータベースを操作できるようにする、自動生成コード。設計図（<code>schema.prisma</code>）から<code>prisma generate</code>コマンドが書き出すもので、Wordファイルから作ったPDFのような「元があればいつでも作り直せる成果物」なのでgitには含めない。新しい環境では毎回この生成コマンドを実行する必要がある</dd>
+      </div>
+      <div class="term">
+        <dt>マイグレーション</dt>
+        <dd>「usersテーブルにemail列を追加する」のような、データベースの設計変更を記録した手順書。順番に適用していくことで、どの環境のデータベースも同じ形に揃えられる。ローカルでは開発中にほぼ習慣で実行するため意識しないが、Neonのような新しいデータベースには誰かが明示的に一度実行してあげる必要がある</dd>
+      </div>
+      <div class="term">
+        <dt>プール接続（PgBouncer）</dt>
+        <dd>大量の接続要求を、少数の実接続にまとめて中継する仕組み。サーバーレス関数のように「同時にたくさんのインスタンスが起動しうる」構成では、これが無いとデータベース側の接続上限をすぐ使い切ってしまう</dd>
+      </div>
+      <div class="term">
+        <dt>typecheck（型チェック）</dt>
+        <dd>コードを実際には動かさず、「この変数は文字列のはず」といった型の矛盾だけを検査する作業。実際に動かして確認する<code>npm test</code>とは別物のため、「テストは全部通るのにtypecheckだけ失敗する」という、実害が無さそうに見えるズレが起きうる。今回はこれが実はVercelのデプロイ自体もブロックしていて、見た目より重大な問題だった</dd>
+      </div>
+      <div class="term">
+        <dt>Neon</dt>
+        <dd>Postgresというデータベースソフトの構築・管理を代行してくれる会社のサービス。実体はAWSのデータセンター設備を借りて動いている（Amazon直営ではなく、Amazonの倉庫を借りるテナントのようなイメージ）ため、プロジェクト作成時に「AWS Asia Pacific 1 (Singapore)」のようなAWSのリージョン名から選ぶ画面になる</dd>
+      </div>
+    </dl>
+  </section>
+
+  <footer>
+    torebu &middot; backend/docs/backlog.md 「Vercel実デプロイで分かったこと」より抜粋・再構成
+  </footer>
+
+</div>
