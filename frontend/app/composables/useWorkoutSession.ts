@@ -159,12 +159,16 @@ export function useWorkoutSession() {
   }
 
   // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してから
-  // セッション状態をリセットする。何も保存していなければ(workoutId未作成)、反映すべきものが
-  // 無いのでAPIは呼ばずリセットだけする
+  // ホームへ遷移し、遷移完了後にセッション状態をリセットする。何も保存していなければ
+  // (workoutId未作成)、反映すべきものが無いのでAPIは呼ばずリセットだけする。
+  // セッションのリセットをnavigateTo後に行っているのは、遷移前に行うと、まだ画面に残っている
+  // ③記録作成ページ(session.value.sets/exercisesを参照して表示している)が一瞬空の状態で
+  // 再描画されてしまうため（「ホームに戻る」でその日の記録が一瞬消えて見える不具合の原因だった）
   async function finishWorkout() {
     if (session.value.workoutId) {
       await fetchWorkouts()
     }
+    await navigateTo('/')
     session.value = { workoutId: null, performedAt: null, sets: [], exercises: [], memo: null }
   }
 
