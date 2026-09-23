@@ -101,10 +101,10 @@ async function onDeleteExercise(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink :to="returnTo" class="text-sm text-gray-500">← 戻る</NuxtLink>
-      <h1 class="text-base font-semibold text-gray-900">種目を選択</h1>
+      <NuxtLink :to="returnTo" class="text-sm text-gray-500 dark:text-muted">← 戻る</NuxtLink>
+      <h1 class="text-base font-semibold text-gray-900 dark:text-ink">種目を選択</h1>
 
       <div class="flex flex-wrap gap-2">
         <button
@@ -114,8 +114,8 @@ async function onDeleteExercise(id: string) {
           class="rounded-full border px-3 py-1 text-xs font-medium"
           :class="
             selectedEquipmentCategories.has(category)
-              ? 'border-brand-600 bg-brand-600 text-white'
-              : 'border-gray-300 bg-white text-gray-600'
+              ? 'border-brand-600 dark:border-brand-400 bg-brand-600 text-white'
+              : 'border-gray-300 dark:border-border-dark bg-white dark:bg-panel text-gray-600 dark:text-muted'
           "
           @click="toggleEquipmentCategory(category)"
         >
@@ -123,8 +123,8 @@ async function onDeleteExercise(id: string) {
         </button>
       </div>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="error" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
         種目一覧の取得に失敗しました。時間をおいて再度お試しください
       </p>
 
@@ -132,35 +132,33 @@ async function onDeleteExercise(id: string) {
         <section
           v-for="section in sections"
           :key="section.group"
-          class="rounded-lg bg-white p-4 shadow"
+          class="rounded-lg bg-white dark:bg-panel p-4 shadow"
         >
           <div class="mb-2 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900">{{ section.label }}</h2>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">{{ section.label }}</h2>
             <NuxtLink
               :to="{
                 path: '/workouts/exercises-new',
                 query: { muscleGroup: section.group, returnTo },
               }"
-              class="text-xs text-brand-600"
+              class="text-xs text-brand-600 dark:text-brand-400"
             >
               ＋種目を追加
             </NuxtLink>
           </div>
 
-          <p v-if="section.exercises.length === 0" class="text-sm text-gray-500">
+          <p v-if="section.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
             {{
-              selectedEquipmentCategories.size > 0
-                ? '該当する種目がありません'
-                : '種目がありません'
+              selectedEquipmentCategories.size > 0 ? '該当する種目がありません' : '種目がありません'
             }}
           </p>
           <ul v-else class="space-y-1">
             <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
               <div
                 v-if="confirmingDeleteId === exercise.id"
-                class="flex flex-col gap-2 rounded bg-gray-50 p-2"
+                class="flex flex-col gap-2 rounded bg-gray-50 dark:bg-surface p-2"
               >
-                <p class="text-sm text-gray-700">
+                <p class="text-sm text-gray-700 dark:text-ink">
                   「{{
                     exercise.name
                   }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
@@ -169,7 +167,7 @@ async function onDeleteExercise(id: string) {
                   <button
                     type="button"
                     :disabled="deletingId === exercise.id"
-                    class="flex-1 rounded border border-gray-300 py-1.5 text-sm text-gray-700 disabled:opacity-50"
+                    class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
                     @click="confirmingDeleteId = null"
                   >
                     キャンセル
@@ -183,19 +181,21 @@ async function onDeleteExercise(id: string) {
                     {{ deletingId === exercise.id ? '削除中...' : '削除する' }}
                   </button>
                 </div>
-                <p v-if="deleteError" class="text-sm text-red-600">{{ deleteError }}</p>
+                <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
+                  {{ deleteError }}
+                </p>
               </div>
               <div v-else class="flex items-center gap-1">
                 <button
                   type="button"
-                  class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+                  class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
                   @click="selectExercise(exercise.id)"
                 >
                   {{ exercise.name }}
                 </button>
                 <button
                   type="button"
-                  class="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  class="shrink-0 rounded-full p-1.5 text-gray-400 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-600 dark:hover:text-muted"
                   aria-label="この種目が効く部位を見る"
                   @click="highlightExercise = exercise"
                 >
@@ -204,7 +204,7 @@ async function onDeleteExercise(id: string) {
                 <button
                   v-if="canDelete(exercise)"
                   type="button"
-                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                   aria-label="この種目を削除する"
                   @click="confirmingDeleteId = exercise.id"
                 >
@@ -217,7 +217,7 @@ async function onDeleteExercise(id: string) {
           <button
             v-if="section.exercises.length > SECTION_PREVIEW_COUNT"
             type="button"
-            class="mt-1 flex items-center gap-1 text-xs text-gray-500"
+            class="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-muted"
             @click="toggleExpanded(section.group)"
           >
             {{

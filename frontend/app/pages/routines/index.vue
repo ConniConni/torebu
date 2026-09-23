@@ -49,19 +49,19 @@ async function onDeleteRoutine(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <h1 class="text-base font-semibold text-gray-900">ルーティン</h1>
+      <h1 class="text-base font-semibold text-gray-900 dark:text-ink">ルーティン</h1>
 
       <form class="flex items-end gap-2" @submit.prevent="onCreate">
-        <label class="flex flex-1 flex-col gap-1 text-sm text-gray-700">
+        <label class="flex flex-1 flex-col gap-1 text-sm text-gray-700 dark:text-ink">
           新しいルーティン名
           <input
             v-model="newName"
             type="text"
             maxlength="50"
             placeholder="例：胸の日"
-            class="rounded border border-gray-300 px-3 py-2 text-sm"
+            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm"
           />
         </label>
         <button
@@ -72,28 +72,35 @@ async function onDeleteRoutine(id: string) {
           追加
         </button>
       </form>
-      <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="error" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
         ルーティン一覧の取得に失敗しました。時間をおいて再度お試しください
       </p>
-      <p v-else-if="routines?.length === 0" class="text-center text-sm text-gray-500">
+      <p
+        v-else-if="routines?.length === 0"
+        class="text-center text-sm text-gray-500 dark:text-muted"
+      >
         ルーティンがまだありません。上の入力欄から作成できます
       </p>
 
       <ul v-else class="flex flex-col gap-2">
-        <li v-for="routine in routines" :key="routine.id" class="rounded-lg bg-white shadow">
+        <li
+          v-for="routine in routines"
+          :key="routine.id"
+          class="rounded-lg bg-white dark:bg-panel shadow"
+        >
           <template v-if="confirmingDeleteId === routine.id">
             <div class="flex flex-col gap-2 p-4">
-              <p class="text-sm text-gray-700">
+              <p class="text-sm text-gray-700 dark:text-ink">
                 「{{ routine.name }}」を削除しますか？（元に戻せません）
               </p>
               <div class="flex gap-2">
                 <button
                   type="button"
                   :disabled="deletingId === routine.id"
-                  class="flex-1 rounded border border-gray-300 py-1.5 text-sm text-gray-700 disabled:opacity-50"
+                  class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
                   @click="confirmingDeleteId = null"
                 >
                   キャンセル
@@ -107,19 +114,21 @@ async function onDeleteRoutine(id: string) {
                   {{ deletingId === routine.id ? '削除中...' : '削除する' }}
                 </button>
               </div>
-              <p v-if="deleteError" class="text-sm text-red-600">{{ deleteError }}</p>
+              <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
+                {{ deleteError }}
+              </p>
             </div>
           </template>
           <div v-else class="flex items-center gap-2 p-4">
             <NuxtLink
               :to="`/routines/${routine.id}`"
-              class="flex-1 text-sm font-semibold text-gray-900"
+              class="flex-1 text-sm font-semibold text-gray-900 dark:text-ink"
             >
               {{ routine.name }}
             </NuxtLink>
             <button
               type="button"
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
               aria-label="このルーティンを削除する"
               @click="confirmingDeleteId = routine.id"
             >
