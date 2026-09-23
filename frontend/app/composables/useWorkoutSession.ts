@@ -104,10 +104,23 @@ export function useWorkoutSession() {
     if (!session.value.workoutId && !trimmed) return
 
     const workoutId = await ensureWorkout()
-    const updated = await $fetch<{ memo: string | null }>(`/api/workouts/${workoutId}`, {
-      method: 'PATCH',
-      body: { memo: trimmed },
-    })
+    const updated = await $fetch<{ memo: string | null; deleted: boolean }>(
+      `/api/workouts/${workoutId}`,
+      { method: 'PATCH', body: { memo: trimmed } },
+    )
+    // セット0件・メモ無しになった結果サーバー側でworkoutがソフトデリートされた場合(Issue #234)、
+    // 削除済みのworkoutIdを持ち続けると次の保存操作(addSet等)が404になるため、
+    // 「まだ何も保存していない」状態にリセットする
+    if (updated.deleted) {
+      session.value = {
+        workoutId: null,
+        performedAt: session.value.performedAt,
+        sets: [],
+        exercises: [],
+        memo: null,
+      }
+      return
+    }
     session.value.memo = updated.memo
   }
 
@@ -132,7 +145,23 @@ export function useWorkoutSession() {
 
   async function removeSet(setId: string) {
     if (!session.value.workoutId) return
-    await $fetch(`/api/workouts/${session.value.workoutId}/sets/${setId}`, { method: 'DELETE' })
+    const { deleted } = await $fetch<{ deleted: boolean }>(
+      `/api/workouts/${session.value.workoutId}/sets/${setId}`,
+      { method: 'DELETE' },
+    )
+    // セット0件・メモ無しになった結果サーバー側でworkoutがソフトデリートされた場合(Issue #234)、
+    // GET /workouts/:idはもう404になるため、fetchSetsで再取得せず
+    // 「まだ何も保存していない」状態にリセットする(updateMemoと同じ扱い)
+    if (deleted) {
+      session.value = {
+        workoutId: null,
+        performedAt: session.value.performedAt,
+        sets: [],
+        exercises: [],
+        memo: null,
+      }
+      return
+    }
     // 削除すると同じ種目の残りのsetOrderがサーバー側で1から連番に詰め直されるため、
     // ローカルでの単純なfilterではなく再取得して反映する
     await fetchSets()
