@@ -113,7 +113,9 @@ export function useWorkoutSession() {
   async function removeSet(setId: string) {
     if (!session.value.workoutId) return
     await $fetch(`/api/workouts/${session.value.workoutId}/sets/${setId}`, { method: 'DELETE' })
-    session.value.sets = session.value.sets.filter((s) => s.id !== setId)
+    // 削除すると同じ種目の残りのsetOrderがサーバー側で1から連番に詰め直されるため、
+    // ローカルでの単純なfilterではなく再取得して反映する
+    await fetchSets()
   }
 
   async function updateSet(setId: string, weightKg: number | null, reps: number) {

@@ -598,6 +598,42 @@ describe('DELETE /workouts/:id/sets/:setId', () => {
     const stored = await prisma.workoutSet.findUnique({ where: { id: set.id } })
     expect(stored).toBeNull()
   })
+
+  it('先頭・中間のsetを削除すると、残りのsetOrderが1から連番に詰め直される', async () => {
+    const workout = await createWorkout(ownerId)
+    const set1 = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+    const set2 = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 10 },
+    })
+    const set3 = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 3, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+
+    // 中間(2セット目)を削除 → 残りは1, 3 ではなく 1, 2 に詰め直される
+    const res1 = await agent.delete(`/workouts/${workout.id}/sets/${set2.id}`)
+    expect(res1.status).toBe(204)
+    const afterMiddleDelete = await prisma.workoutSet.findMany({
+      where: { workoutId: workout.id },
+      orderBy: { setOrder: 'asc' },
+    })
+    expect(afterMiddleDelete.map((s) => ({ id: s.id, setOrder: s.setOrder }))).toEqual([
+      { id: set1.id, setOrder: 1 },
+      { id: set3.id, setOrder: 2 },
+    ])
+
+    // 先頭(元set1、今は1セット目)を削除 → 残りが1セット目から始まる
+    const res2 = await agent.delete(`/workouts/${workout.id}/sets/${set1.id}`)
+    expect(res2.status).toBe(204)
+    const afterFirstDelete = await prisma.workoutSet.findMany({
+      where: { workoutId: workout.id },
+      orderBy: { setOrder: 'asc' },
+    })
+    expect(afterFirstDelete).toEqual([expect.objectContaining({ id: set3.id, setOrder: 1 })])
+  })
 })
 
 describe('別ユーザーからの操作', () => {
