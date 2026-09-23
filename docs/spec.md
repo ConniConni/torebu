@@ -890,7 +890,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 |---|---|---|---|
 | POST | `/workouts` | 要 | その日のworkoutを作る |
 | GET | `/workouts` | 要 | 自分のworkout一覧（`performedAt` 降順、同日内は`createdAt`降順で登録順に安定させる。`performedAt`は日付のみのためtie-breakが無いと同日内の順序が不定になる。Issue #222）。各要素に`hasSets`（セットが1件以上あるか）を含む（②ホームのカレンダー印・記録カードの表示振り分けに使う。Issue #99） |
-| GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧 |
+| GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧（`setOrder`昇順、同値内は`createdAt`昇順。`setOrder`は種目ごとに1からリセットされる連番のため異なる種目間で頻繁に同値になり、tie-breakが無いとフロントの種目カードの並び（各種目の初出順でグルーピング）が更新のたびに崩れる。Issue #226） |
 | PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照） |
 | DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
 | POST | `/workouts/:id/sets` | 要 | セットを1件追加する |
@@ -929,7 +929,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
-| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）。`exercises`の並びは各種目を最初に追加した順（セット取得は`setOrder`昇順、同値内は`createdAt`昇順でグルーピング。Issue #226）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |

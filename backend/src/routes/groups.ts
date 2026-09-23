@@ -148,7 +148,13 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
     orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }],
     include: {
       user: { select: { displayName: true } },
-      sets: { include: { exercise: { select: { name: true } } } },
+      // setOrderは種目ごとに1からリセットされる連番のため、異なる種目間では頻繁に同値になる。
+      // tie-breakにcreatedAtを追加し、種目のグルーピング順(下のsetsByExercise参照。
+      // 各種目の初出順で並ぶ)が常に安定するようにする(Issue #226)
+      sets: {
+        orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
+        include: { exercise: { select: { name: true } } },
+      },
     },
   })
 

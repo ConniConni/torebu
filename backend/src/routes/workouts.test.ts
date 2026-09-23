@@ -235,6 +235,38 @@ describe('GET /workouts/:id', () => {
       expect.objectContaining({ exerciseId, setOrder: 1, reps: 10, weightKg: 60 }),
     ])
   })
+
+  it('異なる種目のsetOrderが同値でも、種目を最初に追加した順(作成日時の古い順)で安定して返る(Issue #226)', async () => {
+    const secondExercise = await prisma.exercise.create({
+      data: { name: 'スクワット', muscleGroup: 'legs' },
+    })
+    const workout = await createWorkout(ownerId)
+    // 2番目に追加した種目のsetを先に作る(=setOrder=1同値のtieを、作成順とは逆の入力順で発生させる)
+    const secondSet = await prisma.workoutSet.create({
+      data: {
+        workoutId: workout.id,
+        exerciseId: secondExercise.id,
+        setOrder: 1,
+        reps: 10,
+        createdAt: new Date('2026-09-01T10:00:00Z'),
+      },
+    })
+    const firstSet = await prisma.workoutSet.create({
+      data: {
+        workoutId: workout.id,
+        exerciseId,
+        setOrder: 1,
+        reps: 8,
+        createdAt: new Date('2026-09-01T09:00:00Z'),
+      },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/workouts/${workout.id}`)
+
+    const ids = (res.body.sets as Array<{ id: string }>).map((s) => s.id)
+    expect(ids).toEqual([firstSet.id, secondSet.id])
+  })
 })
 
 describe('PATCH /workouts/:id', () => {

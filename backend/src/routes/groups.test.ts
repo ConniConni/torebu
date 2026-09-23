@@ -179,12 +179,17 @@ describe('GET /groups/:id', () => {
 
 describe('GET /groups/:id/workouts', () => {
   let exerciseId: string
+  let secondExerciseId: string
 
   beforeEach(async () => {
     const exercise = await prisma.exercise.create({
       data: { name: 'ベンチプレス', muscleGroup: 'chest' },
     })
     exerciseId = exercise.id
+    const secondExercise = await prisma.exercise.create({
+      data: { name: 'スクワット', muscleGroup: 'legs' },
+    })
+    secondExerciseId = secondExercise.id
   })
 
   afterEach(async () => {
@@ -192,7 +197,7 @@ describe('GET /groups/:id/workouts', () => {
     await prisma.reaction.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
     // workout_setsがexercisesを参照しているため、先にworkouts(cascadeでsetsも消える)を全削除してから消す
     await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
-    await prisma.exercise.deleteMany({ where: { id: exerciseId } })
+    await prisma.exercise.deleteMany({ where: { id: { in: [exerciseId, secondExerciseId] } } })
   })
 
   it('未所属者には404を返す(IDOR対策)', async () => {
@@ -258,6 +263,40 @@ describe('GET /groups/:id/workouts', () => {
         ],
       }),
     ])
+  })
+
+  it('異なる種目のsetOrderが同値でも、種目を最初に追加した順(作成日時の古い順)でexercisesが安定して返る(Issue #226)', async () => {
+    const group = await createGroup()
+    const workout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10') },
+    })
+    // 2番目に追加した種目のsetを先に作る(=setOrder=1同値のtieを、作成順とは逆の入力順で発生させる)
+    await prisma.workoutSet.create({
+      data: {
+        workoutId: workout.id,
+        exerciseId: secondExerciseId,
+        setOrder: 1,
+        reps: 10,
+        createdAt: new Date('2026-01-10T10:00:00Z'),
+      },
+    })
+    await prisma.workoutSet.create({
+      data: {
+        workoutId: workout.id,
+        exerciseId,
+        setOrder: 1,
+        reps: 8,
+        createdAt: new Date('2026-01-10T09:00:00Z'),
+      },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    const exerciseIds = (res.body[0].exercises as Array<{ exerciseId: string }>).map(
+      (e) => e.exerciseId,
+    )
+    expect(exerciseIds).toEqual([exerciseId, secondExerciseId])
   })
 
   it('同じ実施日の記録が複数あるときは、作成日時の新しい順(登録順)に返る(Issue #222)', async () => {
