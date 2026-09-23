@@ -89,10 +89,19 @@ groupsRouter.get('/', requireAuth, async (req, res) => {
     orderBy: { joinedAt: 'desc' },
   })
 
+  // マイページの所属グループ一覧（名前・人数・自分の役割）用に現在の所属人数を添える(Issue #237)
+  const memberCounts = await prisma.groupMember.groupBy({
+    by: ['groupId'],
+    where: { groupId: { in: memberships.map((m) => m.groupId) }, leftAt: null },
+    _count: { _all: true },
+  })
+  const memberCountByGroupId = new Map(memberCounts.map((c) => [c.groupId, c._count._all]))
+
   res.status(200).json(
     memberships.map((m) => ({
       ...serializeGroup(m.group),
       role: m.role,
+      memberCount: memberCountByGroupId.get(m.groupId) ?? 0,
     })),
   )
 })
