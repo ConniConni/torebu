@@ -211,7 +211,9 @@ async function onDeleteWorkout(id: string) {
   <div class="min-h-screen bg-gray-50 px-4 py-6 pb-24">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <p class="text-sm text-gray-900">{{ user?.displayName }}さん</p>
+        <!-- ⑨マイページへの導線（Issue #237）。ヘッダーの表示名クリックから遷移する想定
+             （docs/backlog.md「マイページ（⑨）の新設・設計」参照） -->
+        <NuxtLink to="/mypage" class="text-sm text-gray-900">{{ user?.displayName }}さん</NuxtLink>
         <div class="flex items-center gap-2">
           <NuxtLink
             to="/notifications"

@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み19ページ）
+### 3-1. 画面一覧（実装済み20ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -175,6 +175,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」の通知を新しい順に表示する。開いた時点で全件既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
+| `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量）・所属グループ一覧（名前・人数・自分の役割）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモードの購入導線はStripe連携着手のIssueで追加予定（下記参照） | `GET /stats/volume`, `GET /groups`, `POST /auth/logout` | `auth` |
 
 **ミドルウェアの意味**
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす（`/`自体は対象外。下記参照）
@@ -196,7 +197,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
   `definePageMeta({ layout: 'tabbar' })`を指定し、
   [layouts/tabbar.vue](../frontend/app/layouts/tabbar.vue)経由で
   [BottomTabBar.vue](../frontend/app/components/BottomTabBar.vue)を表示する。それ以外の画面
-  （ログイン／新規登録・通知・グループ詳細配下・ルーティン編集・記録作成／種目選択など）は対象外で、
+  （ログイン／新規登録・通知・グループ詳細配下・ルーティン編集・記録作成／種目選択・⑨マイページなど）は対象外で、
   従来どおり「← ◯◯に戻る」の個別リンクのままにする
 - タブ構成は**「ホーム／ルーティン／統計／グループ」の4タブ＋中央FAB「＋記録」**（`/workouts/new`へ
   遷移）。通知はタブに含めず、従来どおり②ホームのヘッダーのベル＋バッジのまま
@@ -935,7 +936,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
-| GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`を含む |
+| GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`、現在の所属人数`memberCount`（退会済みを除く。⑨マイページの所属グループ一覧で使用、[Issue #237](https://github.com/ConniConni/torebu/issues/237)）を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
 | GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）。`exercises`の並びは`WorkoutExercise.sortOrder`昇順（③記録作成でのカード並び替えと同じ並び順。[Issue #228](https://github.com/ConniConni/torebu/issues/228)）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
