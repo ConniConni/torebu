@@ -30,7 +30,7 @@ function isActive(to: string) {
 
 <template>
   <nav
-    class="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]"
+    class="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 dark:border-border-dark bg-white dark:bg-panel pb-[env(safe-area-inset-bottom)]"
     aria-label="主ナビゲーション"
   >
     <div class="relative mx-auto flex max-w-sm items-center justify-between px-2">
@@ -39,7 +39,9 @@ function isActive(to: string) {
         :key="tab.to"
         :to="tab.to"
         class="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold"
-        :class="isActive(tab.to) ? 'text-brand-700' : 'text-gray-400'"
+        :class="
+          isActive(tab.to) ? 'text-brand-700 dark:text-brand-400' : 'text-gray-400 dark:text-muted'
+        "
         :aria-current="isActive(tab.to) ? 'page' : undefined"
       >
         <component :is="tab.icon" class="h-5 w-5" />

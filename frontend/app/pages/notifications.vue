@@ -28,7 +28,8 @@ await load()
 function notificationText(n: AppNotification) {
   const actorName = n.actor?.displayName ?? '(退会済みのメンバー)'
   if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
-  if (n.type === 'comment_reply') return `${actorName}さんが、あなたもコメントした記録にコメントしました`
+  if (n.type === 'comment_reply')
+    return `${actorName}さんが、あなたもコメントした記録にコメントしました`
   return `${actorName}さんがあなたの記録にコメントしました`
 }
 
@@ -51,20 +52,20 @@ function targetLink(n: AppNotification) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
     <div class="mx-auto flex max-w-sm flex-col gap-4">
       <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-gray-500">← ホームに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900">通知</h1>
+        <NuxtLink to="/" class="text-sm text-gray-500 dark:text-muted">← ホームに戻る</NuxtLink>
+        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">通知</h1>
       </div>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600">
+      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
         通知の取得に失敗しました。時間をおいて再度お試しください
       </p>
       <p
         v-else-if="!notifications || notifications.length === 0"
-        class="text-center text-sm text-gray-500"
+        class="text-center text-sm text-gray-500 dark:text-muted"
       >
         通知はまだありません
       </p>
@@ -74,14 +75,14 @@ function targetLink(n: AppNotification) {
           <NuxtLink
             :to="targetLink(n)"
             class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
-            :class="n.isRead ? 'bg-white' : 'bg-brand-50'"
+            :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-brand-900/30'"
           >
             <span
               v-if="!n.isRead"
               class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600"
             />
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-xs font-semibold text-brand-700 dark:text-brand-400"
             >
               {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
             </span>
@@ -89,24 +90,30 @@ function targetLink(n: AppNotification) {
               v-if="n.type === 'reaction'"
               filled
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="n.isRead ? 'text-gray-400' : 'text-brand-600'"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-brand-400'
+              "
             />
             <CommentIcon
               v-else
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="n.isRead ? 'text-gray-400' : 'text-brand-600'"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-brand-400'
+              "
             />
             <div class="min-w-0 flex-1">
               <p
                 class="text-sm leading-relaxed"
-                :class="n.isRead ? 'text-gray-700' : 'text-gray-900'"
+                :class="n.isRead ? 'text-gray-700 dark:text-ink' : 'text-gray-900 dark:text-ink'"
               >
                 {{ notificationText(n) }}
               </p>
-              <p class="mt-0.5 truncate text-xs text-gray-500">
+              <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
                 {{ n.target.performedAt }}の記録・{{ targetSummary(n) }}
               </p>
-              <p class="mt-1 text-[11px] text-gray-400">{{ formatRelativeTime(n.createdAt) }}</p>
+              <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
+                {{ formatRelativeTime(n.createdAt) }}
+              </p>
             </div>
           </NuxtLink>
         </li>
