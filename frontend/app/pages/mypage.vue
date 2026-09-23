@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // ⑨マイページ（Issue #237）。ユーザー情報の集約・サポート情報への導線をまとめる画面。
-// グループPro・ダークモードの導線はStripe連携着手のIssueで追加する（今は「押しても何も起きない
-// ボタン」になってしまうため対象外にした。docs/backlog.md「マイページ（⑨）の新設・設計」参照）
+// グループPro・ダークモード（アプリの見た目）、パスワード変更（アカウント）は
+// Stripe連携・新規APIの実装がそれぞれ別Issueになるため、今回は「準備中」の非活性表示のみ置く
+// （押しても何も起きない状態を避けつつ、モックの構成には合わせる。docs/backlog.md
+// 「マイページ（⑨）の新設・設計」参照）
 definePageMeta({ middleware: 'auth' })
 
 const { user, logout } = useAuth()
@@ -108,8 +110,9 @@ async function onLogout() {
           <li v-for="group in groups" :key="group.id">
             <NuxtLink
               :to="`/groups/${group.id}`"
-              class="flex items-center justify-between rounded border border-gray-200 px-3 py-2 hover:bg-gray-50"
+              class="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 hover:bg-gray-50"
             >
+              <GroupIcon class="h-5 w-5 shrink-0 text-gray-400" />
               <div class="min-w-0">
                 <p class="truncate text-sm text-gray-900">{{ group.name }}</p>
                 <p class="text-xs text-gray-500">
@@ -121,27 +124,69 @@ async function onLogout() {
         </ul>
       </div>
 
+      <!-- アプリの見た目（ダークモード）。グループPro・個人テーマ購入はStripe連携着手の
+           Issueで実装するため、それまでは「準備中」の非活性表示にする（docs/backlog.md参照） -->
+      <div class="rounded-lg bg-white p-4 shadow">
+        <p class="mb-2 text-sm font-semibold text-gray-900">アプリの見た目</p>
+        <div class="flex items-center gap-3 rounded border border-gray-100 px-3 py-2">
+          <MoonIcon class="h-5 w-5 shrink-0 text-gray-300" />
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-gray-400">ダークモード</p>
+          </div>
+          <span class="shrink-0 rounded bg-gray-100 px-2 py-1 text-xs text-gray-500"
+            >準備中</span
+          >
+        </div>
+      </div>
+
+      <!-- アカウント（パスワード変更）。現在ログイン中にその場で変更するAPIが無く新規実装が
+           必要なため、別Issueに切り出す。それまでは「準備中」の非活性表示にする（docs/backlog.md参照） -->
+      <div class="rounded-lg bg-white p-4 shadow">
+        <p class="mb-2 text-sm font-semibold text-gray-900">アカウント</p>
+        <div class="flex items-center gap-3 rounded border border-gray-100 px-3 py-2">
+          <LockClosedIcon class="h-5 w-5 shrink-0 text-gray-300" />
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-gray-400">パスワードを変更</p>
+          </div>
+          <span class="shrink-0 rounded bg-gray-100 px-2 py-1 text-xs text-gray-500"
+            >準備中</span
+          >
+        </div>
+      </div>
+
       <!-- サポート・情報（バージョン表示は持たない。docs/backlog.md参照） -->
       <div class="rounded-lg bg-white p-4 shadow">
         <p class="mb-2 text-sm font-semibold text-gray-900">サポート・情報</p>
         <ul class="flex flex-col divide-y divide-gray-100 text-sm text-gray-700">
           <li>
-            <NuxtLink to="/terms" class="block py-2">利用規約</NuxtLink>
+            <NuxtLink to="/terms" class="flex items-center gap-3 py-2">
+              <InfoIcon class="h-5 w-5 shrink-0 text-gray-400" />
+              <span class="flex-1">利用規約</span>
+              <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-300" />
+            </NuxtLink>
           </li>
           <li>
-            <NuxtLink to="/privacy" class="block py-2">プライバシーポリシー</NuxtLink>
+            <NuxtLink to="/privacy" class="flex items-center gap-3 py-2">
+              <InfoIcon class="h-5 w-5 shrink-0 text-gray-400" />
+              <span class="flex-1">プライバシーポリシー</span>
+              <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-300" />
+            </NuxtLink>
           </li>
           <li>
-            <a href="mailto:torebu1442@gmail.com" class="block py-2">お問い合わせ</a>
+            <a href="mailto:torebu1442@gmail.com" class="flex items-center gap-3 py-2">
+              <EnvelopeIcon class="h-5 w-5 shrink-0 text-gray-400" />
+              <span class="flex-1">お問い合わせ</span>
+            </a>
           </li>
         </ul>
       </div>
 
       <button
         type="button"
-        class="rounded bg-gray-200 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300"
+        class="flex items-center justify-center gap-2 rounded bg-gray-200 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300"
         @click="onLogout"
       >
+        <ArrowRightOnRectangleIcon class="h-4 w-4" />
         ログアウト
       </button>
     </div>
