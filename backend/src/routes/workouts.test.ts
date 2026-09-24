@@ -570,6 +570,8 @@ describe('POST /workouts/:id/sets', () => {
       workoutExercise: expect.objectContaining({ workoutId: workout.id, exerciseId, sortOrder: 1 }),
       // 自己ベスト判定(Issue #253)。自重のセットは対象外のため常にnull
       personalBest: null,
+      // 通算の節目・久しぶりの復帰(Issue #255)。初めての記録のため両方とも対象外
+      achievements: { milestoneDays: null, comeback: false },
     })
   })
 

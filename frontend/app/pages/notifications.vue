@@ -30,6 +30,9 @@ function notificationText(n: AppNotification) {
   const actorName = n.actor?.displayName ?? '(退会済みのメンバー)'
   if (n.target.type === 'personal_best')
     return `${actorName}さんが${n.target.exerciseName}で自己ベスト更新！`
+  if (n.target.type === 'milestone')
+    return `${actorName}さんが通算${n.target.days}日目のトレーニング！`
+  if (n.target.type === 'comeback') return `${actorName}さん、久しぶりのトレーニング！`
   if (n.type === 'member_joined') return `${actorName}さんがグループに参加しました`
   if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
   if (n.type === 'comment_reply')
@@ -38,25 +41,33 @@ function notificationText(n: AppNotification) {
 }
 
 // 文面の下に出す補足（記録の通知は対象の記録の日付・種目、グループの通知はグループ名、
-// 自己ベストは記録の日付と重量）
+// 自己ベストは記録の日付と重量、通算の節目・久しぶりの復帰は記録の日付）
 function targetSummary(n: AppNotification) {
   if (n.target.type === 'group') return n.target.groupName
   if (n.target.type === 'personal_best')
     return `${n.target.performedAt}の記録・${n.target.weightKg}kg`
+  if (n.target.type === 'milestone' || n.target.type === 'comeback')
+    return `${n.target.performedAt}の記録`
   const { performedAt, exerciseName, exerciseCount } = n.target
   if (!exerciseName) return `${performedAt}の記録・記録内容はまだありません`
   const rest = exerciseCount - 1
   return `${performedAt}の記録・${rest > 0 ? `${exerciseName} 他${rest}種目` : exerciseName}`
 }
 
-// 新メンバー参加はグループ画面へ遷移する。自己ベスト更新はその記録が見えるグループの記録フィードへ遷移する
-// （共通のグループが無い通知はAPIが返さないため、フォールバックは不要）。
+// 新メンバー参加はグループ画面へ遷移する。自己ベスト更新・通算の節目・久しぶりの復帰はその記録が
+// 見えるグループの記録フィードへ遷移する（共通のグループが無い通知はAPIが返さないため、
+// フォールバックは不要）。
 // いいね・コメントはグループの記録フィード上でのみ見える(自分の記録画面には表示されない)ため、
 // 遷移先はフィード側を優先する。actorが既に共通のグループを退会している等でgroupIdが無い場合のみ、
 // 自分の記録画面（/workouts/new）にフォールバックする
 function targetLink(n: AppNotification) {
   if (n.target.type === 'group') return `/groups/${n.target.groupId}`
-  if (n.target.type === 'personal_best' || n.target.groupId) {
+  if (
+    n.target.type === 'personal_best' ||
+    n.target.type === 'milestone' ||
+    n.target.type === 'comeback' ||
+    n.target.groupId
+  ) {
     return `/groups/${n.target.groupId}/workouts?workout=${n.target.workoutId}`
   }
   return `/workouts/new?date=${n.target.performedAt}`
@@ -108,6 +119,20 @@ function targetLink(n: AppNotification) {
             />
             <TrophyIcon
               v-else-if="n.type === 'personal_best'"
+              class="mt-0.5 h-4.5 w-4.5 shrink-0"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+              "
+            />
+            <FlagIcon
+              v-else-if="n.type === 'milestone'"
+              class="mt-0.5 h-4.5 w-4.5 shrink-0"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+              "
+            />
+            <ArrowPathIcon
+              v-else-if="n.type === 'comeback'"
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
               :class="
                 n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'

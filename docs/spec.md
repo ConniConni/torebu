@@ -173,7 +173,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
-| `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
+| `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、仲間の通算の節目・久しぶりの復帰（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
 | `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アカウント（「パスワードを変更」から`/mypage/password`へ、Issue #247）・アプリの見た目（ダークモードの切替UI自体）は非活性の「準備中」表示のみ
 （配色自体はIssue #241で全画面対応済み。切替UIはStripe連携着手Issueで追加予定）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモードの実処理はStripe連携着手Issueで追加予定（下記参照）。ファイルは`pages/mypage/index.vue`（配下に`password.vue`を置くため、Issue #247で`pages/mypage.vue`から移動） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
@@ -758,6 +758,52 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   （[TrophyIcon.vue](../frontend/app/components/TrophyIcon.vue)、Heroicons由来）・補足行に「記録の日付・重量」を出し、
   押すとその記録が見えるグループの記録フィード（`/groups/:groupId/workouts?workout=:workoutId`）に遷移する
 
+**通算の節目・久しぶりの復帰の通知、トレ日数表示の変更（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）の実装メモ**
+- 通知の種類を増やす設計（`docs/backlog.md`「通知の種類の拡張（2026-09-24決定）」）の3つ目（最後）。
+  通算の節目（`type: milestone`）・久しぶりの復帰（`type: comeback`）を追加し、あわせて
+  ②ホーム・⑨マイページのトレ日数表示を「セットが1件以上ある日」だけを数える形に揃えた
+- **「セットがある日」の数え方**：`countDaysWithSets`（[workouts.ts](../backend/src/routes/workouts.ts)）が
+  `userId`の削除されていない記録のうち`sets`が1件以上あるものの件数を返す。1ユーザー1日1記録
+  （同じ日付のworkoutは再利用する設計）のため、件数=日数になる
+- **日本時間の「今日」**：サーバー（Vercel）はUTCで動くため、[date.ts](../backend/src/lib/date.ts)の
+  `todayInJst`（`Intl.DateTimeFormat`にタイムゾーン`Asia/Tokyo`を指定）で日本時間の日付文字列
+  （`YYYY-MM-DD`）を求める。`shiftDateString`はその文字列にn日を加減する
+- **判定タイミング**：C1・C2とも「その日付の自分のセットが初めて1件になったとき」（`POST /workouts/:id/sets`で、
+  追加前にそのworkoutのセット数が0件だった場合）のみ判定する（`evaluateAchievements`関数）。
+  重量・回数の編集（`PATCH`）や、同じ日の2セット目以降では判定しない
+- **C1 通算の節目**：節目は**10・30・50・100日、以降100日ごと、および365日**（`isMilestoneDayCount`関数）。
+  達成時点の通算日数が節目のとき、行為者が所属するアクティブな全グループのアクティブなメンバー宛
+  （受信者ごとに重複排除、本人は除く）に`type: milestone`・`target_type: workout`・`target_id: workoutId`・
+  `payload: { days }`で作る。**同じ節目（`days`の値）は2回通知しない**（既に同じ`days`のmilestone通知が
+  あれば作らない。日付を間違えた記録を消して入れ直す操作での重複防止）
+- **C2 久しぶりの復帰**：対象は**日本時間で今日または昨日**の日付の記録（初めての記録、つまり
+  通算日数が1件目のときは対象外）。条件は「**その日付の前14日間と翌日（`performedAt-14`〜`performedAt+1`）に、
+  セットがある日付が他に無い**」（このworkout以外に、削除されていない・セットが1件以上ある記録が
+  その範囲に無いことで判定。1ユーザー1日1記録のため日付そのものではなくworkout単位の除外で足りる）。
+  「翌日も見る」のは、今日の分を記録した後に昨日の分を後入力したとき、同じ復帰が2回判定されるのを
+  防ぐため。条件を満たせば、milestoneと同じ宛先に`type: comeback`・`target_type: workout`・
+  `target_id: workoutId`で作る（`payload`は無し）。トリガー自体が「その日付の最初のセット」に限られる
+  ため、milestoneのような重複防止クエリは設けていない（高速な連続保存時の重複と同様、許容したずれ）
+- **通知の表示**（`findVisibleNotifications`）：`personal_best`と同じく**作成から5分経つまで表示しない**。
+  表示時には、記録が削除されていない・行為者の記録である・**受信者と行為者に今も共通のアクティブな
+  グループがある**ことを確認する（他人の記録についての通知のため自分の記録画面へのフォールバックは無い）。
+  milestoneは表示する`days`を`payload`からそのまま使う（再確認する値は無い）
+- **本人へのその場の表示**：本人には通知を作らず、`POST /workouts/:id/sets`の応答の`achievements`
+  （`{ milestoneDays: number | null, comeback: boolean }`、判定対象外なら両方null/false）で返す。
+  personal_bestと違い記録（workout）単位の達成のため種目カードではなくページ上部にまとめて表示し、
+  節目は「通算〇日目のトレーニング！」（[FlagIcon.vue](../frontend/app/components/FlagIcon.vue)）、
+  復帰は「お帰りなさい！久しぶりのトレーニング」
+  （[ArrowPathIcon.vue](../frontend/app/components/ArrowPathIcon.vue)、いずれもHeroicons由来）を出す。
+  表示は③のページ内の状態で持つため、画面を離れて戻ると消える
+- **通知一覧の画面**：`milestone`は文面「〇〇さんが通算△日目のトレーニング！」・旗のアイコン、
+  `comeback`は文面「〇〇さん、久しぶりのトレーニング！」・循環矢印のアイコンで、補足行に記録の日付を出し、
+  押すとその記録が見えるグループの記録フィード（`/groups/:groupId/workouts?workout=:workoutId`）に遷移する
+- **トレ日数表示の変更**：②ホーム（`allRecordedDates`、[HomeScreen.vue](../frontend/app/components/HomeScreen.vue)）・
+  ⑨マイページ（[mypage/index.vue](../frontend/app/pages/mypage/index.vue)）の直近7日/直近28日/通算の
+  トレ日数集計を、`GET /workouts`の`hasSets`で絞り込んでから渡す形に変更した（以前はメモのみの日も
+  数えていた）。C1・C2の判定と数字が2種類にならないようにするための変更（`docs/backlog.md`参照）。
+  集計ロジック自体（[trainingDays.ts](../frontend/app/utils/trainingDays.ts)）は変えていない
+
 ### 3-2. 記録するときの流れ（実装どおり）
 
 ```
@@ -1004,7 +1050,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧（`sets`。`setOrder`昇順、同値内は`createdAt`昇順。`setOrder`は種目ごとに1からリセットされる連番のため異なる種目間で頻繁に同値になり、tie-breakが無いと同じ種目内のセットの表示順が更新のたびに崩れる。Issue #226）＋種目カード一覧（`exercises`。`WorkoutExercise`を`sortOrder`昇順で返す。種目カード自体の並び順はこちらが正。Issue #228） |
 | PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照）。レスポンスに`deleted`（真偽値）を含む（下記「4-2」参照） |
 | DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
-| POST | `/workouts/:id/sets` | 要 | セットを1件追加する。その種目の`WorkoutExercise`（種目カード）がまだ無ければ、末尾の`sortOrder`で自動的に作る（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。レスポンスにはセット本体に加え、対応する`workoutExercise`（`id`/`sortOrder`）と、自己ベスト更新の達成内容`personalBest`（`{ exerciseId, weightKg, previousBestKg }`または`null`、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）を含む。自己ベストを更新したときは仲間への`personal_best`通知も作る（下記「4-2」参照） |
+| POST | `/workouts/:id/sets` | 要 | セットを1件追加する。その種目の`WorkoutExercise`（種目カード）がまだ無ければ、末尾の`sortOrder`で自動的に作る（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。レスポンスにはセット本体に加え、対応する`workoutExercise`（`id`/`sortOrder`）と、自己ベスト更新の達成内容`personalBest`（`{ exerciseId, weightKg, previousBestKg }`または`null`、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、通算の節目・久しぶりの復帰の達成内容`achievements`（`{ milestoneDays: number \| null, comeback: boolean }`、その日付の最初のセット追加のときだけ判定。[Issue #255](https://github.com/ConniConni/torebu/issues/255)）を含む。達成したときは仲間への`personal_best`／`milestone`／`comeback`通知も作る（下記「4-2」参照） |
 | PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する。レスポンスはセット本体に`personalBest`を加えたもの（重量が変わった更新のときだけ判定し、それ以外は`null`。[Issue #253](https://github.com/ConniConni/torebu/issues/253)） |
 | DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除）。種目カード（`WorkoutExercise`）自体は削除しない（最後の1件を消しても残る。再度同じ種目のセットを追加すると同じカードが復元される）。レスポンスは`204`ではなく`{ deleted: boolean }`（下記「4-2」参照） |
 | PATCH | `/workouts/:id/exercises/:workoutExerciseId` | 要 | 種目カードの並び順（`sortOrder`）を変更する（[Issue #228](https://github.com/ConniConni/torebu/issues/228)。ルーティンの`PATCH /routines/:id/exercises/:routineExerciseId`と同じ方針） |
@@ -1052,9 +1098,9 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
-| GET | `/notifications` | 要 | 自分宛の通知のうち表示してよいものを`createdAt`降順（直近50件の範囲）で返す（[Issue #144](https://github.com/ConniConni/torebu/issues/144)・[#249](https://github.com/ConniConni/torebu/issues/249)）。既読化は行わない。`member_joined`・`personal_best`は作成から5分経つまで返さない。対象が無効になった通知（記録が削除済み、参加者・受信者の退会、グループの削除、自己ベストが成り立たなくなった・行為者と共通のグループが無くなった）は除外する |
+| GET | `/notifications` | 要 | 自分宛の通知のうち表示してよいものを`createdAt`降順（直近50件の範囲）で返す（[Issue #144](https://github.com/ConniConni/torebu/issues/144)・[#249](https://github.com/ConniConni/torebu/issues/249)）。既読化は行わない。`member_joined`・`personal_best`・`milestone`・`comeback`は作成から5分経つまで返さない。対象が無効になった通知（記録が削除済み、参加者・受信者の退会、グループの削除、自己ベストが成り立たなくなった・行為者と共通のグループが無くなった）は除外する |
 | GET | `/notifications/unread-count` | 要 | 自分宛の未読件数のみを返す（②ホームのバッジ用）。`GET /notifications`と同じ判定・同じ直近50件の範囲で数えるため、一覧の未読件数と一致する |
-| POST | `/notifications/read` | 要 | 自分宛の未読通知を一括既読化する。`GET /notifications`と同じ判定で表示対象になるものだけが対象で、まだ表示していない通知（作成から5分未満の`member_joined`・`personal_best`等）は既読にしない。個別の既読トグルAPIは無い（通知一覧を開いたタイミングでフロントから呼ぶ想定） |
+| POST | `/notifications/read` | 要 | 自分宛の未読通知を一括既読化する。`GET /notifications`と同じ判定で表示対象になるものだけが対象で、まだ表示していない通知（作成から5分未満の`member_joined`・`personal_best`・`milestone`・`comeback`等）は既読にしない。個別の既読トグルAPIは無い（通知一覧を開いたタイミングでフロントから呼ぶ想定） |
 
 ※ このほかに `GET /health`（認証不要、`{ status: 'ok' }` を返すだけ）がある。
 
@@ -1094,8 +1140,9 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET/POST /workouts/:id/comments`<br>`DELETE /workouts/:id/comments/:commentId` | 認可は`reactions`と同じ`shareActiveGroup`関数を再利用。削除は`userId`一致も条件に加えるため、自分のコメント以外は`404` |
 | いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる。**コメントは投稿者に加え、そのworkoutへの過去のコメント投稿者（スレッド参加者）にも`type: comment_reply`で通知する**（`notifyCommentParticipants`関数、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）。自分自身・投稿者（`comment`で通知済み）は宛先から除く |
 | 自己ベスト更新の判定・通知 | `POST /workouts/:id/sets`・重量が変わった`PATCH /workouts/:id/sets/:setId`で、種目ごとの最大重量の自己ベストを判定する（`evaluatePersonalBest`関数、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）。自重・初めての種目は対象外。**自分の他の記録の最大重量を上回ったら**、所属するアクティブな全グループのメンバー宛（重複排除・本人除く）に`personal_best`通知を作る（同じ記録の同じ種目につき1件まで、`payload`に更新前のベスト）。本人には通知を作らず、**同じ記録内の他のセットも含めた最高重量を上回ったら**応答の`personalBest`で返す |
+| 通算の節目・久しぶりの復帰の判定・通知 | `POST /workouts/:id/sets`で、その日付の最初のセット追加のときだけ判定する（`evaluateAchievements`関数、[Issue #255](https://github.com/ConniConni/torebu/issues/255)）。**通算の節目（10・30・50・100日、以降100日ごと、365日）**に達したら所属するアクティブな全グループのメンバー宛（重複排除・本人除く）に`milestone`通知を作る（同じ節目につき1件まで、`payload`に`{ days }`）。**日本時間で今日・昨日の記録かつ、その日付の前14日間・翌日にセットがある日付が他に無ければ**（初めての記録は対象外）同じ宛先に`comeback`通知を作る。本人には通知を作らず、応答の`achievements`（`{ milestoneDays, comeback }`）で返す |
 | `GET /groups/:id/ranking` | **集計対象は公式種目のみ**（`stats.ts`と同じ方針）。ただし`stats.ts`と異なり**自重セット（`weightKg`が`null`）は除外せず0kg扱いで加算する**（schema.md「Phase4の検討結果」参照。合計に影響はしないが、記録自体はランキングの母数に含める）。`period=week`は日曜起算、`month`は1日起算（Phase3-Dの週定義と統一）で「現在の期間の開始日時以降」を集計し、`all`は期間の下限を設けない。過去の期間（先週・先月等）を見る機能は無い。記録が無いメンバーも`totalVolumeKg: 0`で結果に含める。同着は同順位、次の順位は人数分スキップする（例：1位2人なら次点は3位ではなく3人目時点で3位＝1,1,3） |
-| `GET /notifications` | 対象は**自分の記録（`type: reaction`/`comment`）**、または**自分もコメントしたことがある記録に他の人がコメントしたとき（`type: comment_reply`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）**。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する）。**`type: member_joined`**（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）は`target: { type: 'group', groupId, groupName }`を返す。作成から5分経つまで返さず、表示時点でグループが削除されておらず参加者・受信者の両方が今もそのグループのアクティブなメンバーである場合のみ返す（受信者が退会したグループの参加通知は見えない）。**`type: personal_best`**（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）は`target: { type: 'personal_best', workoutId, groupId, performedAt, exerciseId, exerciseName, weightKg }`を返す。`weightKg`・`exerciseName`は取得時点の値（その記録のその種目の現在の最大重量）。作成から5分経つまで返さず、表示時点で「現在の最大重量 ＞ `payload.previousBestKg`」かつ受信者と行為者に共通のアクティブなグループがある場合のみ返す（`groupId`は常にある）。この判定は`unread-count`・`read`と共通（`findVisibleNotifications`関数、§3-1の実装メモ参照） |
+| `GET /notifications` | 対象は**自分の記録（`type: reaction`/`comment`）**、または**自分もコメントしたことがある記録に他の人がコメントしたとき（`type: comment_reply`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）**。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する）。**`type: member_joined`**（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）は`target: { type: 'group', groupId, groupName }`を返す。作成から5分経つまで返さず、表示時点でグループが削除されておらず参加者・受信者の両方が今もそのグループのアクティブなメンバーである場合のみ返す（受信者が退会したグループの参加通知は見えない）。**`type: personal_best`**（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）は`target: { type: 'personal_best', workoutId, groupId, performedAt, exerciseId, exerciseName, weightKg }`を返す。`weightKg`・`exerciseName`は取得時点の値（その記録のその種目の現在の最大重量）。作成から5分経つまで返さず、表示時点で「現在の最大重量 ＞ `payload.previousBestKg`」かつ受信者と行為者に共通のアクティブなグループがある場合のみ返す（`groupId`は常にある）。**`type: milestone`**（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）は`target: { type: 'milestone', workoutId, groupId, performedAt, days }`（`days`は`payload`の値をそのまま使う）、**`type: comeback`**は`target: { type: 'comeback', workoutId, groupId, performedAt }`を返す。どちらも作成から5分経つまで返さず、記録が削除されていない・受信者と行為者に共通のアクティブなグループがあることを確認する。この判定は`unread-count`・`read`と共通（`findVisibleNotifications`関数、§3-1の実装メモ参照） |
 
 ---
 
@@ -1116,7 +1163,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `group_members`（Phase4） | グループへの所属 | 複合PK（`group_id`, `user_id`）。`role`は`owner`/`member`のenum、**ownerは複数人可**。**退会してもレコードは物理削除しない**（`left_at`で論理管理）。再参加は新規INSERTではなく既存行の`left_at`をNULLに戻すUPDATEで行う（退会後も過去の記録・カスタム種目が仲間から見え続ける設計のため。docs/schema.md「設計方針メモ」参照） |
 | `reactions`（Phase4） | いいね | `target_type`（enum：`workout`/`workout_set`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #140](https://github.com/ConniConni/torebu/issues/140)、`workout_set`/`topic_post`は対象UI未実装）。`target_id`はFK制約なし（対象が`target_type`によって変わるため）、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`UNIQUE(target_type, target_id, user_id)`で1人1いいねを保証 |
 | `comments`（Phase4） | コメント | `target_type`（enum：`workout`/`topic_post`）＋`target_id`の汎用テーブル。**現状発行されるのは`workout`のみ**（[Issue #142](https://github.com/ConniConni/torebu/issues/142)、`topic_post`は対象UI未実装）。`target_id`はFK制約なし、対象の存在・アクセス権はアプリ側（`workouts.ts`）で検証する。`reactions`と異なり1人が複数回投稿できるため`UNIQUE`制約は無い |
-| `notifications`（Phase4） | 通知 | `recipient_id`（誰宛）／`actor_id`（誰が起こしたか、nullable）／`type`（enum：`reaction`/`comment`/`comment_reply`/`topic`/`ranking`/`exercise_promoted`/`member_joined`/`personal_best`。`comment_reply`は[Issue #149](https://github.com/ConniConni/torebu/issues/149)、`member_joined`は[Issue #249](https://github.com/ConniConni/torebu/issues/249)、`personal_best`は[Issue #253](https://github.com/ConniConni/torebu/issues/253)で追加）／`target_type`（enum：`workout`/`workout_set`/`topic_post`/`topic`/`exercise`/`group`）＋`target_id`の汎用テーブル。**現状発行されるのは`type: reaction`/`comment`/`comment_reply`/`personal_best`（`target_type: workout`）と`type: member_joined`（`target_type: group`）のみ**（[Issue #144](https://github.com/ConniConni/torebu/issues/144)・#149・#249・#253。残りの`type`/`target_type`はランキング・イチオシこだわり共有・種目昇格が未実装のため発行しない、docs/schema.mdの設計をそのまま反映）。`target_id`はFK制約なし、対象の存在確認はアプリ側（`notifications.ts`）で行う。`payload`（jsonb、nullable、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）は作成時点の値を残すための付加情報で、現状は`personal_best`のみ`{ exerciseId, previousBestKg }`を入れる（表示用の要約は取得時点の状態を都度引き直す方針のまま）。`recipient_id`は`onDelete: Cascade`（受信者退会でまとめて消える）、`actor_id`は`onDelete: SetNull`（行為者が退会しても通知自体は残る） |
+| `notifications`（Phase4） | 通知 | `recipient_id`（誰宛）／`actor_id`（誰が起こしたか、nullable）／`type`（enum：`reaction`/`comment`/`comment_reply`/`topic`/`ranking`/`exercise_promoted`/`member_joined`/`personal_best`/`milestone`/`comeback`。`comment_reply`は[Issue #149](https://github.com/ConniConni/torebu/issues/149)、`member_joined`は[Issue #249](https://github.com/ConniConni/torebu/issues/249)、`personal_best`は[Issue #253](https://github.com/ConniConni/torebu/issues/253)、`milestone`・`comeback`は[Issue #255](https://github.com/ConniConni/torebu/issues/255)で追加）／`target_type`（enum：`workout`/`workout_set`/`topic_post`/`topic`/`exercise`/`group`）＋`target_id`の汎用テーブル。**現状発行されるのは`type: reaction`/`comment`/`comment_reply`/`personal_best`/`milestone`/`comeback`（`target_type: workout`）と`type: member_joined`（`target_type: group`）のみ**（[Issue #144](https://github.com/ConniConni/torebu/issues/144)・#149・#249・#253・#255。残りの`type`/`target_type`はランキング・イチオシこだわり共有・種目昇格が未実装のため発行しない、docs/schema.mdの設計をそのまま反映）。`target_id`はFK制約なし、対象の存在確認はアプリ側（`notifications.ts`）で行う。`payload`（jsonb、nullable、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）は作成時点の値を残すための付加情報で、`personal_best`は`{ exerciseId, previousBestKg }`、`milestone`は`{ days }`を入れる（`comeback`は無し。表示用の要約は取得時点の状態を都度引き直す方針のまま）。`recipient_id`は`onDelete: Cascade`（受信者退会でまとめて消える）、`actor_id`は`onDelete: SetNull`（行為者が退会しても通知自体は残る） |
 
 **`sessions` テーブルについて**：DBには存在するが、**Prismaのマイグレーション管理外**。
 `connect-pg-simple` が `sid` / `sess` / `expire` の3カラムで自動作成・管理している

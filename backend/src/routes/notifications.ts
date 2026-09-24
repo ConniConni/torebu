@@ -14,7 +14,7 @@ const IMMEDIATE_TYPES = ['reaction', 'comment', 'comment_reply'] as const
 // 作成から一定時間経つまで表示しない種類(Issue #249。docs/backlog.md「通知の種類の拡張」)。
 // 誤操作(参加してすぐ退会する等)で通知が出ないよう、通知自体は即時に作り、表示側で遅らせる。
 // 表示時には条件がまだ成り立っているかを確認し直す(下のfindVisibleNotifications参照)
-const DELAYED_TYPES = ['member_joined', 'personal_best'] as const
+const DELAYED_TYPES = ['member_joined', 'personal_best', 'milestone', 'comeback'] as const
 const DISPLAY_DELAY_MS = 5 * 60 * 1000
 
 // 通知1件を表示するための対象記録の要約(日付・種目名の先頭1件・種目数)。
@@ -165,6 +165,37 @@ async function resolvePersonalBestTargets(
   return summaryByKey
 }
 
+// milestone通知(Issue #255)のpayload。作成時点の節目の日数
+function parseMilestonePayload(payload: NotificationModel['payload']) {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null
+  const { days } = payload as Record<string, unknown>
+  if (typeof days !== 'number') return null
+  return { days }
+}
+
+// milestone・comeback通知(Issue #255)の表示内容を取得時点の状態で引き直す(記録の日付)。
+// 記録が削除済み・行為者の記録でない場合は、キーがMapに入らない
+async function resolveAchievementTargets(
+  notifications: Pick<NotificationModel, 'actorId' | 'targetId'>[],
+) {
+  const summaryByWorkoutId = new Map<string, { performedAt: string }>()
+  if (notifications.length === 0) return summaryByWorkoutId
+
+  const workoutIds = [...new Set(notifications.map((n) => n.targetId))]
+  const actorIdByWorkoutId = new Map(notifications.map((n) => [n.targetId, n.actorId]))
+  const workouts = await prisma.workout.findMany({
+    where: { id: { in: workoutIds }, deletedAt: null },
+    select: { id: true, userId: true, performedAt: true },
+  })
+  for (const workout of workouts) {
+    if (workout.userId !== actorIdByWorkoutId.get(workout.id)) continue
+    summaryByWorkoutId.set(workout.id, {
+      performedAt: workout.performedAt.toISOString().slice(0, 10),
+    })
+  }
+  return summaryByWorkoutId
+}
+
 type WorkoutTarget = {
   type: 'workout'
   workoutId: string
@@ -183,6 +214,14 @@ type PersonalBestTarget = {
   exerciseName: string
   weightKg: number
 }
+type MilestoneTarget = {
+  type: 'milestone'
+  workoutId: string
+  groupId: string
+  performedAt: string
+  days: number
+}
+type ComebackTarget = { type: 'comeback'; workoutId: string; groupId: string; performedAt: string }
 
 // 「表示してよい通知か」の共通判定(Issue #249)。一覧・未読件数・一括既読の3つのAPIで使い、
 // 3つの結果(一覧に出る通知・バッジの件数・既読になる通知)がずれないようにする。
@@ -218,25 +257,34 @@ async function findVisibleNotifications(userId: string) {
   const personalBestNotifications = notifications.filter(
     (n) => n.type === 'personal_best' && n.targetType === 'workout',
   )
+  const achievementNotifications = notifications.filter(
+    (n) => (n.type === 'milestone' || n.type === 'comeback') && n.targetType === 'workout',
+  )
 
   const actorIds = [
     ...new Set(
-      [...workoutNotifications, ...personalBestNotifications]
+      [...workoutNotifications, ...personalBestNotifications, ...achievementNotifications]
         .map((n) => n.actorId)
         .filter((id) => id !== null),
     ),
   ]
-  const [summaryByWorkoutId, sharedGroupIdByActorId, memberJoined, personalBestByKey] =
-    await Promise.all([
-      summarizeWorkoutTargets(workoutNotifications.map((n) => n.targetId)),
-      findSharedGroupIds(userId, actorIds),
-      resolveMemberJoinedTargets(userId, memberJoinedNotifications),
-      resolvePersonalBestTargets(personalBestNotifications),
-    ])
+  const [
+    summaryByWorkoutId,
+    sharedGroupIdByActorId,
+    memberJoined,
+    personalBestByKey,
+    achievementByWorkoutId,
+  ] = await Promise.all([
+    summarizeWorkoutTargets(workoutNotifications.map((n) => n.targetId)),
+    findSharedGroupIds(userId, actorIds),
+    resolveMemberJoinedTargets(userId, memberJoinedNotifications),
+    resolvePersonalBestTargets(personalBestNotifications),
+    resolveAchievementTargets(achievementNotifications),
+  ])
 
   const visible: {
     notification: (typeof notifications)[number]
-    target: WorkoutTarget | GroupTarget | PersonalBestTarget
+    target: WorkoutTarget | GroupTarget | PersonalBestTarget | MilestoneTarget | ComebackTarget
   }[] = []
   for (const n of notifications) {
     if (workoutNotifications.includes(n)) {
@@ -283,6 +331,31 @@ async function findVisibleNotifications(userId: string) {
           ...summary,
         },
       })
+    } else if (achievementNotifications.includes(n)) {
+      // personal_bestと同様、他人の記録についての通知のため自分の記録画面へのフォールバックは無い。
+      // 行為者と今も共通のアクティブなグループがある場合のみ表示する
+      const groupId = n.actorId ? sharedGroupIdByActorId.get(n.actorId) : undefined
+      const summary = achievementByWorkoutId.get(n.targetId)
+      if (!groupId || !summary) continue
+      if (n.type === 'milestone') {
+        const payload = parseMilestonePayload(n.payload)
+        if (!payload) continue
+        visible.push({
+          notification: n,
+          target: {
+            type: 'milestone',
+            workoutId: n.targetId,
+            groupId,
+            days: payload.days,
+            ...summary,
+          },
+        })
+      } else {
+        visible.push({
+          notification: n,
+          target: { type: 'comeback', workoutId: n.targetId, groupId, ...summary },
+        })
+      }
     }
   }
   return visible

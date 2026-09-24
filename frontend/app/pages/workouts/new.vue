@@ -211,12 +211,13 @@ async function onApplyRoutine(routineId: string) {
         continue
       }
       for (const target of e.targetSets) {
-        const { set, personalBest } = await addSet(
+        const { set, personalBest, achievements } = await addSet(
           e.exerciseId,
           target.reps,
           target.weightKg ?? undefined,
         )
         applyPersonalBest(set, personalBest)
+        applyAchievements(achievements)
       }
     }
     pendingExercises.value = [...pendingExercises.value, ...newPendingItems]
@@ -269,6 +270,26 @@ function personalBestFor(exerciseId: string) {
   if (!personalBest || !session.value.sets.some((s) => s.id === personalBest.setId)) return null
   return personalBest
 }
+
+// --- 通算の節目（C1）・久しぶりの復帰（C2）のその場の表示（Issue #255） ---
+// 自己ベストと違い種目単位ではなくworkout（この日の記録）単位の達成のため、種目カードの中ではなく
+// ページ上部にまとめて表示する。personalBestsと同じくこのページのローカル状態のため、画面を
+// 離れて戻ると消える
+const achievement = ref<Achievements | null>(null)
+
+function applyAchievements(achievements: Achievements) {
+  if (achievements.milestoneDays !== null || achievements.comeback) {
+    achievement.value = achievements
+  }
+}
+
+// この日の記録自体が消えた（セット全削除でworkoutがソフトデリートされた等）場合は表示を取り下げる
+watch(
+  () => session.value.workoutId,
+  (workoutId) => {
+    if (!workoutId) achievement.value = null
+  },
+)
 
 function ensureSetInput(set: { id: string; weightKg: number | null; reps: number }) {
   if (setInputs[set.id]) return
@@ -376,9 +397,10 @@ async function onAddSet(exerciseId: string) {
   }
   try {
     const { reps, weightKg } = defaultSetValuesFor(exerciseId)
-    const { set, personalBest } = await addSet(exerciseId, reps, weightKg)
+    const { set, personalBest, achievements } = await addSet(exerciseId, reps, weightKg)
     ensureSetInput(set)
     applyPersonalBest(set, personalBest)
+    applyAchievements(achievements)
   } catch (error) {
     addSetError.value = addSetErrorMessage(error)
   }
@@ -467,6 +489,21 @@ async function onGoToExercisePicker() {
         </p>
         <p v-if="memoError" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ memoError }}</p>
       </section>
+
+      <p
+        v-if="achievement && achievement.milestoneDays !== null"
+        class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+      >
+        <FlagIcon class="h-4.5 w-4.5 shrink-0" />
+        <span class="font-semibold">通算{{ achievement.milestoneDays }}日目のトレーニング！</span>
+      </p>
+      <p
+        v-if="achievement?.comeback"
+        class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+      >
+        <ArrowPathIcon class="h-4.5 w-4.5 shrink-0" />
+        <span class="font-semibold">お帰りなさい！久しぶりのトレーニング</span>
+      </p>
 
       <ClientOnly>
         <draggable

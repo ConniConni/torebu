@@ -23,6 +23,15 @@ interface PersonalBest {
   previousBestKg: number
 }
 
+// セット追加(POST)で通算の節目(C1)・久しぶりの復帰(C2)に達したときに、保存APIが返す達成内容
+// (Issue #255)。その日付の最初のセット追加のときだけ判定されるため、それ以外は
+// { milestoneDays: null, comeback: false }になる(記録・種目単位ではなくworkout単位の達成のため、
+// personalBestと違いexerciseIdは持たない)
+interface Achievements {
+  milestoneDays: number | null
+  comeback: boolean
+}
+
 interface SessionState {
   workoutId: string | null
   performedAt: string | null
@@ -134,8 +143,12 @@ export function useWorkoutSession() {
 
   async function addSet(exerciseId: string, reps: number, weightKg?: number) {
     const workoutId = await ensureWorkout()
-    const { workoutExercise, personalBest, ...set } = await $fetch<
-      WorkoutSetItem & { workoutExercise: WorkoutExerciseItem; personalBest: PersonalBest | null }
+    const { workoutExercise, personalBest, achievements, ...set } = await $fetch<
+      WorkoutSetItem & {
+        workoutExercise: WorkoutExerciseItem
+        personalBest: PersonalBest | null
+        achievements: Achievements
+      }
     >(`/api/workouts/${workoutId}/sets`, {
       method: 'POST',
       body: { exerciseId, reps, weightKg },
@@ -148,7 +161,7 @@ export function useWorkoutSession() {
     }
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する。詳細はuseExercises.ts参照
     patchLastSet(exerciseId, { weightKg: set.weightKg, reps: set.reps })
-    return { set, personalBest }
+    return { set, personalBest, achievements }
   }
 
   async function removeSet(setId: string) {
@@ -232,4 +245,4 @@ export function useWorkoutSession() {
   }
 }
 
-export type { WorkoutSetItem, WorkoutExerciseItem, PersonalBest }
+export type { WorkoutSetItem, WorkoutExerciseItem, PersonalBest, Achievements }

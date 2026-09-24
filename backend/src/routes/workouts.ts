@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { shiftDateString, todayInJst } from '../lib/date.js'
 import type {
   WorkoutModel,
   WorkoutSetModel,
@@ -344,6 +345,21 @@ async function maxOwnWeight(
   return toWeightNumber(aggregate._max.weightKg)
 }
 
+// 行為者(actorId)が現在所属するアクティブな全グループの、行為者以外のアクティブなメンバーのID
+// (受信者ごとに重複排除)。①自己ベスト・C1通算の節目・C2久しぶりの復帰で共通の宛先ロジック(Issue #253, #255)
+async function activeGroupRecipientIds(actorId: string) {
+  const recipients = await prisma.groupMember.findMany({
+    where: {
+      leftAt: null,
+      userId: { not: actorId },
+      group: { deletedAt: null, members: { some: { userId: actorId, leftAt: null } } },
+    },
+    distinct: ['userId'],
+    select: { userId: true },
+  })
+  return recipients.map((r) => r.userId)
+}
+
 // 仲間への自己ベスト更新の通知。宛先は行為者が所属するアクティブな全グループのアクティブなメンバー
 // (受信者ごとに重複排除、本人は除く)。同じ記録の同じ種目につき1件まで(既にあれば作らない)。
 // payloadに更新前のベストを残し、表示時は「その記録の現在の最大重量 > 更新前のベスト」で確認し直す
@@ -366,20 +382,12 @@ async function notifyPersonalBest(
   })
   if (existing) return
 
-  const recipients = await prisma.groupMember.findMany({
-    where: {
-      leftAt: null,
-      userId: { not: actorId },
-      group: { deletedAt: null, members: { some: { userId: actorId, leftAt: null } } },
-    },
-    distinct: ['userId'],
-    select: { userId: true },
-  })
-  if (recipients.length === 0) return
+  const recipientIds = await activeGroupRecipientIds(actorId)
+  if (recipientIds.length === 0) return
 
   await prisma.notification.createMany({
-    data: recipients.map((r) => ({
-      recipientId: r.userId,
+    data: recipientIds.map((recipientId) => ({
+      recipientId,
       actorId,
       type: 'personal_best' as const,
       targetType: 'workout' as const,
@@ -387,6 +395,112 @@ async function notifyPersonalBest(
       payload: { exerciseId, previousBestKg },
     })),
   })
+}
+
+// --- C1 通算の節目・C2 久しぶりの復帰(Issue #255。docs/backlog.md「通知の種類の拡張」参照) ---
+// どちらも判定タイミングは同じ：その日付の自分のセットが初めて1件になったとき(セットのPOSTのみ)
+
+// 自分の(削除済みでない)セットが1件以上ある日付(=workout)の数。「セットがある日」だけを数える方針を
+// C1・②ホーム・⑨マイページのトレ日数表示で揃える(1ユーザー1日1workoutのため、workout数=日数になる)
+async function countDaysWithSets(userId: string) {
+  return prisma.workout.count({ where: { userId, deletedAt: null, sets: { some: {} } } })
+}
+
+// 節目は10・30・50・100日、以降100日ごと、および365日
+function isMilestoneDayCount(days: number) {
+  if (days === 365) return true
+  return days === 10 || days === 30 || days === 50 || (days >= 100 && days % 100 === 0)
+}
+
+// 仲間への通算の節目の通知。同じ節目は2回通知しない(日付を間違えた記録を消して正しい日付で
+// 入れ直す、という操作で重複するため)
+async function notifyMilestone(actorId: string, workoutId: string, days: number) {
+  const existing = await prisma.notification.findFirst({
+    where: { type: 'milestone', actorId, payload: { path: ['days'], equals: days } },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const recipientIds = await activeGroupRecipientIds(actorId)
+  if (recipientIds.length === 0) return
+
+  await prisma.notification.createMany({
+    data: recipientIds.map((recipientId) => ({
+      recipientId,
+      actorId,
+      type: 'milestone' as const,
+      targetType: 'workout' as const,
+      targetId: workoutId,
+      payload: { days },
+    })),
+  })
+}
+
+// 仲間への久しぶりの復帰の通知。トリガー自体が「その日付の最初のセット」に限られるため、
+// personal_best・milestoneのような重複防止のクエリは設けない(セットを高速に連続保存したときの
+// まれな重複と同様、許容した既知のずれとして扱う。docs/backlog.md参照)
+async function notifyComeback(actorId: string, workoutId: string) {
+  const recipientIds = await activeGroupRecipientIds(actorId)
+  if (recipientIds.length === 0) return
+
+  await prisma.notification.createMany({
+    data: recipientIds.map((recipientId) => ({
+      recipientId,
+      actorId,
+      type: 'comeback' as const,
+      targetType: 'workout' as const,
+      targetId: workoutId,
+    })),
+  })
+}
+
+type Achievements = { milestoneDays: number | null; comeback: boolean }
+
+// C1・C2の判定。isFirstSetOfWorkoutがfalse(このworkoutに既にセットがある)の場合は判定しない
+async function evaluateAchievements(
+  userId: string,
+  workout: WorkoutModel,
+  isFirstSetOfWorkout: boolean,
+): Promise<Achievements> {
+  if (!isFirstSetOfWorkout) return { milestoneDays: null, comeback: false }
+
+  const totalDays = await countDaysWithSets(userId)
+  const milestoneDays = isMilestoneDayCount(totalDays) ? totalDays : null
+  if (milestoneDays !== null) {
+    await notifyMilestone(userId, workout.id, milestoneDays)
+  }
+
+  // C2の対象は日本時間で今日・昨日の記録のみ、かつ初めての記録(totalDays === 1)は対象外
+  const performedAt = workout.performedAt.toISOString().slice(0, 10)
+  const today = todayInJst()
+  const yesterday = shiftDateString(today, -1)
+  let comeback = false
+  if (totalDays > 1 && (performedAt === today || performedAt === yesterday)) {
+    // 「その日付の前14日間と翌日に、セットがある日付が他に無い」を、このworkout以外に
+    // 同じ範囲でセットがある記録が無いかで判定する(1ユーザー1日1workoutのため、
+    // 日付そのものの比較ではなくworkout単位の除外で十分)
+    const rangeStart = shiftDateString(performedAt, -14)
+    const rangeEnd = shiftDateString(performedAt, 1)
+    const otherDayInRange = await prisma.workout.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+        id: { not: workout.id },
+        sets: { some: {} },
+        performedAt: {
+          gte: new Date(`${rangeStart}T00:00:00Z`),
+          lte: new Date(`${rangeEnd}T00:00:00Z`),
+        },
+      },
+      select: { id: true },
+    })
+    comeback = otherDayInRange === null
+  }
+  if (comeback) {
+    await notifyComeback(userId, workout.id)
+  }
+
+  return { milestoneDays, comeback }
 }
 
 // 保存したセット(POST/重量を変えたPATCH)の自己ベスト判定。仲間への通知を作り、本人向けの達成内容を返す。
@@ -435,6 +549,10 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
 
   const workoutExercise = await ensureWorkoutExercise(workout.id, parsed.data.exerciseId)
   const setOrder = await nextSetOrder(workout.id, parsed.data.exerciseId)
+  // C1・C2の判定用に、このセットを追加する前の時点でこのworkoutにセットが無かったか(=その日付の
+  // 初めてのセットになるか)を先に見ておく
+  const isFirstSetOfWorkout =
+    (await prisma.workoutSet.count({ where: { workoutId: workout.id } })) === 0
   const set = await prisma.workoutSet.create({
     data: {
       workoutId: workout.id,
@@ -446,11 +564,13 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   })
 
   const personalBest = await evaluatePersonalBest(userId, set)
+  const achievements = await evaluateAchievements(userId, workout, isFirstSetOfWorkout)
 
   res.status(201).json({
     ...serializeSet(set),
     workoutExercise: serializeWorkoutExercise(workoutExercise),
     personalBest,
+    achievements,
   })
 })
 
