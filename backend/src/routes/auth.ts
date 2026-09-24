@@ -292,6 +292,13 @@ authRouter.post('/password-changes', requireAuth, passwordChangeRateLimiter, asy
     return
   }
 
+  // 同じパスワードのままだと「変更しました」と表示しても実際は何も変わらず紛らわしいため弾く。
+  // 現在のパスワードとの一致は上で確認済みなので、入力値どうしの比較で足りる
+  if (newPassword === currentPassword) {
+    res.status(400).json({ error: 'same_as_current_password' })
+    return
+  }
+
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS)
   await prisma.user.update({
     where: { id: user.id },

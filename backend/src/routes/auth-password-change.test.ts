@@ -79,6 +79,32 @@ describe('POST /auth/password-changes', () => {
     expect(me.status).toBe(200)
   })
 
+  it('新しいパスワードが現在のパスワードと同じなら400を返し、パスワードは変わらない', async () => {
+    const agent = await loggedInAgent()
+    const before = await prisma.user.findUnique({ where: { email: testEmail } })
+
+    const res = await agent
+      .post('/auth/password-changes')
+      .send({ currentPassword, newPassword: currentPassword })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'same_as_current_password' })
+
+    const after = await prisma.user.findUnique({ where: { email: testEmail } })
+    expect(after?.passwordHash).toBe(before?.passwordHash)
+  })
+
+  it('現在のパスワードが誤っていれば、新旧が同じ入力でも現在のパスワードの誤りを優先して返す', async () => {
+    const agent = await loggedInAgent()
+
+    const res = await agent
+      .post('/auth/password-changes')
+      .send({ currentPassword: 'wrongPassword', newPassword: 'wrongPassword' })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_current_password' })
+  })
+
   it('新しいパスワードが8文字未満なら400を返す', async () => {
     const agent = await loggedInAgent()
 

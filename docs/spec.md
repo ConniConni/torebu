@@ -916,7 +916,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/auth/logout` | 要 | セッションを破棄する |
 | POST | `/auth/password-reset-requests` | 不要 | パスワード再設定メールの送信をリクエストする（Issue #213）。メール列挙対策のため、ユーザーが存在しない場合も常に`202`を返す。**レート制限あり**（同一IPから15分に5回まで） |
 | POST | `/auth/password-resets` | 不要 | トークンを検証し、新しいパスワードを設定する（Issue #213）。トークンは有効期限1時間・使い切り |
-| POST | `/auth/password-changes` | 要 | ログイン中にパスワードを変更する（Issue #247）。`currentPassword`を照合し、不一致なら`400 invalid_current_password`（ログイン状態は維持）。`newPassword`は登録時と同じ8〜72文字。成功時は未使用のメールリセット用トークンも失効させる。現在のセッションはそのまま維持し、**他端末のセッションは無効化しない**。**レート制限あり**（IPではなく同一ユーザーから15分に5回まで） |
+| POST | `/auth/password-changes` | 要 | ログイン中にパスワードを変更する（Issue #247）。`currentPassword`を照合し、不一致なら`400 invalid_current_password`（ログイン状態は維持）。`newPassword`は登録時と同じ8〜72文字で、現在のパスワードと同じなら`400 same_as_current_password`（現在のパスワードの照合を先に行うため、照合失敗時はそちらを優先して返す）。成功時は未使用のメールリセット用トークンも失効させる。現在のセッションはそのまま維持し、**他端末のセッションは無効化しない**。**レート制限あり**（IPではなく同一ユーザーから15分に5回まで） |
 
 ### 種目マスタ — [exercises.ts](../backend/src/routes/exercises.ts)
 

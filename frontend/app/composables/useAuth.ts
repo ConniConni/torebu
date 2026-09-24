@@ -36,6 +36,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_or_expired_token:
     'リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください',
   invalid_current_password: '現在のパスワードが正しくありません',
+  same_as_current_password: '現在と異なるパスワードを入力してください',
 }
 
 export function authErrorMessage(error: unknown): string {
