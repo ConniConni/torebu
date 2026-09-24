@@ -391,8 +391,35 @@ groupsRouter.delete('/:id', requireAuth, async (req, res) => {
 // 集計対象は公式種目のみ(createdBy IS NULL)。stats.ts(Phase3-C)と同じ方針
 const RANKING_OFFICIAL_EXERCISE_FILTER = { createdBy: null }
 
+// 種目別ランキングのデフォルト種目選定に使う「直近」の窓。②ホーム・⑨マイページの期間別サマリー
+// (直近28日、spec.md「記録日数」実装メモ参照)と同じ定義に揃え、アプリ内で「直近」の意味を統一する
+const RECENT_WINDOW_DAYS = 28
+
+function recentWindowStart(now: Date): Date {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - RECENT_WINDOW_DAYS)
+  return start
+}
+
+// 参加・継続の可視化(非順位)用のスタンプ段階。順位ではなく「自分がどの段階にいるか」に焦点が
+// 移るよう、直近28日の実日数を生の数字ではなく4段階のスタンプに変換して見せる
+// (backlog.md「通知の種類の拡張」で決めた『途切れを責めず積み上げを祝う』方針と揃える)。
+// フロント側の見た目はブランドオレンジの濃淡4段階（表彰台の金・銀・銅とは別配色。
+// 隣に並ぶ順位バッジと混同しやすいという指摘を受けて別軸にした、2026-09-24）。
+// bronze/silver/goldという名前はこのAPIの型名として残すが、表示文言には出さない
+type AttendanceStamp = 'none' | 'bronze' | 'silver' | 'gold'
+
+function attendanceStamp(daysTrained: number): AttendanceStamp {
+  if (daysTrained >= 18) return 'gold' // 週4日超のペース
+  if (daysTrained >= 7) return 'silver' // 週1〜2日程度のペース
+  if (daysTrained >= 1) return 'bronze'
+  return 'none'
+}
+
 const rankingPeriodSchema = z.object({
   period: z.enum(['week', 'month', 'all']).default('week'),
+  exerciseId: z.string().uuid().optional(),
 })
 
 // todayを含む週の開始日(直近の日曜日、時刻0時)を返す。
@@ -420,11 +447,13 @@ function rankingStartDate(period: 'week' | 'month' | 'all'): Date | undefined {
   return period === 'week' ? weekStart(now) : monthStart(now)
 }
 
-// GET /groups/:id/ranking?period=week|month|all
+// GET /groups/:id/ranking?period=week|month|all&exerciseId=<uuid>
 // グループのアクティブな全メンバー(本人含む)について、公式種目の合計挙上重量(Σ weightKg * reps)
 // でランキングを作る。自重セット(weightKgがnull)は0kg扱いで加算する(stats.tsは自重セットを
 // 集計から除外するが、ランキングは「0kgとして扱う」ことで記録自体はしている点を評価する。
-// schema.md「Phase4の検討結果」参照)
+// schema.md「Phase4の検討結果」参照)。
+// exerciseIdを指定すると、その種目だけの挙上重量に絞った「種目別ランキング」になる
+// (対象は既存方針どおり公式種目のみ。カスタム種目・存在しないIDはstats.tsの種目別推移と同じく404)
 groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const groupId = req.params.id as string
@@ -442,6 +471,18 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
     return
   }
 
+  let exerciseId: string | undefined
+  if (parsed.data.exerciseId) {
+    const exercise = await prisma.exercise.findFirst({
+      where: { id: parsed.data.exerciseId, ...RANKING_OFFICIAL_EXERCISE_FILTER },
+    })
+    if (!exercise) {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    exerciseId = exercise.id
+  }
+
   const members = await prisma.groupMember.findMany({
     where: { groupId, leftAt: null },
     include: { user: { select: { displayName: true } } },
@@ -457,6 +498,7 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
         ...(startDate ? { performedAt: { gte: startDate } } : {}),
       },
       exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+      ...(exerciseId ? { exerciseId } : {}),
     },
     select: { weightKg: true, reps: true, workout: { select: { userId: true } } },
   })
@@ -469,13 +511,35 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
     volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * set.reps)
   }
 
+  // 参加・継続の可視化用に、種目・期間タブとは独立して「直近28日にセットがある日数」を集計する
+  // (workouts.tsのcountDaysWithSetsと同じ「セットが1件以上ある日=workout」の数え方。
+  // 種目には依存しないグループ全体のトレ日数のため、公式種目フィルタもかけない)
+  const attendanceCounts = await prisma.workout.groupBy({
+    by: ['userId'],
+    where: {
+      userId: { in: memberIds },
+      deletedAt: null,
+      performedAt: { gte: recentWindowStart(new Date()) },
+      sets: { some: {} },
+    },
+    _count: { _all: true },
+  })
+  const daysTrainedByUserId = new Map<string, number>(
+    attendanceCounts.map((c) => [c.userId, c._count._all]),
+  )
+
   // 合計挙上重量の降順。同点はdisplayNameで安定した順序にする(表示上の並びをブレさせないため)
   const sorted = members
-    .map((m) => ({
-      userId: m.userId,
-      displayName: m.user.displayName,
-      totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
-    }))
+    .map((m) => {
+      const daysTrained = daysTrainedByUserId.get(m.userId) ?? 0
+      return {
+        userId: m.userId,
+        displayName: m.user.displayName,
+        totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
+        daysTrained,
+        attendanceStamp: attendanceStamp(daysTrained),
+      }
+    })
     .sort((a, b) => b.totalVolumeKg - a.totalVolumeKg || a.displayName.localeCompare(b.displayName))
 
   // 同着は同順位、次の順位は人数分スキップする方式(例: 1,2,2,4)
@@ -489,5 +553,100 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
     return { ...entry, rank }
   })
 
-  res.status(200).json({ period: parsed.data.period, ranking })
+  res.status(200).json({ period: parsed.data.period, exerciseId: exerciseId ?? null, ranking })
+})
+
+// GET /groups/:id/ranking/default-exercise
+// 種目別ランキングを開いたときに最初に選択する種目を返す。グループのアクティブメンバー全員の
+// 直近28日間のセット数が最も多い公式種目(タイは種目一覧と同じ表示順→名前順で解決)。
+// 該当するセットが1件も無ければexerciseId: nullを返す(フロント側は種目未選択の状態で表示する)
+groupsRouter.get('/:id/ranking/default-exercise', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    select: { userId: true },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const counts = await prisma.workoutSet.groupBy({
+    by: ['exerciseId'],
+    where: {
+      workout: {
+        userId: { in: memberIds },
+        deletedAt: null,
+        performedAt: { gte: recentWindowStart(new Date()) },
+      },
+      exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+    },
+    _count: { _all: true },
+  })
+
+  if (counts.length === 0) {
+    res.status(200).json({ exerciseId: null })
+    return
+  }
+
+  const maxCount = Math.max(...counts.map((c) => c._count._all))
+  const topExerciseIds = counts.filter((c) => c._count._all === maxCount).map((c) => c.exerciseId)
+
+  // 同数のタイは種目一覧(GET /exercises)と同じ「表示順→名前順」で解決する
+  const topExercise = await prisma.exercise.findFirst({
+    where: { id: { in: topExerciseIds } },
+    orderBy: [{ defaultSortOrder: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+  })
+
+  res.status(200).json({ exerciseId: topExercise?.id ?? null })
+})
+
+// GET /groups/:id/ranking/exercises
+// 種目別ランキングの種目セレクタに出す候補を返す。公式種目は77種目あり全件出すと選びづらいため、
+// グループのアクティブメンバーの誰か1人でも記録したことがある種目だけに絞り込む(期間の下限は
+// 設けず、過去の全期間が対象。default-exerciseの「直近28日」とは別軸)。使用実績が無い種目は、
+// 通算で見ても0kgランキングにしかならず実用上の価値が薄いため候補から外す
+// (2026-09-25決定、docs/spec.md参照)
+groupsRouter.get('/:id/ranking/exercises', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    select: { userId: true },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const counts = await prisma.workoutSet.groupBy({
+    by: ['exerciseId'],
+    where: {
+      workout: { userId: { in: memberIds }, deletedAt: null },
+      exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+    },
+    _count: { _all: true },
+  })
+  const countByExerciseId = new Map(counts.map((c) => [c.exerciseId, c._count._all]))
+
+  // 使用回数の多い順。同数はdefault-exerciseと同じ「表示順→名前順」で解決する
+  const usedExercises = await prisma.exercise.findMany({
+    where: { id: { in: [...countByExerciseId.keys()] } },
+    orderBy: [{ defaultSortOrder: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+    select: { id: true, name: true },
+  })
+  usedExercises.sort(
+    (a, b) => (countByExerciseId.get(b.id) ?? 0) - (countByExerciseId.get(a.id) ?? 0),
+  )
+
+  res.status(200).json({ exercises: usedExercises })
 })
