@@ -309,6 +309,23 @@ groupsRouter.post('/join', requireAuth, async (req, res) => {
       : await tx.groupMember.create({
           data: { groupId: group.id, userId, role: 'member' },
         })
+
+    // 新メンバー参加の通知(Issue #249)。初回参加・再参加のどちらでも、そのグループの他のアクティブな
+    // メンバー宛に作る。表示は作成から5分後で、その時点で参加者・受信者が今もメンバーかを確認し直す
+    // (notifications.tsのfindVisibleNotifications参照)
+    const otherMembers = await tx.groupMember.findMany({
+      where: { groupId: group.id, leftAt: null, userId: { not: userId } },
+      select: { userId: true },
+    })
+    await tx.notification.createMany({
+      data: otherMembers.map((m) => ({
+        recipientId: m.userId,
+        actorId: userId,
+        type: 'member_joined' as const,
+        targetType: 'group' as const,
+        targetId: group.id,
+      })),
+    })
     return { status: 'joined' as const, membership }
   })
 
