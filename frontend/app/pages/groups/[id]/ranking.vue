@@ -151,7 +151,10 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
   silver: 'bg-brand-400 text-brand-900 dark:bg-accent/25 dark:text-accent',
   gold: 'bg-brand-700 text-white dark:bg-accent/45 dark:text-surface',
 }
-// 「ハイペース・18日」のように日数を併記する（記録なしのときは0日を添えても意味が無いので省く）
+// 「ハイペース・18日」のように日数を併記する（記録なしのときは0日を添えても意味が無いので省く）。
+// バッジの幅(w-28)は「コンスタント・17日」（直近28日の窓で出うる最長の文言、日数は常に2桁以下）の
+// 実測幅(約94px、10px boldフォントでcanvas.measureTextにより確認)に余裕を持たせた固定値。
+// 文言ごとに幅が変わらないよう、パディングではなく固定幅+中央寄せ(justify-center)で揃えている
 function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained: number }): string {
   const label = ATTENDANCE_STAMP_LABELS[entry.attendanceStamp]
   return entry.attendanceStamp === 'none' ? label : `${label}・${entry.daysTrained}日`
@@ -274,7 +277,7 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
                   </span>
                 </span>
                 <span
-                  class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                  class="inline-flex h-5 w-28 shrink-0 items-center justify-center rounded text-[10px] font-bold"
                   :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
                 >
                   {{ attendanceLabel(entry) }}
