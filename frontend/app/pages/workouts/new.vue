@@ -211,7 +211,12 @@ async function onApplyRoutine(routineId: string) {
         continue
       }
       for (const target of e.targetSets) {
-        await addSet(e.exerciseId, target.reps, target.weightKg ?? undefined)
+        const { set, personalBest } = await addSet(
+          e.exerciseId,
+          target.reps,
+          target.weightKg ?? undefined,
+        )
+        applyPersonalBest(set, personalBest)
       }
     }
     pendingExercises.value = [...pendingExercises.value, ...newPendingItems]
@@ -238,6 +243,32 @@ const setErrors = reactive<Record<string, string>>({})
 // pendingMemoSaveと同じ「待ち合わせる」方式で防ぐ。値そのもの(Promise)は追跡できればよく
 // 表示に使わないためreactiveにしない
 const pendingSetSaves = new Map<string, Promise<void>>()
+
+// --- 自己ベスト更新のその場の表示（Issue #253） ---
+// 本人には通知を出さず、保存API（セット追加・重量の編集）の応答で返った達成内容を種目カード内に表示する。
+// このページのローカル状態のため、画面を離れて戻ると消える（前回の表示を持ち越さない）。
+// 種目ごとに直近の達成1件だけを持つ
+const personalBests = reactive(new Map<string, PersonalBest & { setId: string }>())
+
+function applyPersonalBest(set: WorkoutSetItem, personalBest: PersonalBest | null) {
+  if (personalBest) {
+    personalBests.set(set.exerciseId, { ...personalBest, setId: set.id })
+    return
+  }
+  // 達成したセット自体の重量を変えて自己ベストでなくなった場合は、表示を取り下げる
+  // （回数だけの編集では重量が変わらないため残る）
+  const current = personalBests.get(set.exerciseId)
+  if (current?.setId === set.id && current.weightKg !== set.weightKg) {
+    personalBests.delete(set.exerciseId)
+  }
+}
+
+// 達成したセットが削除された（記録ごと消えた場合も含む）ときは出さない
+function personalBestFor(exerciseId: string) {
+  const personalBest = personalBests.get(exerciseId)
+  if (!personalBest || !session.value.sets.some((s) => s.id === personalBest.setId)) return null
+  return personalBest
+}
 
 function ensureSetInput(set: { id: string; weightKg: number | null; reps: number }) {
   if (setInputs[set.id]) return
@@ -281,7 +312,7 @@ async function onSetFieldBlur(setId: string) {
   setSaving[setId] = true
   setErrors[setId] = ''
   const promise = updateSet(setId, weightKg, reps)
-    .then(() => {})
+    .then(({ set, personalBest }) => applyPersonalBest(set, personalBest))
     .catch(() => {
       setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
     })
@@ -345,8 +376,9 @@ async function onAddSet(exerciseId: string) {
   }
   try {
     const { reps, weightKg } = defaultSetValuesFor(exerciseId)
-    const set = await addSet(exerciseId, reps, weightKg)
+    const { set, personalBest } = await addSet(exerciseId, reps, weightKg)
     ensureSetInput(set)
+    applyPersonalBest(set, personalBest)
   } catch (error) {
     addSetError.value = addSetErrorMessage(error)
   }
@@ -536,6 +568,19 @@ async function onGoToExercisePicker() {
                   {{ setErrors[set.id] }}
                 </p>
               </template>
+              <p
+                v-if="personalBestFor(element.exerciseId)"
+                class="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+              >
+                <TrophyIcon class="h-4.5 w-4.5 shrink-0" />
+                <span>
+                  <span class="font-semibold">自己ベスト更新！</span>
+                  {{ personalBestFor(element.exerciseId)!.weightKg }}kg
+                  <span class="text-xs text-amber-800 dark:text-amber-300"
+                    >（これまで {{ personalBestFor(element.exerciseId)!.previousBestKg }}kg）</span
+                  >
+                </span>
+              </p>
             </section>
           </template>
         </draggable>
