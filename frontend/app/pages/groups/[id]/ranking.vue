@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Phase4: グループ内ランキング。合計挙上重量（自重セットは0kg扱い、公式種目のみ集計）を
-// 週間/月間/通算の3タブで切り替える（docs/schema.md「Phase4の検討結果」参照）
-import type { RankingPeriod } from '~/composables/useGroups'
+// 週間/月間/通算の3タブで切り替える（docs/schema.md「Phase4の検討結果」参照）。
+// Issue #258で種目別ランキング（種目セレクタ）と参加・継続の可視化（attendanceStamp）を追加
+import type { AttendanceStamp, RankingPeriod } from '~/composables/useGroups'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -14,8 +15,17 @@ const PERIODS: { value: RankingPeriod; label: string }[] = [
   { value: 'all', label: '通算' },
 ]
 
-const { fetchGroupRanking } = useGroups()
+const { fetchGroupRanking, fetchGroupRankingDefaultExercise } = useGroups()
+const { exercises, fetchExercises } = useExercises()
 const { user } = useAuth()
+
+// 指標: 合計挙上重量 or 種目別。種目別に切り替えたときだけ種目一覧・デフォルト種目を取得する
+type Metric = 'total' | 'exercise'
+const metric = ref<Metric>('total')
+const selectedExerciseId = ref<string | null>(null)
+const officialExercises = computed(() =>
+  (exercises.value ?? []).filter((e) => e.createdBy === null && e.deletedAt === null),
+)
 
 const period = ref<RankingPeriod>('week')
 const ranking = ref<Awaited<ReturnType<typeof fetchGroupRanking>>['ranking'] | null>(null)
@@ -23,10 +33,17 @@ const pending = ref(true)
 const loadError = ref(false)
 
 async function load() {
+  // 種目別モードで選べる種目が1つも無い場合は、誤って合計扱いで取得しない(exerciseId未指定だと
+  // バックエンドは合計挙上重量ランキングを返すため、選択中の種目名と表示がズレてしまう)
+  if (metric.value === 'exercise' && !selectedExerciseId.value) {
+    ranking.value = []
+    return
+  }
   pending.value = true
   loadError.value = false
   try {
-    const result = await fetchGroupRanking(groupId, period.value)
+    const exerciseId = metric.value === 'exercise' ? selectedExerciseId.value : null
+    const result = await fetchGroupRanking(groupId, period.value, exerciseId)
     ranking.value = result.ranking
   } catch {
     loadError.value = true
@@ -36,6 +53,36 @@ async function load() {
 }
 await load()
 watch(period, load)
+
+// 種目別に初めて切り替えたときだけ、種目一覧とグループ内の直近人気種目を取得する
+let exerciseModeLoaded = false
+async function onSelectMetric(next: Metric) {
+  if (metric.value === next) return
+  metric.value = next
+  if (next === 'exercise' && !exerciseModeLoaded) {
+    exerciseModeLoaded = true
+    pending.value = true
+    try {
+      const [, defaultExercise] = await Promise.all([
+        exercises.value ? Promise.resolve() : fetchExercises(),
+        fetchGroupRankingDefaultExercise(groupId),
+      ])
+      // グループ内に直近の使用実績が無ければ(defaultExercise.exerciseId === null)、
+      // 一覧の先頭(使用回数DESC→名前順、GET /exercisesの既存ソート)にフォールバックする
+      selectedExerciseId.value = defaultExercise.exerciseId ?? officialExercises.value[0]?.id ?? null
+    } catch {
+      loadError.value = true
+      pending.value = false
+      return
+    }
+  }
+  await load()
+}
+
+async function onSelectExercise(exerciseId: string) {
+  selectedExerciseId.value = exerciseId
+  await load()
+}
 
 // 上位3人は表彰台形式で強調表示する。表示上は中央に1位を置くため並び替える
 // 同着（同順位）のメンバーがいる場合はrankの値が重複するため、rankではなくAPIが返す
@@ -76,6 +123,21 @@ function medalClasses(rank: number): string {
 function medalBarClass(rank: number): string {
   return MEDAL_COLORS[rank as 1 | 2 | 3]?.bar ?? ''
 }
+
+// 参加・継続の可視化用スタンプ。順位の表彰台とは別軸の要素だが、色の意味を覚え直させないよう
+// 金・銀・銅と同じ配色を流用する(none=記録なしはニュートラルなグレー)
+const ATTENDANCE_STAMP_LABELS: Record<AttendanceStamp, string> = {
+  none: '記録なし',
+  bronze: '銅',
+  silver: '銀',
+  gold: '金',
+}
+const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
+  none: 'bg-gray-100 text-gray-400 dark:bg-white/5 dark:text-muted',
+  bronze: `${MEDAL_COLORS[3].bg} ${MEDAL_COLORS[3].text}`,
+  silver: `${MEDAL_COLORS[2].bg} ${MEDAL_COLORS[2].text}`,
+  gold: `${MEDAL_COLORS[1].bg} ${MEDAL_COLORS[1].text}`,
+}
 </script>
 
 <template>
@@ -87,6 +149,43 @@ function medalBarClass(rank: number): string {
         >
         <h1 class="text-base font-semibold text-gray-900 dark:text-ink">ランキング</h1>
       </div>
+
+      <div class="flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+          :class="
+            metric === 'total'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+          "
+          @click="onSelectMetric('total')"
+        >
+          合計
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+          :class="
+            metric === 'exercise'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+          "
+          @click="onSelectMetric('exercise')"
+        >
+          種目別
+        </button>
+      </div>
+
+      <select
+        v-if="metric === 'exercise'"
+        :value="selectedExerciseId ?? ''"
+        class="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-panel px-3 py-2 text-sm text-gray-900 dark:text-ink"
+        @change="onSelectExercise(($event.target as HTMLSelectElement).value)"
+      >
+        <option v-if="officialExercises.length === 0" value="" disabled>種目がありません</option>
+        <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+      </select>
 
       <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent">
         <button
@@ -186,6 +285,14 @@ function medalBarClass(rank: number): string {
                   自分
                 </span>
               </span>
+              <!-- 参加・継続の可視化(非順位)。直近28日にセットがある日数を4段階のスタンプで表示する -->
+              <span
+                class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
+                :title="`直近28日で${entry.daysTrained}日トレーニング`"
+              >
+                {{ ATTENDANCE_STAMP_LABELS[entry.attendanceStamp] }}
+              </span>
               <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
                 {{ formatVolume(entry.totalVolumeKg)
                 }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
@@ -194,7 +301,13 @@ function medalBarClass(rank: number): string {
           </ul>
         </div>
         <p class="text-center text-xs text-gray-400 dark:text-muted">
-          合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています
+          <template v-if="metric === 'exercise'">
+            {{ officialExercises.find((e) => e.id === selectedExerciseId)?.name ?? '選択した種目' }}の挙上重量でランキングしています
+          </template>
+          <template v-else> 合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています </template>
+        </p>
+        <p class="text-center text-xs text-gray-400 dark:text-muted">
+          スタンプは直近28日にトレーニングした日数の目安です（金:18日〜 銀:7日〜 銅:1日〜）
         </p>
       </template>
     </div>

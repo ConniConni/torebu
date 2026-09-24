@@ -174,7 +174,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、仲間の通算の節目・久しぶりの復帰（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
-| `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量で週間/月間/通算の3タブを切り替えて表示する | `GET /groups/:id/ranking` | `auth` |
+| `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。合計挙上重量／種目別（[Issue #258](https://github.com/ConniConni/torebu/issues/258)）を週間/月間/通算の3タブで切り替えて表示する。各メンバーの行に、直近28日の参加・継続の可視化スタンプ（none/bronze/silver/gold）も表示する | `GET /groups/:id/ranking`, `GET /groups/:id/ranking/default-exercise`, `GET /exercises` | `auth` |
 | `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アカウント（「パスワードを変更」から`/mypage/password`へ、Issue #247）・アプリの見た目（ダークモードの切替UI自体）は非活性の「準備中」表示のみ
 （配色自体はIssue #241で全画面対応済み。切替UIはStripe連携着手Issueで追加予定）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモードの実処理はStripe連携着手Issueで追加予定（下記参照）。ファイルは`pages/mypage/index.vue`（配下に`password.vue`を置くため、Issue #247で`pages/mypage.vue`から移動） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
 | `/mypage/password` | ⑨ | パスワード変更（Issue #247）。ログイン中に現在のパスワード・新しいパスワード（確認付き）を入力して変更する。成功時は同じ画面で完了表示に切り替わり、「マイページに戻る」で⑨へ戻る。変更後もログイン状態は維持される。現在のパスワードを忘れた場合の案内は文言のみ（`/password-reset`は`guest`ミドルウェア付きでログイン中は開けないため、リンクにしていない） | `POST /auth/password-changes` | `auth` |
@@ -653,6 +653,42 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   数値の差がそのまま棒の高さの差として伝わる（全員0kgのときは全員同じ最小の高さになる）
 - グループ詳細画面（`/groups/[id]`）の「みんなの記録を見る」の下に「ランキングを見る」ボタンを追加
 
+**グループ内ランキングの種目別集計・参加継続の可視化（Phase4拡張、[Issue #258](https://github.com/ConniConni/torebu/issues/258)）の実装メモ**
+- `docs/schema.md`「Phase4の検討結果」で当初から想定していた「将来複数指標を切り替えられるレイアウト」
+  の宿題を回収する形で、合計挙上重量1本だったランキングに**種目別ランキング**を追加した。あわせて、
+  合計挙上重量だけでは通える頻度が低い人が順位で報われにくいという課題への対応として、順位ではない
+  軸の**参加・継続の可視化（attendanceStamp）**も追加した
+- **種目別ランキング**：`GET /groups/:id/ranking`に`exerciseId`クエリ（公式種目のUUID）を追加。
+  指定するとその種目だけのセットに絞って合計挙上重量ランキングを再計算する（既存の集計ロジックは
+  そのまま流用し、`exerciseId`のフィルタを1つ足すだけで済んだ）。カスタム種目・存在しないIDは
+  `stats.ts`の種目別推移エンドポイントと同じ方針で`404`にする
+  - **デフォルト種目の選定**は別エンドポイント`GET /groups/:id/ranking/default-exercise`を新設。
+    「グループ内で直近使われている種目」を、グループのアクティブメンバー全員の直近28日間のセット数が
+    最も多い公式種目として算出する（タイは`GET /exercises`と同じ表示順→名前順で解決）。メインの
+    `GET /groups/:id/ranking`に含めず別エンドポイントに分けたのは、頻繁に見る合計挙上重量ランキング
+    （デフォルト表示）で毎回この集計を走らせずに済ませるため（種目別タブに切り替えたときだけ叩く）
+  - フロントは`/groups/[id]/ranking`に「合計／種目別」の指標切り替えボタンを追加。「種目別」を
+    初めて選んだときだけ種目一覧・デフォルト種目を取得し、以後はタブ内に保持する。種目セレクタは
+    `GET /exercises`（公式＋自分のカスタム種目）を流用し、フロント側で`createdBy === null`に絞り込む
+    （新しい一覧APIは作らない）
+- **参加・継続の可視化（attendanceStamp）**：各メンバーの行に、直近28日にセットがある日数
+  （`workouts.ts`の`countDaysWithSets`と同じ「セットが1件以上ある日＝workout」の数え方。メモのみ・
+  ソフトデリート済みworkoutは含めない）を`none`/`bronze`/`silver`/`gold`の4段階のスタンプに変換して
+  表示する。**種目セレクタ・期間タブの絞り込みに影響されない、グループ全体の指標**（種目に依存させると
+  種目を切り替えるたびに数値が変わって分かりにくいため。schema.mdの`OFFICIAL_EXERCISE_FILTER`も
+  意図的にかけない、自重種目・カスタム種目のセットでもカウントする）
+  - **直近28日という窓**は、当初「直近30日」で検討していたが、②ホーム・⑨マイページの期間別
+    サマリー（直近7日/直近28日/通算）で既に使われている「直近28日」ローリングウィンドウ（週の
+    巡りが毎回ずれない4週間ちょうどの区切り）に統一した。デフォルト種目の選定（直近使われている
+    種目）も同じ窓を使う
+  - **閾値**（none:0日、bronze:1日〜、silver:7日〜、gold:18日〜）は、週1〜2回ペース＝silver、
+    ほぼ2日に1日ペース＝goldを目安に決めた。段階数を増やすほど「自分がどの段階にいるか」より
+    「あと何日で次の段階か」という数字比較に寄ってしまうため、4段階に留めた
+  - **数値ではなく段階のスタンプで見せる**のは、生の日数をそのまま出すと結局「多い人・少ない人」の
+    比較になり、順位ではないだけで実質的には合計挙上重量ランキングと同じ土俵に戻ってしまうため
+    （検討時のセッションメモ参照）。色は表彰台の金・銀・銅（`MEDAL_COLORS`）と同じ配色を流用し、
+    色の意味を覚え直させないようにしている（noneはニュートラルなグレー）
+
 **通知の宛先拡大・いいねユーザー表示（Phase4改善、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）の実装メモ**
 - Phase4の通知・いいね（#144, #140）実装後の棚卸しで見つかった2つの積み残し（`docs/backlog.md`参照）
 - **コメント通知の宛先を拡大**：あるworkoutにA→B→Aとコメントが連なった場合、Aの2回目のコメントで
@@ -1092,7 +1128,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE。参加（再参加含む）したときは他のアクティブなメンバー宛に`member_joined`通知を作る（[Issue #249](https://github.com/ConniConni/torebu/issues/249)） |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
 | DELETE | `/groups/:id` | 要 | グループを削除する（**ソフトデリート**）。**オーナー限定**（オーナー以外は`403`） |
-| GET | `/groups/:id/ranking` | 要 | グループのアクティブな全メンバー（本人含む）の合計挙上重量ランキングを返す。`period`クエリ（`week`/`month`/`all`、省略時`week`）で対象期間を切り替える |
+| GET | `/groups/:id/ranking` | 要 | グループのアクティブな全メンバー（本人含む）の合計挙上重量ランキングを返す。`period`クエリ（`week`/`month`/`all`、省略時`week`）で対象期間を切り替える。`exerciseId`クエリ（公式種目のUUID、省略可）を指定すると、その種目だけの挙上重量に絞った種目別ランキングになる（カスタム種目・存在しないIDは`404`）。各要素に直近28日の参加・継続の可視化用`daysTrained`/`attendanceStamp`（`none`/`bronze`/`silver`/`gold`）も含む（[Issue #258](https://github.com/ConniConni/torebu/issues/258)） |
+| GET | `/groups/:id/ranking/default-exercise` | 要 | 種目別ランキングを開いたときに最初に選ぶべき種目を返す。グループのアクティブメンバー全員の直近28日間のセット数が最も多い公式種目（タイは種目一覧と同じ表示順→名前順で解決）。該当する記録が無ければ`exerciseId: null` |
 
 ### 通知（Phase4） — [notifications.ts](../backend/src/routes/notifications.ts)
 
@@ -1141,7 +1178,9 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | いいね・コメント作成時の通知 | `POST /workouts/:id/reactions`・`POST /workouts/:id/comments`（[workouts.ts](../backend/src/routes/workouts.ts)）が、対象workoutの投稿者宛に`notifications`を作成する（`notifyWorkoutOwner`関数）。**投稿者が自分自身（自分の記録への自分の操作）の場合は作成しない**。いいねは`upsert`で冪等だが、通知は**新規いいね時のみ**作成する（連打で複製しないよう、`upsert`の前に既存いいねの有無を確認している）。通知APIを直接叩いて作る手段は無く、常にこの2エンドポイントの副作用として作られる。**コメントは投稿者に加え、そのworkoutへの過去のコメント投稿者（スレッド参加者）にも`type: comment_reply`で通知する**（`notifyCommentParticipants`関数、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）。自分自身・投稿者（`comment`で通知済み）は宛先から除く |
 | 自己ベスト更新の判定・通知 | `POST /workouts/:id/sets`・重量が変わった`PATCH /workouts/:id/sets/:setId`で、種目ごとの最大重量の自己ベストを判定する（`evaluatePersonalBest`関数、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）。自重・初めての種目は対象外。**自分の他の記録の最大重量を上回ったら**、所属するアクティブな全グループのメンバー宛（重複排除・本人除く）に`personal_best`通知を作る（同じ記録の同じ種目につき1件まで、`payload`に更新前のベスト）。本人には通知を作らず、**同じ記録内の他のセットも含めた最高重量を上回ったら**応答の`personalBest`で返す |
 | 通算の節目・久しぶりの復帰の判定・通知 | `POST /workouts/:id/sets`で、その日付の最初のセット追加のときだけ判定する（`evaluateAchievements`関数、[Issue #255](https://github.com/ConniConni/torebu/issues/255)）。**通算の節目（10・30・50・100日、以降100日ごと、365日）**に達したら所属するアクティブな全グループのメンバー宛（重複排除・本人除く）に`milestone`通知を作る（同じ節目につき1件まで、`payload`に`{ days }`）。**日本時間で今日・昨日の記録かつ、その日付の前14日間・翌日にセットがある日付が他に無ければ**（初めての記録は対象外）同じ宛先に`comeback`通知を作る。本人には通知を作らず、応答の`achievements`（`{ milestoneDays, comeback }`）で返す |
-| `GET /groups/:id/ranking` | **集計対象は公式種目のみ**（`stats.ts`と同じ方針）。ただし`stats.ts`と異なり**自重セット（`weightKg`が`null`）は除外せず0kg扱いで加算する**（schema.md「Phase4の検討結果」参照。合計に影響はしないが、記録自体はランキングの母数に含める）。`period=week`は日曜起算、`month`は1日起算（Phase3-Dの週定義と統一）で「現在の期間の開始日時以降」を集計し、`all`は期間の下限を設けない。過去の期間（先週・先月等）を見る機能は無い。記録が無いメンバーも`totalVolumeKg: 0`で結果に含める。同着は同順位、次の順位は人数分スキップする（例：1位2人なら次点は3位ではなく3人目時点で3位＝1,1,3） |
+| `GET /groups/:id/ranking` | **集計対象は公式種目のみ**（`stats.ts`と同じ方針）。ただし`stats.ts`と異なり**自重セット（`weightKg`が`null`）は除外せず0kg扱いで加算する**（schema.md「Phase4の検討結果」参照。合計に影響はしないが、記録自体はランキングの母数に含める）。`period=week`は日曜起算、`month`は1日起算（Phase3-Dの週定義と統一）で「現在の期間の開始日時以降」を集計し、`all`は期間の下限を設けない。過去の期間（先週・先月等）を見る機能は無い。記録が無いメンバーも`totalVolumeKg: 0`で結果に含める。同着は同順位、次の順位は人数分スキップする（例：1位2人なら次点は3位ではなく3人目時点で3位＝1,1,3）。`exerciseId`を指定すると、その種目だけのセットに絞って同じ集計をする（[Issue #258](https://github.com/ConniConni/torebu/issues/258)）。各要素の`daysTrained`/`attendanceStamp`は種目・期間の絞り込みに影響されない、グループ全体の直近28日の集計（下記参照） |
+| `GET /groups/:id/ranking`の`attendanceStamp`（参加・継続の可視化、[Issue #258](https://github.com/ConniConni/torebu/issues/258)） | 順位ではなく「自分がどの段階にいるか」を見せる非順位の要素。直近28日にセットがある日数（`workouts.ts`の`countDaysWithSets`と同じ「セットが1件以上ある日＝workout」の数え方。メモのみ・ソフトデリート済みworkoutは含めない）を`none`（0日）/`bronze`（1日〜）/`silver`（7日〜）/`gold`（18日〜）の4段階に変換する。直近28日という窓は②ホーム・⑨マイページの期間別サマリーと同じ定義に揃えている。種目には依存しないグループ全体の指標のため、公式種目フィルタはかけない（自重種目・カスタム種目のセットでもカウントする） |
+| `GET /groups/:id/ranking/default-exercise` | グループのアクティブメンバー全員の**直近28日間**（`attendanceStamp`と同じ窓）のセット数を公式種目ごとに集計し、最多の種目を返す。同数のタイは`defaultSortOrder`昇順（`null`は最後）→名前昇順で解決する（`GET /exercises`の表示順ロジックと同じ考え方）。該当するセットが無ければ`exerciseId: null` |
 | `GET /notifications` | 対象は**自分の記録（`type: reaction`/`comment`）**、または**自分もコメントしたことがある記録に他の人がコメントしたとき（`type: comment_reply`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)）**。`target`には表示用にworkoutを要約した情報（`performedAt`・先頭の種目名`exerciseName`・種目数`exerciseCount`）に加え、リンク先解決用の`groupId`（actorと自分が現在も同席しているアクティブなグループ、無ければ`null`）を含める。要約は**取得時点の現在の状態**を都度引き直したもので、通知作成時点のスナップショットではない（記録を後から編集すると通知側の表示も追従する）。**`type: member_joined`**（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）は`target: { type: 'group', groupId, groupName }`を返す。作成から5分経つまで返さず、表示時点でグループが削除されておらず参加者・受信者の両方が今もそのグループのアクティブなメンバーである場合のみ返す（受信者が退会したグループの参加通知は見えない）。**`type: personal_best`**（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）は`target: { type: 'personal_best', workoutId, groupId, performedAt, exerciseId, exerciseName, weightKg }`を返す。`weightKg`・`exerciseName`は取得時点の値（その記録のその種目の現在の最大重量）。作成から5分経つまで返さず、表示時点で「現在の最大重量 ＞ `payload.previousBestKg`」かつ受信者と行為者に共通のアクティブなグループがある場合のみ返す（`groupId`は常にある）。**`type: milestone`**（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）は`target: { type: 'milestone', workoutId, groupId, performedAt, days }`（`days`は`payload`の値をそのまま使う）、**`type: comeback`**は`target: { type: 'comeback', workoutId, groupId, performedAt }`を返す。どちらも作成から5分経つまで返さず、記録が削除されていない・受信者と行為者に共通のアクティブなグループがあることを確認する。この判定は`unread-count`・`read`と共通（`findVisibleNotifications`関数、§3-1の実装メモ参照） |
 
 ---

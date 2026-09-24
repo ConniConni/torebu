@@ -53,16 +53,28 @@ interface GroupWorkout {
 
 type RankingPeriod = 'week' | 'month' | 'all'
 
+// 直近28日にセットがある日数を4段階に変換したスタンプ(backend/src/routes/groups.tsの
+// attendanceStamp参照)。順位ではなく「自分がどの段階にいるか」を見せる、参加・継続の可視化
+type AttendanceStamp = 'none' | 'bronze' | 'silver' | 'gold'
+
 interface GroupRankingEntry {
   userId: string
   displayName: string
   totalVolumeKg: number
+  daysTrained: number
+  attendanceStamp: AttendanceStamp
   rank: number
 }
 
 interface GroupRanking {
   period: RankingPeriod
+  // 指定した種目の種目別ランキングのときは種目ID、合計挙上重量ランキングのときはnull
+  exerciseId: string | null
   ranking: GroupRankingEntry[]
+}
+
+interface GroupRankingDefaultExercise {
+  exerciseId: string | null
 }
 
 interface WorkoutComment {
@@ -129,9 +141,20 @@ export function useGroups() {
     return await requestFetch<GroupWorkout[]>(`/api/groups/${id}/workouts`)
   }
 
-  // ランキング(Phase4)。週間/月間/通算はタブ切り替えのたびに都度取得し直す
-  async function fetchGroupRanking(id: string, period: RankingPeriod) {
-    return await requestFetch<GroupRanking>(`/api/groups/${id}/ranking`, { query: { period } })
+  // ランキング(Phase4)。週間/月間/通算・種目セレクタの切り替えのたびに都度取得し直す。
+  // exerciseIdを指定すると、その種目だけの挙上重量に絞った種目別ランキングになる
+  async function fetchGroupRanking(id: string, period: RankingPeriod, exerciseId?: string | null) {
+    return await requestFetch<GroupRanking>(`/api/groups/${id}/ranking`, {
+      query: { period, ...(exerciseId ? { exerciseId } : {}) },
+    })
+  }
+
+  // 種目別ランキングを開いたときに最初に選択する種目(グループ内で直近28日に最も使われている
+  // 公式種目)。該当する記録が無ければexerciseId: nullが返る
+  async function fetchGroupRankingDefaultExercise(id: string) {
+    return await requestFetch<GroupRankingDefaultExercise>(
+      `/api/groups/${id}/ranking/default-exercise`,
+    )
   }
 
   // いいね(Phase4)。対象はworkout単体のためgroupsではなくworkoutsのエンドポイントを叩く
@@ -197,6 +220,7 @@ export function useGroups() {
     fetchGroupDetail,
     fetchGroupWorkouts,
     fetchGroupRanking,
+    fetchGroupRankingDefaultExercise,
     likeWorkout,
     unlikeWorkout,
     fetchComments,
@@ -218,6 +242,8 @@ export type {
   GroupWorkoutSet,
   GroupRanking,
   GroupRankingEntry,
+  GroupRankingDefaultExercise,
   RankingPeriod,
+  AttendanceStamp,
   WorkoutComment,
 }
