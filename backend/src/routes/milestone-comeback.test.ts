@@ -372,6 +372,19 @@ describe('C2 久しぶりの復帰', () => {
 
     expect(res.body.achievements.comeback).toBe(false)
   })
+
+  it('14日以内の記録でも削除済みなら無視して判定する(comebackを返す)', async () => {
+    const deleted = await createPastDayWithSet(shiftDateString(today, -10))
+    await prisma.workout.update({ where: { id: deleted.id }, data: { deletedAt: new Date() } })
+    // 削除済みの記録を除くと、範囲外(-20日)の記録しか残らない
+    await createPastDayWithSet(shiftDateString(today, -20))
+    const agent = await login(lifterEmail)
+    const workoutId = await startWorkout(agent, today)
+
+    const res = await addSet(agent, workoutId)
+
+    expect(res.body.achievements.comeback).toBe(true)
+  })
 })
 
 describe('comeback通知の表示', () => {
@@ -409,6 +422,37 @@ describe('comeback通知の表示', () => {
     await shiftNotificationsToPast('comeback', 10)
 
     const res = await login(mateEmail).then((agent) => agent.get('/notifications'))
+
+    expect(res.body).toHaveLength(0)
+  })
+
+  it('共通のアクティブなグループが無いメンバーには表示しない', async () => {
+    await achieveComeback()
+    await shiftNotificationsToPast('comeback', 10)
+    await prisma.groupMember.update({
+      where: { groupId_userId: { groupId, userId: mateId } },
+      data: { leftAt: new Date() },
+    })
+
+    const res = await login(mateEmail).then((agent) => agent.get('/notifications'))
+
+    expect(res.body).toHaveLength(0)
+  })
+
+  it('グループのメンバー以外には通知の行があっても表示しない', async () => {
+    const { workoutId } = await achieveComeback()
+    await prisma.notification.create({
+      data: {
+        recipientId: outsiderId,
+        actorId: lifterId,
+        type: 'comeback',
+        targetType: 'workout',
+        targetId: workoutId,
+        createdAt: new Date(Date.now() - 10 * 60 * 1000),
+      },
+    })
+
+    const res = await login(outsiderEmail).then((agent) => agent.get('/notifications'))
 
     expect(res.body).toHaveLength(0)
   })
