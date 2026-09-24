@@ -4,5 +4,6 @@ Disallow: /workouts
 Disallow: /stats
 Disallow: /routines
 Disallow: /notifications
+Disallow: /mypage
 
 Sitemap: https://torebu-7gf1.vercel.app/sitemap.xml

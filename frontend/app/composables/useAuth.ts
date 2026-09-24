@@ -33,10 +33,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_request: '入力内容を確認してください',
   email_already_registered: 'このメールアドレスは既に登録されています',
   invalid_credentials: 'メールアドレスまたはパスワードが正しくありません',
-  invalid_or_expired_token: 'リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください',
+  invalid_or_expired_token:
+    'リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください',
+  invalid_current_password: '現在のパスワードが正しくありません',
+  same_as_current_password: '現在と異なるパスワードを入力してください',
 }
 
 export function authErrorMessage(error: unknown): string {
+  // レート制限（express-rate-limit）の429はエラーコードを返さないため、ステータスで判定する
+  if ((error as { statusCode?: number })?.statusCode === 429) {
+    return '試行回数が上限に達しました。しばらく時間をおいて再度お試しください'
+  }
   const code = (error as { data?: { error?: string } })?.data?.error
   return (code && ERROR_MESSAGES[code]) || '通信に失敗しました。時間をおいて再度お試しください'
 }
@@ -92,5 +99,22 @@ export function useAuth() {
     await $fetch('/api/auth/password-resets', { method: 'POST', body: { token, password } })
   }
 
-  return { user, fetchMe, register, login, logout, requestPasswordReset, resetPassword }
+  // ログイン中のパスワード変更（Issue #247）。変更後もログイン状態は維持され、userも変わらない
+  async function changePassword(currentPassword: string, newPassword: string) {
+    await $fetch('/api/auth/password-changes', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    })
+  }
+
+  return {
+    user,
+    fetchMe,
+    register,
+    login,
+    logout,
+    requestPasswordReset,
+    resetPassword,
+    changePassword,
+  }
 }
