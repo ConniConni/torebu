@@ -402,6 +402,19 @@ function recentWindowStart(now: Date): Date {
   return start
 }
 
+// 参加・継続の可視化(非順位)用のスタンプ段階。順位ではなく「自分がどの段階にいるか」に焦点が
+// 移るよう、直近28日の実日数を生の数字ではなく3段階のスタンプに変換して見せる
+// (backlog.md「通知の種類の拡張」で決めた『途切れを責めず積み上げを祝う』方針と揃える)。
+// 色分けは表彰台(MEDAL_COLORS、frontend/app/pages/groups/[id]/ranking.vue)の金・銀・銅を流用する
+type AttendanceStamp = 'none' | 'bronze' | 'silver' | 'gold'
+
+function attendanceStamp(daysTrained: number): AttendanceStamp {
+  if (daysTrained >= 18) return 'gold' // 週4日超のペース
+  if (daysTrained >= 7) return 'silver' // 週1〜2日程度のペース
+  if (daysTrained >= 1) return 'bronze'
+  return 'none'
+}
+
 const rankingPeriodSchema = z.object({
   period: z.enum(['week', 'month', 'all']).default('week'),
   exerciseId: z.string().uuid().optional(),
@@ -496,13 +509,35 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
     volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * set.reps)
   }
 
+  // 参加・継続の可視化用に、種目・期間タブとは独立して「直近28日にセットがある日数」を集計する
+  // (workouts.tsのcountDaysWithSetsと同じ「セットが1件以上ある日=workout」の数え方。
+  // 種目には依存しないグループ全体のトレ日数のため、公式種目フィルタもかけない)
+  const attendanceCounts = await prisma.workout.groupBy({
+    by: ['userId'],
+    where: {
+      userId: { in: memberIds },
+      deletedAt: null,
+      performedAt: { gte: recentWindowStart(new Date()) },
+      sets: { some: {} },
+    },
+    _count: { _all: true },
+  })
+  const daysTrainedByUserId = new Map<string, number>(
+    attendanceCounts.map((c) => [c.userId, c._count._all]),
+  )
+
   // 合計挙上重量の降順。同点はdisplayNameで安定した順序にする(表示上の並びをブレさせないため)
   const sorted = members
-    .map((m) => ({
-      userId: m.userId,
-      displayName: m.user.displayName,
-      totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
-    }))
+    .map((m) => {
+      const daysTrained = daysTrainedByUserId.get(m.userId) ?? 0
+      return {
+        userId: m.userId,
+        displayName: m.user.displayName,
+        totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
+        daysTrained,
+        attendanceStamp: attendanceStamp(daysTrained),
+      }
+    })
     .sort((a, b) => b.totalVolumeKg - a.totalVolumeKg || a.displayName.localeCompare(b.displayName))
 
   // 同着は同順位、次の順位は人数分スキップする方式(例: 1,2,2,4)

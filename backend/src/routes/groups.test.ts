@@ -810,8 +810,22 @@ describe('GET /groups/:id/ranking', () => {
       period: 'all',
       exerciseId: null,
       ranking: [
-        { userId: memberId, displayName: 'グループテストメンバー', totalVolumeKg: 800, rank: 1 },
-        { userId: ownerId, displayName: 'グループテストオーナー', totalVolumeKg: 500, rank: 2 },
+        {
+          userId: memberId,
+          displayName: 'グループテストメンバー',
+          totalVolumeKg: 800,
+          daysTrained: 1,
+          attendanceStamp: 'bronze',
+          rank: 1,
+        },
+        {
+          userId: ownerId,
+          displayName: 'グループテストオーナー',
+          totalVolumeKg: 500,
+          daysTrained: 1,
+          attendanceStamp: 'bronze',
+          rank: 2,
+        },
       ],
     })
   })
@@ -889,8 +903,22 @@ describe('GET /groups/:id/ranking', () => {
       period: 'all',
       exerciseId: officialExerciseId,
       ranking: [
-        { userId: ownerId, displayName: 'グループテストオーナー', totalVolumeKg: 500, rank: 1 },
-        { userId: memberId, displayName: 'グループテストメンバー', totalVolumeKg: 0, rank: 2 },
+        {
+          userId: ownerId,
+          displayName: 'グループテストオーナー',
+          totalVolumeKg: 500,
+          daysTrained: 1,
+          attendanceStamp: 'bronze',
+          rank: 1,
+        },
+        {
+          userId: memberId,
+          displayName: 'グループテストメンバー',
+          totalVolumeKg: 0,
+          daysTrained: 0,
+          attendanceStamp: 'none',
+          rank: 2,
+        },
       ],
     })
 
@@ -912,6 +940,77 @@ describe('GET /groups/:id/ranking', () => {
       .get(`/groups/${group.id}/ranking`)
       .query({ period: 'all', exerciseId: '00000000-0000-0000-0000-000000000000' })
     expect(missingRes.status).toBe(404)
+  })
+
+  it('直近28日のトレ日数に応じてattendanceStampが段階的に変わる(none/bronze/silver/gold)', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+    const thirdEmail = 'groups-ranking-attendance-third@example.com'
+    const passwordHash = await bcrypt.hash(testPassword, 12)
+    const thirdUser = await prisma.user.create({
+      data: { email: thirdEmail, passwordHash, displayName: '三人目' },
+    })
+    await addMember(group.id, thirdUser.id)
+
+    // ownerは直近28日のうち7日(silverの下限)、memberは18日(goldの下限)トレした状態を作る。
+    // outsiderとの混同を避けるため種目・重量は使い回してよい(このテストは日数だけを見る)
+    async function createWorkoutWithSet(userId: string, daysAgo: number) {
+      const performedAt = new Date()
+      performedAt.setHours(0, 0, 0, 0)
+      performedAt.setDate(performedAt.getDate() - daysAgo)
+      const workout = await prisma.workout.create({ data: { userId, performedAt } })
+      await prisma.workoutSet.create({
+        data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 1, weightKg: 1 },
+      })
+    }
+    for (let i = 0; i < 7; i++) await createWorkoutWithSet(ownerId, i)
+    for (let i = 0; i < 18; i++) await createWorkoutWithSet(memberId, i)
+    // thirdUserは記録なし(none)
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, daysTrained: 7, attendanceStamp: 'silver' }),
+        expect.objectContaining({ userId: memberId, daysTrained: 18, attendanceStamp: 'gold' }),
+        expect.objectContaining({ userId: thirdUser.id, daysTrained: 0, attendanceStamp: 'none' }),
+      ]),
+    )
+
+    await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId] } } })
+    await prisma.user.delete({ where: { id: thirdUser.id } })
+  })
+
+  it('attendanceStampは種目セレクタ・期間タブの絞り込みに影響されない(グループ全体のトレ日数)', async () => {
+    const group = await createGroup()
+    const otherOfficialExercise = await prisma.exercise.create({
+      data: { name: 'スクワット', muscleGroup: 'legs' },
+    })
+
+    // 直近28日以内・カスタム種目のみのworkoutでも「セットがある日」としてattendanceには数える
+    const today = new Date()
+    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: customExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    // 種目セレクタで別の公式種目(挙上重量は0kgになる)に絞っても、attendanceStampは変わらない
+    const res = await agent
+      .get(`/groups/${group.id}/ranking`)
+      .query({ period: 'week', exerciseId: otherOfficialExercise.id })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, totalVolumeKg: 0, daysTrained: 1, attendanceStamp: 'bronze' }),
+      ]),
+    )
+
+    await prisma.workout.delete({ where: { id: workout.id } })
+    await prisma.exercise.delete({ where: { id: otherOfficialExercise.id } })
   })
 })
 
