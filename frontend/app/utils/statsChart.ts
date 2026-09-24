@@ -4,6 +4,8 @@
 // グラフ描画コード（vue-chartjs）から使う純粋関数として切り出し、ここだけVitestでテストする
 // （CLAUDE.mdの優先順位に沿い、コンポーネント自体の単体テストは見送る）
 
+import type { ChartDataset } from 'chart.js'
+
 export interface DatedValue {
   date: string // YYYY-MM-DD
   value: number
@@ -11,7 +13,13 @@ export interface DatedValue {
 
 export interface LineChartData {
   labels: string[]
-  datasets: [{ label: string; data: number[] }]
+  // 線の色はダークモード時だけstats.vueの`withThemedColor`が上書きする（canvas描画のためCSSの
+  // `dark:`が効かない）。ライトでは未指定のままChart.jsの既定色で描かせる
+  datasets: [
+    { label: string; data: number[] } & Partial<
+      Pick<ChartDataset<'line'>, 'borderColor' | 'backgroundColor'>
+    >,
+  ]
 }
 
 // 日付ラベルは軸が横に長くなりがちなため年を省いた"M/D"表記にする
