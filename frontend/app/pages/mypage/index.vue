@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // ⑨マイページ（Issue #237）。ユーザー情報の集約・サポート情報への導線をまとめる画面。
-// グループPro・ダークモード（アプリの見た目）、パスワード変更（アカウント）は
-// Stripe連携・新規APIの実装がそれぞれ別Issueになるため、今回は「準備中」の非活性表示のみ置く
+// グループPro・ダークモード（アプリの見た目）はStripe連携の実装が別Issueになるため、
+// 今回は「準備中」の非活性表示のみ置く
 // （押しても何も起きない状態を避けつつ、モックの構成には合わせる。docs/backlog.md
 // 「マイページ（⑨）の新設・設計」参照）
 definePageMeta({ middleware: 'auth' })
@@ -160,22 +160,17 @@ async function onLogout() {
         </div>
       </div>
 
-      <!-- アカウント（パスワード変更）。現在ログイン中にその場で変更するAPIが無く新規実装が
-           必要なため、別Issueに切り出す。それまでは「準備中」の非活性表示にする（docs/backlog.md参照） -->
+      <!-- アカウント（パスワード変更、Issue #247） -->
       <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
         <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">アカウント</p>
-        <div
-          class="flex items-center gap-3 rounded border border-gray-100 dark:border-white/5 px-3 py-2"
+        <NuxtLink
+          to="/mypage/password"
+          class="flex items-center gap-3 py-2 text-sm text-gray-700 dark:text-ink hover:text-brand-700 dark:hover:text-accent"
         >
-          <LockClosedIcon class="h-5 w-5 shrink-0 text-gray-300 dark:text-white/20" />
-          <div class="min-w-0 flex-1">
-            <p class="text-sm text-gray-400 dark:text-muted">パスワードを変更</p>
-          </div>
-          <span
-            class="shrink-0 rounded bg-gray-100 dark:bg-white/5 px-2 py-1 text-xs text-gray-500 dark:text-muted"
-            >準備中</span
-          >
-        </div>
+          <LockClosedIcon class="h-5 w-5 shrink-0 text-brand-500 dark:text-accent" />
+          <span class="flex-1">パスワードを変更</span>
+          <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-300 dark:text-white/20" />
+        </NuxtLink>
       </div>
 
       <!-- サポート・情報（バージョン表示は持たない。docs/backlog.md参照） -->
