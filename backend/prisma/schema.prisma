@@ -278,6 +278,7 @@ enum NotificationType {
   topic // 未使用(イチオシこだわり共有は未実装)
   ranking // 未使用(ランキングは未実装)
   exercise_promoted // 未使用(カスタム種目の公式昇格は未実装)
+  member_joined // グループへの新メンバー参加(再参加含む)。宛先はそのグループの他のアクティブなメンバー(Issue #249)
 }
 
 enum NotificationTargetType {
@@ -286,10 +287,11 @@ enum NotificationTargetType {
   topic_post // 未使用
   topic // 未使用
   exercise // 未使用
-  group // 未使用
+  group // member_joined(Issue #249)
 }
 
-// Phase4通知(#144)。今回発行するのはtype: reaction/commentのみ、target_typeはworkoutのみ。
+// Phase4通知(#144)。発行するのはtype: reaction/comment/comment_reply(target_type: workout)と
+// member_joined(target_type: group。Issue #249)。
 // 残りのtype/target_typeは将来のランキング・イチオシこだわり共有・種目昇格向けにdocs/schema.mdの
 // 設計をそのまま反映しているが、今回のスコープでは発行しない。target_idはFK制約なし(target_typeに
 // よって参照先テーブルが変わるため。reactions/commentsと同じ方針)
