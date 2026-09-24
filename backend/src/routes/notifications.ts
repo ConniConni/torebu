@@ -14,7 +14,7 @@ const IMMEDIATE_TYPES = ['reaction', 'comment', 'comment_reply'] as const
 // 作成から一定時間経つまで表示しない種類(Issue #249。docs/backlog.md「通知の種類の拡張」)。
 // 誤操作(参加してすぐ退会する等)で通知が出ないよう、通知自体は即時に作り、表示側で遅らせる。
 // 表示時には条件がまだ成り立っているかを確認し直す(下のfindVisibleNotifications参照)
-const DELAYED_TYPES = ['member_joined'] as const
+const DELAYED_TYPES = ['member_joined', 'personal_best'] as const
 const DISPLAY_DELAY_MS = 5 * 60 * 1000
 
 // 通知1件を表示するための対象記録の要約(日付・種目名の先頭1件・種目数)。
@@ -102,6 +102,69 @@ async function resolveMemberJoinedTargets(
   }
 }
 
+// personal_best通知(Issue #253)のpayload。作成時点の種目IDと更新前のベスト(kg)
+function parsePersonalBestPayload(payload: NotificationModel['payload']) {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null
+  const { exerciseId, previousBestKg } = payload as Record<string, unknown>
+  if (typeof exerciseId !== 'string' || typeof previousBestKg !== 'number') return null
+  return { exerciseId, previousBestKg }
+}
+
+// personal_best通知の表示内容を取得時点の状態で引き直す(記録の日付・種目名・その記録のその種目の現在の最大重量)。
+// 記録が削除済み・行為者の記録でない・その種目のセットが無くなった(自重だけになった)場合は、キーがMapに入らない
+async function resolvePersonalBestTargets(
+  notifications: Pick<NotificationModel, 'actorId' | 'targetId' | 'payload'>[],
+) {
+  const summaryByKey = new Map<
+    string,
+    { performedAt: string; exerciseName: string; weightKg: number }
+  >()
+  const payloads = notifications
+    .map((n) => ({ n, payload: parsePersonalBestPayload(n.payload) }))
+    .filter((p) => p.payload !== null)
+  if (payloads.length === 0) return summaryByKey
+
+  const workoutIds = [...new Set(payloads.map((p) => p.n.targetId))]
+  const exerciseIds = [...new Set(payloads.map((p) => p.payload!.exerciseId))]
+  const [workouts, maxWeights, exercises] = await Promise.all([
+    prisma.workout.findMany({
+      where: { id: { in: workoutIds }, deletedAt: null },
+      select: { id: true, userId: true, performedAt: true },
+    }),
+    prisma.workoutSet.groupBy({
+      by: ['workoutId', 'exerciseId'],
+      where: { workoutId: { in: workoutIds }, exerciseId: { in: exerciseIds } },
+      _max: { weightKg: true },
+    }),
+    prisma.exercise.findMany({
+      where: { id: { in: exerciseIds } },
+      select: { id: true, name: true },
+    }),
+  ])
+  const workoutById = new Map(workouts.map((w) => [w.id, w]))
+  const maxWeightByKey = new Map(
+    maxWeights
+      .filter((m) => m._max.weightKg !== null)
+      .map((m) => [`${m.workoutId}:${m.exerciseId}`, Number(m._max.weightKg)]),
+  )
+  const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]))
+
+  for (const { n, payload } of payloads) {
+    const key = `${n.targetId}:${payload!.exerciseId}`
+    const workout = workoutById.get(n.targetId)
+    const weightKg = maxWeightByKey.get(key)
+    const exerciseName = exerciseNameById.get(payload!.exerciseId)
+    if (!workout || workout.userId !== n.actorId || weightKg === undefined || !exerciseName)
+      continue
+    summaryByKey.set(key, {
+      performedAt: workout.performedAt.toISOString().slice(0, 10),
+      exerciseName,
+      weightKg,
+    })
+  }
+  return summaryByKey
+}
+
 type WorkoutTarget = {
   type: 'workout'
   workoutId: string
@@ -111,22 +174,31 @@ type WorkoutTarget = {
   exerciseCount: number
 }
 type GroupTarget = { type: 'group'; groupId: string; groupName: string }
+type PersonalBestTarget = {
+  type: 'personal_best'
+  workoutId: string
+  groupId: string
+  performedAt: string
+  exerciseId: string
+  exerciseName: string
+  weightKg: number
+}
 
 // 「表示してよい通知か」の共通判定(Issue #249)。一覧・未読件数・一括既読の3つのAPIで使い、
 // 3つの結果(一覧に出る通知・バッジの件数・既読になる通知)がずれないようにする。
 // - 遅延対象の種類は、作成から5分経ったものだけをDBの取得条件で絞る(アプリ側で除外すると、
 //   直近50件の枠を未表示の通知が消費してしまうため)
 // - 取得後、種類ごとに対象がまだ有効かを確認し直し、無効なものは除外する
-//   (記録が削除済み／member_joinedの参加者・受信者が退会済み・グループが削除済み)
+//   (記録が削除済み／member_joinedの参加者・受信者が退会済み・グループが削除済み／
+//   personal_bestの自己ベストが取り消された・行為者と共通のアクティブなグループが無くなった)
 async function findVisibleNotifications(userId: string) {
   const notifications = await prisma.notification.findMany({
     where: {
       recipientId: userId,
       OR: [
-        { type: { in: [...IMMEDIATE_TYPES] }, targetType: 'workout' },
+        { type: { in: [...IMMEDIATE_TYPES] } },
         {
           type: { in: [...DELAYED_TYPES] },
-          targetType: 'group',
           createdAt: { lte: new Date(Date.now() - DISPLAY_DELAY_MS) },
         },
       ],
@@ -136,26 +208,38 @@ async function findVisibleNotifications(userId: string) {
     include: { actor: { select: { id: true, displayName: true } } },
   })
 
-  const workoutNotifications = notifications.filter((n) => n.targetType === 'workout')
-  const groupNotifications = notifications.filter((n) => n.targetType === 'group')
-
-  const summaryByWorkoutId = await summarizeWorkoutTargets(
-    workoutNotifications.map((n) => n.targetId),
+  // 種類ごとに期待する対象(targetType)と一致するものだけを扱う
+  const workoutNotifications = notifications.filter(
+    (n) => IMMEDIATE_TYPES.some((t) => t === n.type) && n.targetType === 'workout',
   )
-  const workoutActorIds = [
-    ...new Set(workoutNotifications.map((n) => n.actorId).filter((id) => id !== null)),
+  const memberJoinedNotifications = notifications.filter(
+    (n) => n.type === 'member_joined' && n.targetType === 'group',
+  )
+  const personalBestNotifications = notifications.filter(
+    (n) => n.type === 'personal_best' && n.targetType === 'workout',
+  )
+
+  const actorIds = [
+    ...new Set(
+      [...workoutNotifications, ...personalBestNotifications]
+        .map((n) => n.actorId)
+        .filter((id) => id !== null),
+    ),
   ]
-  const [sharedGroupIdByActorId, memberJoined] = await Promise.all([
-    findSharedGroupIds(userId, workoutActorIds),
-    resolveMemberJoinedTargets(userId, groupNotifications),
-  ])
+  const [summaryByWorkoutId, sharedGroupIdByActorId, memberJoined, personalBestByKey] =
+    await Promise.all([
+      summarizeWorkoutTargets(workoutNotifications.map((n) => n.targetId)),
+      findSharedGroupIds(userId, actorIds),
+      resolveMemberJoinedTargets(userId, memberJoinedNotifications),
+      resolvePersonalBestTargets(personalBestNotifications),
+    ])
 
   const visible: {
     notification: (typeof notifications)[number]
-    target: WorkoutTarget | GroupTarget
+    target: WorkoutTarget | GroupTarget | PersonalBestTarget
   }[] = []
   for (const n of notifications) {
-    if (n.targetType === 'workout') {
+    if (workoutNotifications.includes(n)) {
       // 対象のworkoutが削除済み・存在しない通知は表示から除外する(#144のスコープでは通知自体の掃除は行わない)
       const summary = summaryByWorkoutId.get(n.targetId)
       if (!summary) continue
@@ -171,7 +255,7 @@ async function findVisibleNotifications(userId: string) {
           ...summary,
         },
       })
-    } else {
+    } else if (memberJoinedNotifications.includes(n)) {
       const groupName = memberJoined.groupNameById.get(n.targetId)
       if (
         groupName === undefined ||
@@ -182,6 +266,23 @@ async function findVisibleNotifications(userId: string) {
         continue
       }
       visible.push({ notification: n, target: { type: 'group', groupId: n.targetId, groupName } })
+    } else if (personalBestNotifications.includes(n)) {
+      // 他人の記録についての通知のため、いいね・コメントのような自分の記録画面へのフォールバックは無い。
+      // 行為者と今も共通のアクティブなグループがあり、自己ベストがまだ成り立っている場合のみ表示する
+      const payload = parsePersonalBestPayload(n.payload)
+      const groupId = n.actorId ? sharedGroupIdByActorId.get(n.actorId) : undefined
+      const summary = payload && personalBestByKey.get(`${n.targetId}:${payload.exerciseId}`)
+      if (!payload || !groupId || !summary || summary.weightKg <= payload.previousBestKg) continue
+      visible.push({
+        notification: n,
+        target: {
+          type: 'personal_best',
+          workoutId: n.targetId,
+          groupId,
+          exerciseId: payload.exerciseId,
+          ...summary,
+        },
+      })
     }
   }
   return visible
