@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Phase4: 通知一覧（#144）。自分の記録への「いいね」「コメント」の通知を表示する。
+// Phase4: 通知一覧（#144）。自分の記録への「いいね」「コメント」、グループへの新メンバー参加（#249）の
+// 通知を表示する。種類ごとの文面・アイコン・遷移先は下の関数で出し分ける。
 // 開いた時点で自動的に全件既読にする（個別の既読トグルは設けない。docs/spec.mdの実装メモ参照）
 definePageMeta({ middleware: 'auth' })
 
@@ -27,23 +28,28 @@ await load()
 
 function notificationText(n: AppNotification) {
   const actorName = n.actor?.displayName ?? '(退会済みのメンバー)'
+  if (n.type === 'member_joined') return `${actorName}さんがグループに参加しました`
   if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
   if (n.type === 'comment_reply')
     return `${actorName}さんが、あなたもコメントした記録にコメントしました`
   return `${actorName}さんがあなたの記録にコメントしました`
 }
 
+// 文面の下に出す補足（記録の通知は対象の記録の日付・種目、グループの通知はグループ名）
 function targetSummary(n: AppNotification) {
-  const { exerciseName, exerciseCount } = n.target
-  if (!exerciseName) return '記録内容はまだありません'
+  if (n.target.type === 'group') return n.target.groupName
+  const { performedAt, exerciseName, exerciseCount } = n.target
+  if (!exerciseName) return `${performedAt}の記録・記録内容はまだありません`
   const rest = exerciseCount - 1
-  return rest > 0 ? `${exerciseName} 他${rest}種目` : exerciseName
+  return `${performedAt}の記録・${rest > 0 ? `${exerciseName} 他${rest}種目` : exerciseName}`
 }
 
+// 新メンバー参加はグループ画面へ遷移する。
 // いいね・コメントはグループの記録フィード上でのみ見える(自分の記録画面には表示されない)ため、
 // 遷移先はフィード側を優先する。actorが既に共通のグループを退会している等でgroupIdが無い場合のみ、
 // 自分の記録画面（/workouts/new）にフォールバックする
 function targetLink(n: AppNotification) {
+  if (n.target.type === 'group') return `/groups/${n.target.groupId}`
   if (n.target.groupId) {
     return `/groups/${n.target.groupId}/workouts?workout=${n.target.workoutId}`
   }
@@ -94,6 +100,13 @@ function targetLink(n: AppNotification) {
                 n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
               "
             />
+            <GroupIcon
+              v-else-if="n.type === 'member_joined'"
+              class="mt-0.5 h-4.5 w-4.5 shrink-0"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+              "
+            />
             <CommentIcon
               v-else
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
@@ -109,7 +122,7 @@ function targetLink(n: AppNotification) {
                 {{ notificationText(n) }}
               </p>
               <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
-                {{ n.target.performedAt }}の記録・{{ targetSummary(n) }}
+                {{ targetSummary(n) }}
               </p>
               <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
                 {{ formatRelativeTime(n.createdAt) }}

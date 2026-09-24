@@ -3,7 +3,8 @@ interface NotificationActor {
   displayName: string
 }
 
-interface NotificationTarget {
+// いいね・コメント(reaction/comment/comment_reply)の対象。記録(workout)
+interface WorkoutNotificationTarget {
   type: 'workout'
   workoutId: string
   // いいね・コメントが見えるグループの記録フィードへのリンク用。actorと自分が現在も同席している
@@ -14,15 +15,24 @@ interface NotificationTarget {
   exerciseCount: number
 }
 
+// 新メンバー参加(member_joined)の対象。遷移先はグループ画面(Issue #249)
+interface GroupNotificationTarget {
+  type: 'group'
+  groupId: string
+  groupName: string
+}
+
 // 型名`Notification`はブラウザ標準のWeb Notifications APIとグローバルに衝突するため`AppNotification`にする
 export interface AppNotification {
   id: string
   // comment_reply: 自分の記録ではないが、自分も過去にコメントしたworkoutに別の人がコメントしたときの通知(#149)
-  type: 'reaction' | 'comment' | 'comment_reply'
+  // member_joined: 自分が所属するグループに誰かが参加(再参加含む)したときの通知(#249)。
+  //   作成から5分経つまでAPIが返さない(表示の遅延はバックエンド側で行う)
+  type: 'reaction' | 'comment' | 'comment_reply' | 'member_joined'
   isRead: boolean
   createdAt: string
   actor: NotificationActor | null
-  target: NotificationTarget
+  target: WorkoutNotificationTarget | GroupNotificationTarget
 }
 
 // Phase4: 通知(#144)。ポーリングはせず、画面遷移・読み込み時にAPIを叩くだけの方式
