@@ -19,8 +19,10 @@ const { fetchGroupRanking, fetchGroupRankingDefaultExercise } = useGroups()
 const { exercises, fetchExercises } = useExercises()
 const { user } = useAuth()
 
-// 指標: 合計挙上重量 or 種目別。種目別に切り替えたときだけ種目一覧・デフォルト種目を取得する
-type Metric = 'total' | 'exercise'
+// 指標: 合計挙上重量 or 種目別 or 継続（非順位）。種目別に切り替えたときだけ種目一覧・
+// デフォルト種目を取得する。継続はGET /groups/:id/rankingが常に返すdaysTrained/attendanceStamp
+// を使い回すだけなので、追加のAPI呼び出しは不要（合計挙上重量の取得時に既に含まれている）
+type Metric = 'total' | 'exercise' | 'attendance'
 const metric = ref<Metric>('total')
 const selectedExerciseId = ref<string | null>(null)
 const officialExercises = computed(() =>
@@ -59,6 +61,7 @@ let exerciseModeLoaded = false
 async function onSelectMetric(next: Metric) {
   if (metric.value === next) return
   metric.value = next
+  if (next === 'attendance') return // 既存のranking.valueをそのまま並べ替えて使うため再取得不要
   if (next === 'exercise' && !exerciseModeLoaded) {
     exerciseModeLoaded = true
     pending.value = true
@@ -69,7 +72,8 @@ async function onSelectMetric(next: Metric) {
       ])
       // グループ内に直近の使用実績が無ければ(defaultExercise.exerciseId === null)、
       // 一覧の先頭(使用回数DESC→名前順、GET /exercisesの既存ソート)にフォールバックする
-      selectedExerciseId.value = defaultExercise.exerciseId ?? officialExercises.value[0]?.id ?? null
+      selectedExerciseId.value =
+        defaultExercise.exerciseId ?? officialExercises.value[0]?.id ?? null
     } catch {
       loadError.value = true
       pending.value = false
@@ -108,6 +112,11 @@ function formatVolume(volumeKg: number): string {
   return volumeKg.toLocaleString('ja-JP')
 }
 
+// 継続タブ用。順位を連想させないよう、rankではなく名前順（あいうえお順）で並べる
+const attendanceSorted = computed(() =>
+  [...(ranking.value ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ja')),
+)
+
 // 1〜3位の金・銀・銅配色。ブランドのオレンジとは別軸の配色にする（事前にモックで承認済み）。
 // bg/textはいずれもWCAG AAのコントラスト比4.5:1以上になる組み合わせを検証して選んでいる
 // （銅は当初bgが暗めで文字を濃くしても読みにくかったため、bg側を明るいテラコッタ寄りに変更した）
@@ -124,12 +133,12 @@ function medalBarClass(rank: number): string {
   return MEDAL_COLORS[rank as 1 | 2 | 3]?.bar ?? ''
 }
 
-// 参加・継続の可視化用スタンプ。表彰台の金・銀・銅と同じ配色・文言を流用していたが、
-// 隣に並ぶ順位バッジ（同じ金銀銅配色）と混同しやすいという指摘を受けて別軸の見た目に変更した
-// （2026-09-24）。ブランドのオレンジ1色の濃淡4段階（bg-brand-100→400→700）で「段階」を表現し、
-// 「順位」を連想させる言葉（金・銀・銅）も使わない。ダークモードは一般UIの慣例
-// （main.cssの`--color-accent`のコメント参照）に合わせ、オレンジではなくアクセント色の
-// 濃淡で表現する。形も順位バッジの丸型（rounded-full）とは変え、角丸の矩形（rounded）にしている
+// 参加・継続の可視化用スタンプ（継続タブ専用）。当初は合計/種目別の一覧に順位バッジと並べて
+// 表示していたが、金・銀・銅の配色・文言が隣の順位バッジ（同じ金銀銅配色）と混同され
+// 「もう一つの順位」に見えるという指摘を受け、順位が存在しない別タブに切り出した（2026-09-24）。
+// タブ自体を分けたことに加え、見た目もブランドのオレンジ1色の濃淡4段階
+// （bg-brand-100→400→700、ダークはアクセント色の濃淡）にし、「順位」を連想させる言葉
+// （金・銀・銅）も使わない
 const ATTENDANCE_STAMP_LABELS: Record<AttendanceStamp, string> = {
   none: '記録なし',
   bronze: 'たまに',
@@ -141,6 +150,11 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
   bronze: 'bg-brand-100 text-brand-700 dark:bg-accent/10 dark:text-accent',
   silver: 'bg-brand-400 text-brand-900 dark:bg-accent/25 dark:text-accent',
   gold: 'bg-brand-700 text-white dark:bg-accent/45 dark:text-surface',
+}
+// 「ハイペース・18日」のように日数を併記する（記録なしのときは0日を添えても意味が無いので省く）
+function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained: number }): string {
+  const label = ATTENDANCE_STAMP_LABELS[entry.attendanceStamp]
+  return entry.attendanceStamp === 'none' ? label : `${label}・${entry.daysTrained}日`
 }
 </script>
 
@@ -179,6 +193,18 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
         >
           種目別
         </button>
+        <button
+          type="button"
+          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+          :class="
+            metric === 'attendance'
+              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+          "
+          @click="onSelectMetric('attendance')"
+        >
+          継続
+        </button>
       </div>
 
       <select
@@ -191,7 +217,10 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
         <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
       </select>
 
-      <div class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent">
+      <div
+        v-if="metric !== 'attendance'"
+        class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent"
+      >
         <button
           v-for="p in PERIODS"
           :key="p.value"
@@ -220,101 +249,135 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
       </p>
 
       <template v-else>
-        <div v-if="top3.length > 0" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <div class="grid grid-cols-3 items-end gap-2">
-            <div
-              v-for="entry in podiumOrder"
-              :key="entry?.userId ?? entry?.rank"
-              class="flex flex-col items-center gap-1.5"
-            >
-              <template v-if="entry">
-                <div
-                  class="flex items-center justify-center rounded-full font-bold tabular-nums"
-                  :class="[
-                    entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm',
-                    medalClasses(entry.rank),
-                  ]"
-                >
-                  {{ entry.rank }}
-                </div>
-                <p class="max-w-[80px] truncate text-xs font-semibold text-gray-900 dark:text-ink">
+        <!-- 継続タブ：順位を持たない別軸の一覧。名前順（あいうえお順）に並べ、
+           各メンバーの直近28日の参加・継続スタンプだけを見せる -->
+        <template v-if="metric === 'attendance'">
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <ul class="flex flex-col">
+              <li
+                v-for="entry in attendanceSorted"
+                :key="entry.userId"
+                class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
+                :class="
+                  entry.userId === user?.id
+                    ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
+                    : ''
+                "
+              >
+                <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
                   {{ entry.displayName }}
-                </p>
-                <p class="text-xs font-bold tabular-nums text-gray-700 dark:text-ink">
-                  {{ formatVolume(entry.totalVolumeKg) }}kg
-                </p>
-                <!-- 実績（合計挙上重量）を1位比の相対的な高さで示す棒。実際の値でこそ意味があるため
+                  <span
+                    v-if="entry.userId === user?.id"
+                    class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                  >
+                    自分
+                  </span>
+                </span>
+                <span
+                  class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                  :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
+                >
+                  {{ attendanceLabel(entry) }}
+                </span>
+              </li>
+            </ul>
+          </div>
+          <p class="text-center text-xs text-gray-400 dark:text-muted">
+            順位ではなく、直近28日にトレーニングした日数の目安です（ハイペース:18日〜
+            コンスタント:7日〜 たまに:1日〜）
+          </p>
+        </template>
+
+        <template v-else>
+          <div v-if="top3.length > 0" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <div class="grid grid-cols-3 items-end gap-2">
+              <div
+                v-for="entry in podiumOrder"
+                :key="entry?.userId ?? entry?.rank"
+                class="flex flex-col items-center gap-1.5"
+              >
+                <template v-if="entry">
+                  <div
+                    class="flex items-center justify-center rounded-full font-bold tabular-nums"
+                    :class="[
+                      entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm',
+                      medalClasses(entry.rank),
+                    ]"
+                  >
+                    {{ entry.rank }}
+                  </div>
+                  <p
+                    class="max-w-[80px] truncate text-xs font-semibold text-gray-900 dark:text-ink"
+                  >
+                    {{ entry.displayName }}
+                  </p>
+                  <p class="text-xs font-bold tabular-nums text-gray-700 dark:text-ink">
+                    {{ formatVolume(entry.totalVolumeKg) }}kg
+                  </p>
+                  <!-- 実績（合計挙上重量）を1位比の相対的な高さで示す棒。実際の値でこそ意味があるため
                      ランクの見た目上の並び(2-1-3)ではなく実測値から高さを都度計算する -->
-                <div
-                  class="w-full rounded-t"
-                  :style="{ height: `${podiumBarHeightPx(entry.totalVolumeKg)}px` }"
-                  :class="medalBarClass(entry.rank)"
-                />
-              </template>
+                  <div
+                    class="w-full rounded-t"
+                    :style="{ height: `${podiumBarHeightPx(entry.totalVolumeKg)}px` }"
+                    :class="medalBarClass(entry.rank)"
+                  />
+                </template>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <ul class="flex flex-col">
-            <li
-              v-for="entry in ranking"
-              :key="entry.userId"
-              class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
-              :class="
-                entry.userId === user?.id
-                  ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
-                  : ''
-              "
-            >
-              <span
-                v-if="entry.rank <= 3"
-                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold tabular-nums"
-                :class="medalClasses(entry.rank)"
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <ul class="flex flex-col">
+              <li
+                v-for="entry in ranking"
+                :key="entry.userId"
+                class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
+                :class="
+                  entry.userId === user?.id
+                    ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
+                    : ''
+                "
               >
-                {{ entry.rank }}
-              </span>
-              <span
-                v-else
-                class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400 dark:text-muted"
-              >
-                {{ entry.rank }}
-              </span>
-              <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
-                {{ entry.displayName }}
                 <span
-                  v-if="entry.userId === user?.id"
-                  class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                  v-if="entry.rank <= 3"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold tabular-nums"
+                  :class="medalClasses(entry.rank)"
                 >
-                  自分
+                  {{ entry.rank }}
                 </span>
-              </span>
-              <!-- 参加・継続の可視化(非順位)。直近28日にセットがある日数を4段階のスタンプで表示する。
-                   角丸の矩形(rounded-full ではない)にして、丸型の順位バッジと形でも区別する -->
-              <span
-                class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
-                :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
-                :title="`直近28日で${entry.daysTrained}日トレーニング`"
-              >
-                {{ ATTENDANCE_STAMP_LABELS[entry.attendanceStamp] }}
-              </span>
-              <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
-                {{ formatVolume(entry.totalVolumeKg)
-                }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
-              </span>
-            </li>
-          </ul>
-        </div>
-        <p class="text-center text-xs text-gray-400 dark:text-muted">
-          <template v-if="metric === 'exercise'">
-            {{ officialExercises.find((e) => e.id === selectedExerciseId)?.name ?? '選択した種目' }}の挙上重量でランキングしています
-          </template>
-          <template v-else> 合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています </template>
-        </p>
-        <p class="text-center text-xs text-gray-400 dark:text-muted">
-          スタンプは順位ではなく、直近28日にトレーニングした日数の目安です（ハイペース:18日〜
-          コンスタント:7日〜 たまに:1日〜）
-        </p>
+                <span
+                  v-else
+                  class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400 dark:text-muted"
+                >
+                  {{ entry.rank }}
+                </span>
+                <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
+                  {{ entry.displayName }}
+                  <span
+                    v-if="entry.userId === user?.id"
+                    class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                  >
+                    自分
+                  </span>
+                </span>
+                <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
+                  {{ formatVolume(entry.totalVolumeKg)
+                  }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <p class="text-center text-xs text-gray-400 dark:text-muted">
+            <template v-if="metric === 'exercise'">
+              {{
+                officialExercises.find((e) => e.id === selectedExerciseId)?.name ?? '選択した種目'
+              }}の挙上重量でランキングしています
+            </template>
+            <template v-else>
+              合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています
+            </template>
+          </p>
+        </template>
       </template>
     </div>
   </div>
