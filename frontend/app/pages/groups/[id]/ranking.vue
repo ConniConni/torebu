@@ -124,19 +124,23 @@ function medalBarClass(rank: number): string {
   return MEDAL_COLORS[rank as 1 | 2 | 3]?.bar ?? ''
 }
 
-// 参加・継続の可視化用スタンプ。順位の表彰台とは別軸の要素だが、色の意味を覚え直させないよう
-// 金・銀・銅と同じ配色を流用する(none=記録なしはニュートラルなグレー)
+// 参加・継続の可視化用スタンプ。表彰台の金・銀・銅と同じ配色・文言を流用していたが、
+// 隣に並ぶ順位バッジ（同じ金銀銅配色）と混同しやすいという指摘を受けて別軸の見た目に変更した
+// （2026-09-24）。ブランドのオレンジ1色の濃淡4段階（bg-brand-100→400→700）で「段階」を表現し、
+// 「順位」を連想させる言葉（金・銀・銅）も使わない。ダークモードは一般UIの慣例
+// （main.cssの`--color-accent`のコメント参照）に合わせ、オレンジではなくアクセント色の
+// 濃淡で表現する。形も順位バッジの丸型（rounded-full）とは変え、角丸の矩形（rounded）にしている
 const ATTENDANCE_STAMP_LABELS: Record<AttendanceStamp, string> = {
   none: '記録なし',
-  bronze: '銅',
-  silver: '銀',
-  gold: '金',
+  bronze: 'たまに',
+  silver: 'コンスタント',
+  gold: 'ハイペース',
 }
 const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
   none: 'bg-gray-100 text-gray-400 dark:bg-white/5 dark:text-muted',
-  bronze: `${MEDAL_COLORS[3].bg} ${MEDAL_COLORS[3].text}`,
-  silver: `${MEDAL_COLORS[2].bg} ${MEDAL_COLORS[2].text}`,
-  gold: `${MEDAL_COLORS[1].bg} ${MEDAL_COLORS[1].text}`,
+  bronze: 'bg-brand-100 text-brand-700 dark:bg-accent/10 dark:text-accent',
+  silver: 'bg-brand-400 text-brand-900 dark:bg-accent/25 dark:text-accent',
+  gold: 'bg-brand-700 text-white dark:bg-accent/45 dark:text-surface',
 }
 </script>
 
@@ -285,9 +289,10 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
                   自分
                 </span>
               </span>
-              <!-- 参加・継続の可視化(非順位)。直近28日にセットがある日数を4段階のスタンプで表示する -->
+              <!-- 参加・継続の可視化(非順位)。直近28日にセットがある日数を4段階のスタンプで表示する。
+                   角丸の矩形(rounded-full ではない)にして、丸型の順位バッジと形でも区別する -->
               <span
-                class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
                 :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
                 :title="`直近28日で${entry.daysTrained}日トレーニング`"
               >
@@ -307,7 +312,8 @@ const ATTENDANCE_STAMP_CLASSES: Record<AttendanceStamp, string> = {
           <template v-else> 合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています </template>
         </p>
         <p class="text-center text-xs text-gray-400 dark:text-muted">
-          スタンプは直近28日にトレーニングした日数の目安です（金:18日〜 銀:7日〜 銅:1日〜）
+          スタンプは順位ではなく、直近28日にトレーニングした日数の目安です（ハイペース:18日〜
+          コンスタント:7日〜 たまに:1日〜）
         </p>
       </template>
     </div>

@@ -405,7 +405,9 @@ function recentWindowStart(now: Date): Date {
 // 参加・継続の可視化(非順位)用のスタンプ段階。順位ではなく「自分がどの段階にいるか」に焦点が
 // 移るよう、直近28日の実日数を生の数字ではなく4段階のスタンプに変換して見せる
 // (backlog.md「通知の種類の拡張」で決めた『途切れを責めず積み上げを祝う』方針と揃える)。
-// 色分けは表彰台(MEDAL_COLORS、frontend/app/pages/groups/[id]/ranking.vue)の金・銀・銅を流用する
+// フロント側の見た目はブランドオレンジの濃淡4段階（表彰台の金・銀・銅とは別配色。
+// 隣に並ぶ順位バッジと混同しやすいという指摘を受けて別軸にした、2026-09-24）。
+// bronze/silver/goldという名前はこのAPIの型名として残すが、表示文言には出さない
 type AttendanceStamp = 'none' | 'bronze' | 'silver' | 'gold'
 
 function attendanceStamp(daysTrained: number): AttendanceStamp {
