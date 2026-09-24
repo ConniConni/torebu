@@ -605,3 +605,48 @@ groupsRouter.get('/:id/ranking/default-exercise', requireAuth, async (req, res) 
 
   res.status(200).json({ exerciseId: topExercise?.id ?? null })
 })
+
+// GET /groups/:id/ranking/exercises
+// 種目別ランキングの種目セレクタに出す候補を返す。公式種目は77種目あり全件出すと選びづらいため、
+// グループのアクティブメンバーの誰か1人でも記録したことがある種目だけに絞り込む(期間の下限は
+// 設けず、過去の全期間が対象。default-exerciseの「直近28日」とは別軸)。使用実績が無い種目は、
+// 通算で見ても0kgランキングにしかならず実用上の価値が薄いため候補から外す
+// (2026-09-25決定、docs/spec.md参照)
+groupsRouter.get('/:id/ranking/exercises', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    select: { userId: true },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const counts = await prisma.workoutSet.groupBy({
+    by: ['exerciseId'],
+    where: {
+      workout: { userId: { in: memberIds }, deletedAt: null },
+      exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+    },
+    _count: { _all: true },
+  })
+  const countByExerciseId = new Map(counts.map((c) => [c.exerciseId, c._count._all]))
+
+  // 使用回数の多い順。同数はdefault-exerciseと同じ「表示順→名前順」で解決する
+  const usedExercises = await prisma.exercise.findMany({
+    where: { id: { in: [...countByExerciseId.keys()] } },
+    orderBy: [{ defaultSortOrder: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+    select: { id: true, name: true },
+  })
+  usedExercises.sort(
+    (a, b) => (countByExerciseId.get(b.id) ?? 0) - (countByExerciseId.get(a.id) ?? 0),
+  )
+
+  res.status(200).json({ exercises: usedExercises })
+})

@@ -77,6 +77,12 @@ interface GroupRankingDefaultExercise {
   exerciseId: string | null
 }
 
+// 種目別ランキングのセレクタ候補(グループの誰かが記録したことのある公式種目のみ、使用回数の多い順)
+interface GroupRankingExercise {
+  id: string
+  name: string
+}
+
 interface WorkoutComment {
   id: string
   userId: string
@@ -157,6 +163,15 @@ export function useGroups() {
     )
   }
 
+  // 種目別ランキングの種目セレクタ候補(グループの誰かが記録したことのある公式種目のみ、
+  // 公式種目77種目全件だと選びづらいための絞り込み。2026-09-25決定、docs/spec.md参照)
+  async function fetchGroupRankingExercises(id: string) {
+    const result = await requestFetch<{ exercises: GroupRankingExercise[] }>(
+      `/api/groups/${id}/ranking/exercises`,
+    )
+    return result.exercises
+  }
+
   // いいね(Phase4)。対象はworkout単体のためgroupsではなくworkoutsのエンドポイントを叩く
   // （backend/src/routes/workouts.ts参照。認可は「所属グループで同席しているか」で判定される）
   async function likeWorkout(workoutId: string) {
@@ -221,6 +236,7 @@ export function useGroups() {
     fetchGroupWorkouts,
     fetchGroupRanking,
     fetchGroupRankingDefaultExercise,
+    fetchGroupRankingExercises,
     likeWorkout,
     unlikeWorkout,
     fetchComments,
@@ -243,6 +259,7 @@ export type {
   GroupRanking,
   GroupRankingEntry,
   GroupRankingDefaultExercise,
+  GroupRankingExercise,
   RankingPeriod,
   AttendanceStamp,
   WorkoutComment,

@@ -2,7 +2,7 @@
 // Phase4: グループ内ランキング。合計挙上重量（自重セットは0kg扱い、公式種目のみ集計）を
 // 週間/月間/通算の3タブで切り替える（docs/schema.md「Phase4の検討結果」参照）。
 // Issue #258で種目別ランキング（種目セレクタ）と参加・継続の可視化（attendanceStamp）を追加
-import type { AttendanceStamp, RankingPeriod } from '~/composables/useGroups'
+import type { AttendanceStamp, GroupRankingExercise, RankingPeriod } from '~/composables/useGroups'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -15,8 +15,8 @@ const PERIODS: { value: RankingPeriod; label: string }[] = [
   { value: 'all', label: '通算' },
 ]
 
-const { fetchGroupRanking, fetchGroupRankingDefaultExercise } = useGroups()
-const { exercises, fetchExercises } = useExercises()
+const { fetchGroupRanking, fetchGroupRankingDefaultExercise, fetchGroupRankingExercises } =
+  useGroups()
 const { user } = useAuth()
 
 // 指標: 合計挙上重量 or 種目別 or 継続（非順位）。種目別に切り替えたときだけ種目一覧・
@@ -25,9 +25,9 @@ const { user } = useAuth()
 type Metric = 'total' | 'exercise' | 'attendance'
 const metric = ref<Metric>('total')
 const selectedExerciseId = ref<string | null>(null)
-const officialExercises = computed(() =>
-  (exercises.value ?? []).filter((e) => e.createdBy === null && e.deletedAt === null),
-)
+// 種目セレクタの候補(グループの誰かが記録したことのある公式種目のみ、使用回数の多い順)。
+// 公式種目77種目全件だと選びづらいという指摘を受けて絞り込んだ(2026-09-25決定、docs/spec.md参照)
+const rankingExercises = ref<GroupRankingExercise[] | null>(null)
 
 const period = ref<RankingPeriod>('week')
 const ranking = ref<Awaited<ReturnType<typeof fetchGroupRanking>>['ranking'] | null>(null)
@@ -66,14 +66,14 @@ async function onSelectMetric(next: Metric) {
     exerciseModeLoaded = true
     pending.value = true
     try {
-      const [, defaultExercise] = await Promise.all([
-        exercises.value ? Promise.resolve() : fetchExercises(),
+      const [exercisesResult, defaultExercise] = await Promise.all([
+        fetchGroupRankingExercises(groupId),
         fetchGroupRankingDefaultExercise(groupId),
       ])
+      rankingExercises.value = exercisesResult
       // グループ内に直近の使用実績が無ければ(defaultExercise.exerciseId === null)、
-      // 一覧の先頭(使用回数DESC→名前順、GET /exercisesの既存ソート)にフォールバックする
-      selectedExerciseId.value =
-        defaultExercise.exerciseId ?? officialExercises.value[0]?.id ?? null
+      // 一覧の先頭(使用回数の多い順、fetchGroupRankingExercisesの既存ソート)にフォールバックする
+      selectedExerciseId.value = defaultExercise.exerciseId ?? exercisesResult[0]?.id ?? null
     } catch {
       loadError.value = true
       pending.value = false
@@ -216,8 +216,10 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
         class="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-panel px-3 py-2 text-sm text-gray-900 dark:text-ink"
         @change="onSelectExercise(($event.target as HTMLSelectElement).value)"
       >
-        <option v-if="officialExercises.length === 0" value="" disabled>種目がありません</option>
-        <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+        <option v-if="(rankingExercises ?? []).length === 0" value="" disabled>
+          種目がありません
+        </option>
+        <option v-for="e in rankingExercises ?? []" :key="e.id" :value="e.id">{{ e.name }}</option>
       </select>
 
       <div
@@ -373,7 +375,8 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
           <p class="text-center text-xs text-gray-400 dark:text-muted">
             <template v-if="metric === 'exercise'">
               {{
-                officialExercises.find((e) => e.id === selectedExerciseId)?.name ?? '選択した種目'
+                (rankingExercises ?? []).find((e) => e.id === selectedExerciseId)?.name ??
+                '選択した種目'
               }}の挙上重量でランキングしています
             </template>
             <template v-else>
