@@ -582,6 +582,55 @@ describe('POST /groups/join', () => {
     expect(res.status).toBe(200)
     expect(res.body.role).toBe('member')
   })
+
+  // 新メンバー参加の通知(Issue #249)
+  describe('member_joined通知', () => {
+    async function findMemberJoinedNotifications(groupId: string) {
+      return prisma.notification.findMany({
+        where: { type: 'member_joined', targetType: 'group', targetId: groupId },
+      })
+    }
+
+    it('新規参加すると、他のアクティブなメンバー宛にだけ通知を作る(本人・退会済みメンバー・部外者には作らない)', async () => {
+      const group = await createGroup()
+      await addMember(group.id, outsiderId, { leftAt: new Date('2026-01-01') })
+
+      const agent = await loginAs(memberEmail)
+      await agent.post('/groups/join').send({ inviteCode: group.inviteCode })
+
+      const notifications = await findMemberJoinedNotifications(group.id)
+      expect(notifications).toHaveLength(1)
+      expect(notifications[0]).toMatchObject({
+        recipientId: ownerId,
+        actorId: memberId,
+        isRead: false,
+      })
+    })
+
+    it('退会済みメンバーが再参加したときも通知を作る', async () => {
+      const group = await createGroup()
+      await addMember(group.id, memberId, { leftAt: new Date('2026-01-01') })
+
+      const agent = await loginAs(memberEmail)
+      await agent.post('/groups/join').send({ inviteCode: group.inviteCode })
+
+      const notifications = await findMemberJoinedNotifications(group.id)
+      expect(notifications.map((n) => n.recipientId)).toEqual([ownerId])
+    })
+
+    it('既にアクティブなメンバーの再参加(200)・人数上限での失敗では通知を作らない', async () => {
+      const group = await createGroup({ memberLimit: 2 })
+      await addMember(group.id, memberId)
+
+      const memberAgent = await loginAs(memberEmail)
+      await memberAgent.post('/groups/join').send({ inviteCode: group.inviteCode })
+      const outsiderAgent = await loginAs(outsiderEmail)
+      const res = await outsiderAgent.post('/groups/join').send({ inviteCode: group.inviteCode })
+      expect(res.body.error).toBe('member_limit_exceeded')
+
+      expect(await findMemberJoinedNotifications(group.id)).toHaveLength(0)
+    })
+  })
 })
 
 describe('POST /groups/:id/leave', () => {
