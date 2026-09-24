@@ -760,6 +760,28 @@ describe('GET /groups/:id/ranking', () => {
     expect(res.status).toBe(404)
   })
 
+  it('未所属者は実在する公式種目のexerciseIdを指定しても404を返す(種目の存在有無を漏らさない)', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(outsiderEmail)
+    const res = await agent
+      .get(`/groups/${group.id}/ranking`)
+      .query({ period: 'all', exerciseId: officialExerciseId })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('exerciseIdをクエリパラメータの配列で渡すと400を返す(パラメータ汚染)', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(
+      `/groups/${group.id}/ranking?period=all&exerciseId=${officialExerciseId}&exerciseId=${customExerciseId}`,
+    )
+
+    expect(res.status).toBe(400)
+  })
+
   it('退会済みメンバーには404を返す', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId, { leftAt: new Date() })
@@ -775,6 +797,15 @@ describe('GET /groups/:id/ranking', () => {
 
     const agent = await loginAs(ownerEmail)
     const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'year' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('periodをクエリパラメータの配列で渡すと400を返す(パラメータ汚染)', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking?period=week&period=all`)
 
     expect(res.status).toBe(400)
   })
