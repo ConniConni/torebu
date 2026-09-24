@@ -182,6 +182,22 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 - `auth`（[auth.ts](../frontend/app/middleware/auth.ts)）：未ログインなら `/login` へ飛ばす（`/`自体は対象外。下記参照）
 - `guest`（[guest.ts](../frontend/app/middleware/guest.ts)）：ログイン済みなら `/` へ飛ばす
 
+**画面（ページ）を追加するときのチェックリスト**
+
+Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き合わせて確認する（どれも各Issueの実装メモに
+散らばっていて見落としが繰り返されたため、ここに集約した。Issue #247の検討時に①②の見落としが発覚）。
+
+1. **既存ページの「下」にパスを生やす場合は、先に`xxx.vue`を`xxx/index.vue`へ移動する**：
+   同名の`xxx.vue`と`xxx/`ディレクトリを併存させると、Nuxtが`xxx.vue`を親ルートとして扱い、
+   URLだけ変わって画面が遷移しない（グループ記録フィード実装時に発覚、下記§3-1「グループの記録
+   フィード」の実装メモ参照）。現在単独ファイルになっているページは`find frontend/app/pages -type f`で確認する
+2. **`auth`ミドルウェアを付けたページは[robots.txt](../frontend/public/robots.txt)に`Disallow`を足す**
+   （下記「Google検索対応」参照。前方一致なので、親パスが既に載っていれば子パスは不要）。
+   公開ページなら逆に`sitemap.xml`に足す
+3. **ダークモード対応**：全画面対応済み（Issue #241）のため、新しい画面も`dark:`クラスを付ける
+4. **タブバー**：主ナビの4画面以外は`tabbar`レイアウトを付けない（下記「下部固定タブバー」参照）
+5. **この画面一覧の表と見出しのページ数を更新する**
+
 **Google検索対応（Issue #208）**
 - `frontend/public/sitemap.xml`には`auth`ミドルウェアの無い公開ページ（`/`・`/login`・`/register`・
   `/terms`・`/privacy`）だけを載せる。`auth`が付いている非公開ページは`robots.txt`で個別に`Disallow`
