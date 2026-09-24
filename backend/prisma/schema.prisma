@@ -279,6 +279,7 @@ enum NotificationType {
   ranking // 未使用(ランキングは未実装)
   exercise_promoted // 未使用(カスタム種目の公式昇格は未実装)
   member_joined // グループへの新メンバー参加(再参加含む)。宛先はそのグループの他のアクティブなメンバー(Issue #249)
+  personal_best // 種目ごとの最大重量の自己ベスト更新。宛先は行為者が所属するアクティブな全グループのメンバー(Issue #253)
 }
 
 enum NotificationTargetType {
@@ -302,6 +303,9 @@ model Notification {
   type        NotificationType
   targetType  NotificationTargetType @map("target_type")
   targetId    String                 @map("target_id")
+  // 作成時点の値を残すための付加情報(Issue #253)。personal_bestは{ exerciseId, previousBestKg }。
+  // 表示用の要約(target)は取得時点の状態を都度引き直す方針のため、ここには再確認に必要な値だけを置く
+  payload     Json?
   isRead      Boolean                @default(false) @map("is_read")
   createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
 
