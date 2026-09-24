@@ -2,7 +2,11 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import type { WorkoutModel, WorkoutSetModel, WorkoutExerciseModel } from '../generated/prisma/models.js'
+import type {
+  WorkoutModel,
+  WorkoutSetModel,
+  WorkoutExerciseModel,
+} from '../generated/prisma/models.js'
 
 export const workoutsRouter = Router()
 
@@ -91,7 +95,11 @@ async function notifyWorkoutOwner(
 // コメント通知(#149)。記録の投稿者(comment)に加え、そのworkoutへの過去のコメント投稿者
 // (comment_reply)にもスレッド参加者として通知する。投稿者自身・今回のコメント投稿者(actor)は
 // 重複しないよう除外する
-async function notifyCommentParticipants(workoutOwnerId: string, actorId: string, workoutId: string) {
+async function notifyCommentParticipants(
+  workoutOwnerId: string,
+  actorId: string,
+  workoutId: string,
+) {
   await notifyWorkoutOwner('comment', workoutOwnerId, actorId, workoutId)
 
   const pastCommenters = await prisma.comment.findMany({
@@ -308,6 +316,104 @@ async function ensureWorkoutExercise(workoutId: string, exerciseId: string) {
   })
 }
 
+// --- 自己ベスト更新(Issue #253。docs/backlog.md「通知の種類の拡張」①) ---
+// 判定基準は種目ごとの最大重量。自重(weightKg: null)のセット・初めて記録した種目(比べる相手が無い)は対象外
+
+type PersonalBest = { exerciseId: string; weightKg: number; previousBestKg: number }
+
+function toWeightNumber(weightKg: WorkoutSetModel['weightKg']) {
+  return weightKg === null ? null : Number(weightKg)
+}
+
+// 自分の(削除済みでない)記録のうち、条件に合うセットのその種目の最大重量(無ければnull。_maxはnullを無視する)
+async function maxOwnWeight(
+  userId: string,
+  exerciseId: string,
+  exclude: { setId: string } | { workoutId: string },
+) {
+  const aggregate = await prisma.workoutSet.aggregate({
+    where: {
+      exerciseId,
+      workout: { userId, deletedAt: null },
+      ...('setId' in exclude
+        ? { id: { not: exclude.setId } }
+        : { workoutId: { not: exclude.workoutId } }),
+    },
+    _max: { weightKg: true },
+  })
+  return toWeightNumber(aggregate._max.weightKg)
+}
+
+// 仲間への自己ベスト更新の通知。宛先は行為者が所属するアクティブな全グループのアクティブなメンバー
+// (受信者ごとに重複排除、本人は除く)。同じ記録の同じ種目につき1件まで(既にあれば作らない)。
+// payloadに更新前のベストを残し、表示時は「その記録の現在の最大重量 > 更新前のベスト」で確認し直す
+// (notifications.tsのfindVisibleNotifications参照)。セットを高速に連続保存したときにまれに重複しうるのは許容
+async function notifyPersonalBest(
+  actorId: string,
+  workoutId: string,
+  exerciseId: string,
+  previousBestKg: number,
+) {
+  const existing = await prisma.notification.findFirst({
+    where: {
+      type: 'personal_best',
+      actorId,
+      targetType: 'workout',
+      targetId: workoutId,
+      payload: { path: ['exerciseId'], equals: exerciseId },
+    },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const recipients = await prisma.groupMember.findMany({
+    where: {
+      leftAt: null,
+      userId: { not: actorId },
+      group: { deletedAt: null, members: { some: { userId: actorId, leftAt: null } } },
+    },
+    distinct: ['userId'],
+    select: { userId: true },
+  })
+  if (recipients.length === 0) return
+
+  await prisma.notification.createMany({
+    data: recipients.map((r) => ({
+      recipientId: r.userId,
+      actorId,
+      type: 'personal_best' as const,
+      targetType: 'workout' as const,
+      targetId: workoutId,
+      payload: { exerciseId, previousBestKg },
+    })),
+  })
+}
+
+// 保存したセット(POST/重量を変えたPATCH)の自己ベスト判定。仲間への通知を作り、本人向けの達成内容を返す。
+// - 仲間への通知：自分の「他の記録」の最大重量を上回ったとき(同じ記録内の他のセットとは比べない。
+//   記録単位で「この日に自己ベストを出した」ことを伝えるため)
+// - 本人へのその場の表示：同じ記録内の他のセットも含め、それまでの自分の最高重量を上回るたびに返す
+//   (通知の有無とは関係ない)
+async function evaluatePersonalBest(
+  userId: string,
+  set: WorkoutSetModel,
+): Promise<PersonalBest | null> {
+  const weightKg = toWeightNumber(set.weightKg)
+  if (weightKg === null) return null
+
+  const [bestExceptThisSet, bestInOtherWorkouts] = await Promise.all([
+    maxOwnWeight(userId, set.exerciseId, { setId: set.id }),
+    maxOwnWeight(userId, set.exerciseId, { workoutId: set.workoutId }),
+  ])
+
+  if (bestInOtherWorkouts !== null && weightKg > bestInOtherWorkouts) {
+    await notifyPersonalBest(userId, set.workoutId, set.exerciseId, bestInOtherWorkouts)
+  }
+
+  if (bestExceptThisSet === null || weightKg <= bestExceptThisSet) return null
+  return { exerciseId: set.exerciseId, weightKg, previousBestKg: bestExceptThisSet }
+}
+
 workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   const parsed = createSetSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -339,9 +445,13 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     },
   })
 
-  res
-    .status(201)
-    .json({ ...serializeSet(set), workoutExercise: serializeWorkoutExercise(workoutExercise) })
+  const personalBest = await evaluatePersonalBest(userId, set)
+
+  res.status(201).json({
+    ...serializeSet(set),
+    workoutExercise: serializeWorkoutExercise(workoutExercise),
+    personalBest,
+  })
 })
 
 const updateSetSchema = z
@@ -378,7 +488,12 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
     data: parsed.data,
   })
 
-  res.status(200).json(serializeSet(updated))
+  // 自己ベストの判定は重量が変わったときだけ行う。③記録画面は回数欄のblurでも重量ごとPATCHするため、
+  // 変わっていないときまで判定すると、同じ達成の表示が何度も出てしまう
+  const weightChanged = toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg)
+  const personalBest = weightChanged ? await evaluatePersonalBest(userId, updated) : null
+
+  res.status(200).json({ ...serializeSet(updated), personalBest })
 })
 
 workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
@@ -388,7 +503,9 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
     res.status(404).json({ error: 'not_found' })
     return
   }
-  const set = await prisma.workoutSet.findFirst({ where: { id: req.params.setId as string, workoutId: workout.id } })
+  const set = await prisma.workoutSet.findFirst({
+    where: { id: req.params.setId as string, workoutId: workout.id },
+  })
   if (!set) {
     res.status(404).json({ error: 'not_found' })
     return
@@ -432,10 +549,16 @@ const updateWorkoutExerciseSchema = z.object({
   sortOrder: z.number().int().positive(),
 })
 
-async function findOwnWorkoutExercise(userId: string, workoutId: string, workoutExerciseId: string) {
+async function findOwnWorkoutExercise(
+  userId: string,
+  workoutId: string,
+  workoutExerciseId: string,
+) {
   const workout = await findOwnWorkout(userId, workoutId)
   if (!workout) return null
-  return prisma.workoutExercise.findFirst({ where: { id: workoutExerciseId, workoutId: workout.id } })
+  return prisma.workoutExercise.findFirst({
+    where: { id: workoutExerciseId, workoutId: workout.id },
+  })
 }
 
 workoutsRouter.patch('/:id/exercises/:workoutExerciseId', requireAuth, async (req, res) => {

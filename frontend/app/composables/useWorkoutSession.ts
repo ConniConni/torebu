@@ -15,6 +15,14 @@ interface WorkoutExerciseItem {
   sortOrder: number
 }
 
+// セット保存(追加・重量の編集)で自己ベストを更新したときに、保存APIが返す達成内容(Issue #253)。
+// previousBestKgは同じ記録内の他のセットも含めた、それまでの自分の最高重量
+interface PersonalBest {
+  exerciseId: string
+  weightKg: number
+  previousBestKg: number
+}
+
 interface SessionState {
   workoutId: string | null
   performedAt: string | null
@@ -126,8 +134,8 @@ export function useWorkoutSession() {
 
   async function addSet(exerciseId: string, reps: number, weightKg?: number) {
     const workoutId = await ensureWorkout()
-    const { workoutExercise, ...set } = await $fetch<
-      WorkoutSetItem & { workoutExercise: WorkoutExerciseItem }
+    const { workoutExercise, personalBest, ...set } = await $fetch<
+      WorkoutSetItem & { workoutExercise: WorkoutExerciseItem; personalBest: PersonalBest | null }
     >(`/api/workouts/${workoutId}/sets`, {
       method: 'POST',
       body: { exerciseId, reps, weightKg },
@@ -140,7 +148,7 @@ export function useWorkoutSession() {
     }
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する。詳細はuseExercises.ts参照
     patchLastSet(exerciseId, { weightKg: set.weightKg, reps: set.reps })
-    return set
+    return { set, personalBest }
   }
 
   async function removeSet(setId: string) {
@@ -169,10 +177,12 @@ export function useWorkoutSession() {
 
   async function updateSet(setId: string, weightKg: number | null, reps: number) {
     if (!session.value.workoutId) throw new Error('workoutが開始されていません')
-    const updated = await $fetch<WorkoutSetItem>(
-      `/api/workouts/${session.value.workoutId}/sets/${setId}`,
-      { method: 'PATCH', body: { weightKg, reps } },
-    )
+    const { personalBest, ...updated } = await $fetch<
+      WorkoutSetItem & { personalBest: PersonalBest | null }
+    >(`/api/workouts/${session.value.workoutId}/sets/${setId}`, {
+      method: 'PATCH',
+      body: { weightKg, reps },
+    })
     session.value.sets = session.value.sets.map((s) => (s.id === updated.id ? updated : s))
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する（詳細はuseExercises.ts参照）。
     // ただし編集したのがこのworkout内でその種目の最後(setOrder最大)のセットのときだけ更新する。
@@ -184,7 +194,7 @@ export function useWorkoutSession() {
     if (updated.setOrder === Math.max(...sameExerciseSetOrders)) {
       patchLastSet(updated.exerciseId, { weightKg: updated.weightKg, reps: updated.reps })
     }
-    return updated
+    return { set: updated, personalBest }
   }
 
   // 記録完了。②ホームのカレンダー・記録一覧に今回の分を反映させるため一覧を再取得してからホームへ
@@ -222,4 +232,4 @@ export function useWorkoutSession() {
   }
 }
 
-export type { WorkoutSetItem, WorkoutExerciseItem }
+export type { WorkoutSetItem, WorkoutExerciseItem, PersonalBest }

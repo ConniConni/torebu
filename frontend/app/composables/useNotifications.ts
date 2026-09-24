@@ -22,17 +22,31 @@ interface GroupNotificationTarget {
   groupName: string
 }
 
+// 仲間の自己ベスト更新(personal_best)の対象(Issue #253)。種目名・重量は取得時点の値で、
+// 重量はその記録のその種目の現在の最大重量。行為者と自分が今も同席しているグループがある場合のみ
+// APIが返すため、groupIdは常にある(遷移先はそのグループの記録フィード)
+interface PersonalBestNotificationTarget {
+  type: 'personal_best'
+  workoutId: string
+  groupId: string
+  performedAt: string
+  exerciseId: string
+  exerciseName: string
+  weightKg: number
+}
+
 // 型名`Notification`はブラウザ標準のWeb Notifications APIとグローバルに衝突するため`AppNotification`にする
 export interface AppNotification {
   id: string
   // comment_reply: 自分の記録ではないが、自分も過去にコメントしたworkoutに別の人がコメントしたときの通知(#149)
   // member_joined: 自分が所属するグループに誰かが参加(再参加含む)したときの通知(#249)。
   //   作成から5分経つまでAPIが返さない(表示の遅延はバックエンド側で行う)
-  type: 'reaction' | 'comment' | 'comment_reply' | 'member_joined'
+  // personal_best: 同じグループの仲間が種目の自己ベスト(最大重量)を更新したときの通知(#253)。5分遅延はmember_joinedと同じ
+  type: 'reaction' | 'comment' | 'comment_reply' | 'member_joined' | 'personal_best'
   isRead: boolean
   createdAt: string
   actor: NotificationActor | null
-  target: WorkoutNotificationTarget | GroupNotificationTarget
+  target: WorkoutNotificationTarget | GroupNotificationTarget | PersonalBestNotificationTarget
 }
 
 // Phase4: 通知(#144)。ポーリングはせず、画面遷移・読み込み時にAPIを叩くだけの方式

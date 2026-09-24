@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Phase4: 通知一覧（#144）。自分の記録への「いいね」「コメント」、グループへの新メンバー参加（#249）の
-// 通知を表示する。種類ごとの文面・アイコン・遷移先は下の関数で出し分ける。
+// Phase4: 通知一覧（#144）。自分の記録への「いいね」「コメント」、グループへの新メンバー参加（#249）、
+// 仲間の自己ベスト更新（#253）の通知を表示する。種類ごとの文面・アイコン・遷移先は下の関数で出し分ける。
 // 開いた時点で自動的に全件既読にする（個別の既読トグルは設けない。docs/spec.mdの実装メモ参照）
 definePageMeta({ middleware: 'auth' })
 
@@ -28,6 +28,8 @@ await load()
 
 function notificationText(n: AppNotification) {
   const actorName = n.actor?.displayName ?? '(退会済みのメンバー)'
+  if (n.target.type === 'personal_best')
+    return `${actorName}さんが${n.target.exerciseName}で自己ベスト更新！`
   if (n.type === 'member_joined') return `${actorName}さんがグループに参加しました`
   if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
   if (n.type === 'comment_reply')
@@ -35,22 +37,26 @@ function notificationText(n: AppNotification) {
   return `${actorName}さんがあなたの記録にコメントしました`
 }
 
-// 文面の下に出す補足（記録の通知は対象の記録の日付・種目、グループの通知はグループ名）
+// 文面の下に出す補足（記録の通知は対象の記録の日付・種目、グループの通知はグループ名、
+// 自己ベストは記録の日付と重量）
 function targetSummary(n: AppNotification) {
   if (n.target.type === 'group') return n.target.groupName
+  if (n.target.type === 'personal_best')
+    return `${n.target.performedAt}の記録・${n.target.weightKg}kg`
   const { performedAt, exerciseName, exerciseCount } = n.target
   if (!exerciseName) return `${performedAt}の記録・記録内容はまだありません`
   const rest = exerciseCount - 1
   return `${performedAt}の記録・${rest > 0 ? `${exerciseName} 他${rest}種目` : exerciseName}`
 }
 
-// 新メンバー参加はグループ画面へ遷移する。
+// 新メンバー参加はグループ画面へ遷移する。自己ベスト更新はその記録が見えるグループの記録フィードへ遷移する
+// （共通のグループが無い通知はAPIが返さないため、フォールバックは不要）。
 // いいね・コメントはグループの記録フィード上でのみ見える(自分の記録画面には表示されない)ため、
 // 遷移先はフィード側を優先する。actorが既に共通のグループを退会している等でgroupIdが無い場合のみ、
 // 自分の記録画面（/workouts/new）にフォールバックする
 function targetLink(n: AppNotification) {
   if (n.target.type === 'group') return `/groups/${n.target.groupId}`
-  if (n.target.groupId) {
+  if (n.target.type === 'personal_best' || n.target.groupId) {
     return `/groups/${n.target.groupId}/workouts?workout=${n.target.workoutId}`
   }
   return `/workouts/new?date=${n.target.performedAt}`
@@ -95,6 +101,13 @@ function targetLink(n: AppNotification) {
             <HeartIcon
               v-if="n.type === 'reaction'"
               filled
+              class="mt-0.5 h-4.5 w-4.5 shrink-0"
+              :class="
+                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+              "
+            />
+            <TrophyIcon
+              v-else-if="n.type === 'personal_best'"
               class="mt-0.5 h-4.5 w-4.5 shrink-0"
               :class="
                 n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
