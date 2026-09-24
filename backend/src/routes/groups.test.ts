@@ -942,6 +942,75 @@ describe('GET /groups/:id/ranking', () => {
     expect(missingRes.status).toBe(404)
   })
 
+  it('exerciseIdがUUID形式でなければ400を返す', async () => {
+    const group = await createGroup()
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all', exerciseId: 'not-a-uuid' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('attendanceStampの各段階の下限-1日ではひとつ下の段階になる(6日はbronze、17日はsilver)', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    async function createWorkoutWithSet(userId: string, daysAgo: number) {
+      const performedAt = new Date()
+      performedAt.setHours(0, 0, 0, 0)
+      performedAt.setDate(performedAt.getDate() - daysAgo)
+      const workout = await prisma.workout.create({ data: { userId, performedAt } })
+      await prisma.workoutSet.create({
+        data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 1, weightKg: 1 },
+      })
+    }
+    for (let i = 0; i < 6; i++) await createWorkoutWithSet(ownerId, i)
+    for (let i = 0; i < 17; i++) await createWorkoutWithSet(memberId, i)
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, daysTrained: 6, attendanceStamp: 'bronze' }),
+        expect.objectContaining({ userId: memberId, daysTrained: 17, attendanceStamp: 'silver' }),
+      ]),
+    )
+  })
+
+  it('メモのみでセットが無いworkoutはattendanceStampのカウントに含めない', async () => {
+    const group = await createGroup()
+
+    await prisma.workout.create({ data: { userId: ownerId, performedAt: new Date(), memo: 'メモだけ' } })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' })]),
+    )
+  })
+
+  it('ソフトデリート済みworkoutはattendanceStampのカウントに含めない', async () => {
+    const group = await createGroup()
+
+    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: new Date() } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    await prisma.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ranking).toEqual(
+      expect.arrayContaining([expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' })]),
+    )
+  })
+
   it('直近28日のトレ日数に応じてattendanceStampが段階的に変わる(none/bronze/silver/gold)', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId)
@@ -1073,6 +1142,87 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     old.setHours(0, 0, 0, 0)
     old.setDate(old.getDate() - 40)
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: old } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking/default-exercise`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ exerciseId: null })
+  })
+
+  it('セット数が同数のタイは、defaultSortOrderが小さい方を優先する(名前順より優先)', async () => {
+    const group = await createGroup()
+    // 名前だけならofficialExerciseId(「ベンチプレス」)が先に来る並びだが、sortOrderで逆転させる
+    await prisma.exercise.update({ where: { id: officialExerciseId }, data: { defaultSortOrder: null } })
+    await prisma.exercise.update({ where: { id: otherOfficialExerciseId }, data: { defaultSortOrder: 1 } })
+
+    const today = new Date()
+    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: otherOfficialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking/default-exercise`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ exerciseId: otherOfficialExerciseId })
+  })
+
+  it('セット数が同数でdefaultSortOrderも無ければ名前順で解決する', async () => {
+    const group = await createGroup()
+
+    const today = new Date()
+    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: otherOfficialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking/default-exercise`)
+
+    // 「ベンチプレス」(officialExerciseId)より「スクワット」(otherOfficialExerciseId)が名前順で先
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ exerciseId: otherOfficialExerciseId })
+  })
+
+  it('カスタム種目のセットしか無ければnullを返す(公式種目のみ集計対象)', async () => {
+    const group = await createGroup()
+    const customExercise = await prisma.exercise.create({
+      data: { name: 'オリジナル種目', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const today = new Date()
+    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: customExercise.id, setOrder: 1, reps: 10, weightKg: 50 },
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/ranking/default-exercise`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ exerciseId: null })
+
+    await prisma.workout.delete({ where: { id: workout.id } })
+    await prisma.exercise.delete({ where: { id: customExercise.id } })
+  })
+
+  it('退会済みメンバーの記録は集計に含めない', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId, { leftAt: new Date() })
+
+    const today = new Date()
+    const workout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
     await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
     })
