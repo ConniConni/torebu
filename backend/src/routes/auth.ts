@@ -253,6 +253,59 @@ authRouter.post('/password-resets', async (req, res) => {
   res.status(200).json({ ok: true })
 })
 
+// ログイン中のパスワード変更で、現在のパスワードを総当たりされないためのレート制限（Issue #247）。
+// セッションを乗っ取った攻撃者はIPを変えられるため、IPではなくユーザー単位で数える
+// （requireAuthの後に通すので、userIdは必ずある）
+const passwordChangeRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15分間
+  limit: 5, // 同一ユーザーから15分間に5回まで
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.session.userId!,
+  skip: () => process.env.NODE_ENV === 'test',
+})
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(72), // 登録時と同じ制約
+})
+
+authRouter.post('/password-changes', requireAuth, passwordChangeRateLimiter, async (req, res) => {
+  const parsed = passwordChangeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const { currentPassword, newPassword } = parsed.data
+
+  const user = await prisma.user.findUnique({ where: { id: req.session.userId } })
+  if (!user) {
+    req.session.destroy(() => {})
+    res.status(401).json({ error: 'unauthenticated' })
+    return
+  }
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!passwordMatches) {
+    // ログイン状態は維持したまま、入力し直してもらう
+    res.status(400).json({ error: 'invalid_current_password' })
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      // メールリセットのリンクが未使用で残っていると、変更後に古いリンクで上書きできてしまうため失効させる
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    },
+  })
+
+  res.status(200).json({ ok: true })
+})
+
 authRouter.post('/logout', requireAuth, (req, res) => {
   req.session.destroy((err) => {
     if (err) {
