@@ -50,9 +50,12 @@ const memoOnlyDates = computed(
 
 const today = todayLocalDateString()
 
-// 通算の記録日数（Phase3-B）。hasSetsを問わず「記録がある日」であれば対象にする
+// 通算の記録日数（Phase3-B）。「セットが1件以上ある日」だけを数える(Issue #255。C1・C2の判定と
+// 数字を揃えるための変更。以前はhasSetsを問わずメモのみの日も含めていた)
 // （docs/spec.md参照。frontend/app/utils/trainingDays.ts参照）
-const allRecordedDates = computed(() => (workouts.value ?? []).map((w) => w.performedAt))
+const allRecordedDates = computed(() =>
+  (workouts.value ?? []).filter((w) => w.hasSets).map((w) => w.performedAt),
+)
 const totalTrainingDays = computed(() => countTotalTrainingDays(allRecordedDates.value))
 
 // 合計負荷重量（期間別サマリーカード、Issue #169）。新規バックエンドAPIは

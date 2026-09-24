@@ -32,7 +32,7 @@ async function loadSummary() {
     const [points] = await Promise.all([fetchVolume('all'), fetchWorkouts()])
     recentVolumeKg.value = sumRecentVolume(points, today, 28)
     recentTrainingDays.value = countRecentTrainingDays(
-      (workouts.value ?? []).map((w) => w.performedAt),
+      (workouts.value ?? []).filter((w) => w.hasSets).map((w) => w.performedAt),
       today,
       28,
     )
