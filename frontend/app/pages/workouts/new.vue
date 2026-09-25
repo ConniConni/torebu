@@ -245,8 +245,9 @@ const setErrors = reactive<Record<string, string>>({})
 // 表示に使わないためreactiveにしない
 const pendingSetSaves = new Map<string, Promise<void>>()
 
-// セット削除は他の削除操作と同じ2段階確認に揃える（backlog.md「削除確認フローの不統一」、Issue #261）
-const confirmingSetDeleteId = ref<string | null>(null)
+// セット削除は確認なしの即時削除（Issue #261で他の削除操作と同じ2段階確認に揃えたが、実際に
+// 使うと重量・回数を調整しながら何度もセットを追加/削除する頻繁な操作で確認が煩わしいという
+// フィードバックを受け、Issue #272で即時削除に戻した）
 const setDeleteErrors = reactive<Record<string, string>>({})
 const setDeleting = reactive<Record<string, boolean>>({})
 
@@ -255,7 +256,6 @@ async function onDeleteSet(setId: string) {
   setDeleteErrors[setId] = ''
   try {
     await removeSet(setId)
-    confirmingSetDeleteId.value = null
   } catch {
     setDeleteErrors[setId] = '削除に失敗しました。時間をおいて再度お試しください'
   } finally {
@@ -569,74 +569,48 @@ async function onGoToExercisePicker() {
                       <span></span>
                     </div>
                     <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
-                      <div v-if="setInputs[set.id]">
-                        <div
-                          v-if="confirmingSetDeleteId === set.id"
-                          class="flex items-center gap-2 px-3 py-1.5"
-                          :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                      <div
+                        v-if="setInputs[set.id]"
+                        class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                        :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                      >
+                        <span
+                          class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                          >{{ set.setOrder }}</span
                         >
-                          <p class="flex-1 text-xs text-gray-700 dark:text-ink">
-                            {{ set.setOrder }}セット目を削除しますか？（元に戻せません）
-                          </p>
+                        <span class="flex min-w-0 items-baseline gap-1.5">
+                          <input
+                            v-model="setInputs[set.id]!.weight"
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            placeholder="自重"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            @blur="onSetFieldBlur(set.id)"
+                          />
+                          <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
+                        </span>
+                        <span class="flex min-w-0 items-baseline gap-1.5">
+                          <input
+                            v-model="setInputs[set.id]!.reps"
+                            type="number"
+                            min="1"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            @blur="onSetFieldBlur(set.id)"
+                          />
+                          <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
+                        </span>
+                        <span class="flex justify-center">
                           <button
                             type="button"
                             :disabled="setDeleting[set.id]"
-                            class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
-                            @click="confirmingSetDeleteId = null"
-                          >
-                            キャンセル
-                          </button>
-                          <button
-                            type="button"
-                            :disabled="setDeleting[set.id]"
-                            class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                            class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-[''] disabled:opacity-50"
+                            aria-label="このセットを削除"
                             @click="onDeleteSet(set.id)"
                           >
-                            {{ setDeleting[set.id] ? '削除中...' : '削除する' }}
+                            <TrashIcon class="h-3.5 w-3.5" />
                           </button>
-                        </div>
-                        <div
-                          v-else
-                          class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-                          :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
-                        >
-                          <span
-                            class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                            >{{ set.setOrder }}</span
-                          >
-                          <span class="flex min-w-0 items-baseline gap-1.5">
-                            <input
-                              v-model="setInputs[set.id]!.weight"
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              placeholder="自重"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                              @blur="onSetFieldBlur(set.id)"
-                            />
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
-                          </span>
-                          <span class="flex min-w-0 items-baseline gap-1.5">
-                            <input
-                              v-model="setInputs[set.id]!.reps"
-                              type="number"
-                              min="1"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                              @blur="onSetFieldBlur(set.id)"
-                            />
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
-                          </span>
-                          <span class="flex justify-center">
-                            <button
-                              type="button"
-                              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
-                              aria-label="このセットを削除"
-                              @click="confirmingSetDeleteId = set.id"
-                            >
-                              <TrashIcon class="h-3.5 w-3.5" />
-                            </button>
-                          </span>
-                        </div>
+                        </span>
                       </div>
                     </template>
                   </div>
