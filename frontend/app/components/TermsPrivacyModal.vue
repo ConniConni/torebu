@@ -34,7 +34,7 @@ const title = computed(() => (props.type === 'terms' ? '利用規約' : 'プラ�
     <div class="flex items-center gap-3 border-b border-gray-200 dark:border-border-dark px-4 py-3">
       <button
         type="button"
-        class="text-lg text-gray-500 dark:text-muted"
+        class="-m-2.5 flex h-11 w-11 items-center justify-center text-lg text-gray-500 dark:text-muted"
         aria-label="閉じる"
         @click="emit('close')"
       >

@@ -23,18 +23,10 @@
    コメント削除・ルーティンの目安セット削除・ワークアウト作成中のセット削除の3箇所を、
    他の削除操作（グループ・ワークアウト本体・ルーティン本体・カスタム種目）と同じ
    「削除ボタン→キャンセル/削除するに切り替わる」2段階確認に統一した
-2. **削除系アイコンボタンのタップ領域が44pxガイドラインを下回る**（優先度：中）：Apple HIG／
-   Material Designの推奨タップ領域（目安44×44px）に対し、削除系ボタンが軒並み小さい。
-   - コメント削除：`h-[22px] w-[22px]`（[workouts.vue:477](../frontend/app/pages/groups/[id]/workouts.vue)）
-   - セット/種目/ルーティン削除：`h-7 w-7`〜`h-8 w-8`（28〜32px）：
-     [workouts/exercises.vue:203](../frontend/app/pages/workouts/exercises.vue)、
-     [routines/index.vue:129](../frontend/app/pages/routines/index.vue)、
-     [HomeScreen.vue:518](../frontend/app/components/HomeScreen.vue)など
-   - モーダルの閉じる「✕」：サイズ指定なし・`text-lg`のみ：
-     [MuscleHighlightSheet.vue:79](../frontend/app/components/MuscleHighlightSheet.vue)、
-     [TermsPrivacyModal.vue:38](../frontend/app/components/TermsPrivacyModal.vue)
-   - 1と根っこが同じ（「削除は大きく・必ず確認」という統一ルール未整備）ため、1と合わせて1つの
-     Issueにまとめるのが良さそう
+2. ~~**削除系アイコンボタンのタップ領域が44pxガイドラインを下回る**~~：[Issue #263](https://github.com/ConniConni/torebu/issues/263)で対応済み。
+   視覚サイズはそのままに、グリッド/リストで制約のある箇所は疑似要素（::before + 負のinset）で
+   タップ領域だけ44×44px相当に拡張。モーダルの閉じる「✕」は周囲に制約がないため実ボックスを
+   44×44pxにし、負のマージンで見た目の占有スペースを維持した
 3. **ローディング表現が2パターン混在**（優先度：低）：一覧系ページは`読み込み中...`テキストのみ
    （スケルトン/スピナー無し）で統一。ログイン・登録・パスワード関連フォームはローディング表示無し・
    ボタンdisabledのみ、という別パターン。王道の範囲内の使い分けではあるので緊急性は低い
