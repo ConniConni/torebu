@@ -54,6 +54,15 @@ await fetchRoutine()
 
 const exerciseError = ref('')
 
+// 目安セット(target_sets)の保存中フラグ・エラー。addExercise() が種目追加直後に
+// addTargetSet() → saveTargetSets() を呼ぶため、それより前(このブロックより上)で
+// 宣言しておく必要がある。後方(198行目付近)に置いていたところ、種目選択画面から
+// 戻った直後の自動追加(下のpickedExerciseId分岐)がスクリプト評価順で先に実行され、
+// まだ初期化されていないこのrefを参照してReferenceErrorになり、目安セットのPATCHが
+// 一度も飛ばずに終わっていた(2026-09-26発見)
+const targetSetsSaving = ref<Record<string, boolean>>({})
+const targetSetsErrors = ref<Record<string, string>>({})
+
 // ④種目選択・⑦種目追加(returnTo=このページ)から選ばれた種目を、戻ってきたタイミングで追加する
 const pickedExerciseId = usePickedExerciseId()
 if (pickedExerciseId.value) {
@@ -194,9 +203,8 @@ async function onDragEnd() {
 
 // --- 目安セット(target_sets)の追加・編集・削除 ---
 // routine_exercise単位でセット配列をまるごと持つ設計のため、行を追加・削除・編集するたびに
-// 配列全体をPATCHで送り直す(workout_setsのような1セットごとのAPIは無い。docs/backlog.md参照)
-const targetSetsSaving = ref<Record<string, boolean>>({})
-const targetSetsErrors = ref<Record<string, string>>({})
+// 配列全体をPATCHで送り直す(workout_setsのような1セットごとのAPIは無い。docs/backlog.md参照)。
+// targetSetsSaving/targetSetsErrorsの宣言は63行目付近(pickedExerciseIdの分岐より上)に移動済み
 
 // 重量・回数はworkout_setsと同じ基準(重量0.5kg刻み・999.5kg以下、回数は正の整数・999以下)で検証する
 function normalizeTargetSets(sets: TargetSet[]) {
