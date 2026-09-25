@@ -101,147 +101,151 @@ async function onDeleteExercise(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink :to="returnTo" class="text-sm text-gray-500 dark:text-muted">← 戻る</NuxtLink>
-      <h1 class="text-base font-semibold text-gray-900 dark:text-ink">種目を選択</h1>
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader :back-to="returnTo" back-label="戻る" title="種目を選択" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="category in EQUIPMENT_CATEGORIES"
+            :key="category"
+            type="button"
+            class="rounded-full border px-3 py-1 text-xs font-medium"
+            :class="
+              selectedEquipmentCategories.has(category)
+                ? 'border-brand-600 dark:border-accent bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'border-gray-300 dark:border-border-dark bg-white dark:bg-panel text-gray-600 dark:text-muted'
+            "
+            @click="toggleEquipmentCategory(category)"
+          >
+            {{ equipmentCategoryLabel(category) }}
+          </button>
+        </div>
 
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="category in EQUIPMENT_CATEGORIES"
-          :key="category"
-          type="button"
-          class="rounded-full border px-3 py-1 text-xs font-medium"
-          :class="
-            selectedEquipmentCategories.has(category)
-              ? 'border-brand-600 dark:border-accent bg-brand-600 text-white dark:bg-accent dark:text-surface'
-              : 'border-gray-300 dark:border-border-dark bg-white dark:bg-panel text-gray-600 dark:text-muted'
-          "
-          @click="toggleEquipmentCategory(category)"
-        >
-          {{ equipmentCategoryLabel(category) }}
-        </button>
-      </div>
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
+          種目一覧の取得に失敗しました。時間をおいて再度お試しください
+        </p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
-        種目一覧の取得に失敗しました。時間をおいて再度お試しください
-      </p>
-
-      <template v-else>
-        <section
-          v-for="section in sections"
-          :key="section.group"
-          class="rounded-lg bg-white dark:bg-panel p-4 shadow"
-        >
-          <div class="mb-2 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">{{ section.label }}</h2>
-            <NuxtLink
-              :to="{
-                path: '/workouts/exercises-new',
-                query: { muscleGroup: section.group, returnTo },
-              }"
-              class="text-xs text-brand-600 dark:text-accent"
-            >
-              ＋種目を追加
-            </NuxtLink>
-          </div>
-
-          <p v-if="section.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
-            {{
-              selectedEquipmentCategories.size > 0 ? '該当する種目がありません' : '種目がありません'
-            }}
-          </p>
-          <ul v-else class="space-y-1">
-            <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
-              <div
-                v-if="confirmingDeleteId === exercise.id"
-                class="flex flex-col gap-2 rounded bg-gray-50 dark:bg-surface p-2"
+        <template v-else>
+          <section
+            v-for="section in sections"
+            :key="section.group"
+            class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+          >
+            <div class="mb-2 flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">{{ section.label }}</h2>
+              <NuxtLink
+                :to="{
+                  path: '/workouts/exercises-new',
+                  query: { muscleGroup: section.group, returnTo },
+                }"
+                class="text-xs text-brand-600 dark:text-accent"
               >
-                <p class="text-sm text-gray-700 dark:text-ink">
-                  「{{
-                    exercise.name
-                  }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
-                </p>
-                <div class="flex gap-2">
+                ＋種目を追加
+              </NuxtLink>
+            </div>
+
+            <p v-if="section.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
+              {{
+                selectedEquipmentCategories.size > 0
+                  ? '該当する種目がありません'
+                  : '種目がありません'
+              }}
+            </p>
+            <ul v-else class="space-y-1">
+              <li v-for="exercise in visibleExercises(section)" :key="exercise.id">
+                <div
+                  v-if="confirmingDeleteId === exercise.id"
+                  class="flex flex-col gap-2 rounded bg-gray-50 dark:bg-surface p-2"
+                >
+                  <p class="text-sm text-gray-700 dark:text-ink">
+                    「{{
+                      exercise.name
+                    }}」を削除しますか？（元に戻せません）今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります
+                  </p>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      :disabled="deletingId === exercise.id"
+                      class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
+                      @click="confirmingDeleteId = null"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="deletingId === exercise.id"
+                      class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                      @click="onDeleteExercise(exercise.id)"
+                    >
+                      {{ deletingId === exercise.id ? '削除中...' : '削除する' }}
+                    </button>
+                  </div>
+                  <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
+                    {{ deleteError }}
+                  </p>
+                </div>
+                <div v-else class="flex items-center gap-1">
                   <button
                     type="button"
-                    :disabled="deletingId === exercise.id"
-                    class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-                    @click="confirmingDeleteId = null"
+                    class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
+                    @click="selectExercise(exercise.id)"
                   >
-                    キャンセル
+                    {{ exercise.name }}
                   </button>
                   <button
                     type="button"
-                    :disabled="deletingId === exercise.id"
-                    class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                    @click="onDeleteExercise(exercise.id)"
+                    class="shrink-0 rounded-full p-1.5 text-gray-400 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-600 dark:hover:text-muted"
+                    aria-label="この種目が効く部位を見る"
+                    @click="highlightExercise = exercise"
                   >
-                    {{ deletingId === exercise.id ? '削除中...' : '削除する' }}
+                    <InfoIcon class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="canDelete(exercise)"
+                    type="button"
+                    class="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-2 before:content-['']"
+                    aria-label="この種目を削除する"
+                    @click="confirmingDeleteId = exercise.id"
+                  >
+                    <TrashIcon class="h-4 w-4" />
                   </button>
                 </div>
-                <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
-                  {{ deleteError }}
-                </p>
-              </div>
-              <div v-else class="flex items-center gap-1">
-                <button
-                  type="button"
-                  class="flex-1 rounded px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
-                  @click="selectExercise(exercise.id)"
-                >
-                  {{ exercise.name }}
-                </button>
-                <button
-                  type="button"
-                  class="shrink-0 rounded-full p-1.5 text-gray-400 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-600 dark:hover:text-muted"
-                  aria-label="この種目が効く部位を見る"
-                  @click="highlightExercise = exercise"
-                >
-                  <InfoIcon class="h-4 w-4" />
-                </button>
-                <button
-                  v-if="canDelete(exercise)"
-                  type="button"
-                  class="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-2 before:content-['']"
-                  aria-label="この種目を削除する"
-                  @click="confirmingDeleteId = exercise.id"
-                >
-                  <TrashIcon class="h-4 w-4" />
-                </button>
-              </div>
-            </li>
-          </ul>
+              </li>
+            </ul>
 
-          <button
-            v-if="section.exercises.length > SECTION_PREVIEW_COUNT"
-            type="button"
-            class="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-muted"
-            @click="toggleExpanded(section.group)"
-          >
-            {{
-              expandedGroups.has(section.group)
-                ? '閉じる'
-                : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件）`
-            }}
-            <ChevronDownIcon
-              class="h-3.5 w-3.5 transition-transform"
-              :class="expandedGroups.has(section.group) ? 'rotate-180' : ''"
-            />
-          </button>
-        </section>
-      </template>
+            <button
+              v-if="section.exercises.length > SECTION_PREVIEW_COUNT"
+              type="button"
+              class="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-muted"
+              @click="toggleExpanded(section.group)"
+            >
+              {{
+                expandedGroups.has(section.group)
+                  ? '閉じる'
+                  : `もっと見る（他${section.exercises.length - SECTION_PREVIEW_COUNT}件）`
+              }}
+              <ChevronDownIcon
+                class="h-3.5 w-3.5 transition-transform"
+                :class="expandedGroups.has(section.group) ? 'rotate-180' : ''"
+              />
+            </button>
+          </section>
+        </template>
+      </div>
+
+      <MuscleHighlightSheet
+        v-if="highlightExercise"
+        :exercise-name="highlightExercise.name"
+        :main-muscle="highlightExercise.mainMuscle"
+        :related-muscles="highlightExercise.relatedMuscles"
+        :main-zone="highlightExercise.mainZone"
+        :gender="user?.gender"
+        @close="highlightExercise = null"
+      />
     </div>
-
-    <MuscleHighlightSheet
-      v-if="highlightExercise"
-      :exercise-name="highlightExercise.name"
-      :main-muscle="highlightExercise.mainMuscle"
-      :related-muscles="highlightExercise.relatedMuscles"
-      :main-zone="highlightExercise.mainZone"
-      :gender="user?.gender"
-      @close="highlightExercise = null"
-    />
   </div>
 </template>

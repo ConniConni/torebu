@@ -273,67 +273,67 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink to="/routines" class="text-sm text-gray-500 dark:text-muted"
-        >← ルーティン一覧に戻る</NuxtLink
-      >
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader back-to="/routines" back-label="ルーティン一覧に戻る" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="error || !routine" class="text-center text-sm text-red-600 dark:text-red-400">
+          ルーティンの取得に失敗しました。時間をおいて再度お試しください
+        </p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="error || !routine" class="text-center text-sm text-red-600 dark:text-red-400">
-        ルーティンの取得に失敗しました。時間をおいて再度お試しください
-      </p>
+        <template v-else>
+          <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
+            ルーティン名
+            <input
+              v-model="nameInput"
+              type="text"
+              maxlength="50"
+              class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+              @blur="onNameBlur"
+            />
+          </label>
+          <p v-if="savingName" class="text-xs text-gray-400 dark:text-muted">保存中...</p>
+          <p v-if="nameError" class="text-sm text-red-600 dark:text-red-400">{{ nameError }}</p>
 
-      <template v-else>
-        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
-          ルーティン名
-          <input
-            v-model="nameInput"
-            type="text"
-            maxlength="50"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
-            @blur="onNameBlur"
-          />
-        </label>
-        <p v-if="savingName" class="text-xs text-gray-400 dark:text-muted">保存中...</p>
-        <p v-if="nameError" class="text-sm text-red-600 dark:text-red-400">{{ nameError }}</p>
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <div class="mb-2 flex items-center justify-between">
+              <p class="text-sm font-semibold text-gray-900 dark:text-ink">種目</p>
+              <NuxtLink
+                :to="{ path: '/workouts/exercises', query: { returnTo: `/routines/${routineId}` } }"
+                class="text-xs text-brand-600 dark:text-accent"
+              >
+                ＋種目を追加
+              </NuxtLink>
+            </div>
 
-        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <div class="mb-2 flex items-center justify-between">
-            <p class="text-sm font-semibold text-gray-900 dark:text-ink">種目</p>
-            <NuxtLink
-              :to="{ path: '/workouts/exercises', query: { returnTo: `/routines/${routineId}` } }"
-              class="text-xs text-brand-600 dark:text-accent"
-            >
-              ＋種目を追加
-            </NuxtLink>
-          </div>
+            <p v-if="routine.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
+              種目がまだ登録されていません
+            </p>
+            <ClientOnly v-else>
+              <draggable
+                v-model="routine.exercises"
+                item-key="id"
+                handle=".drag-handle"
+                class="space-y-1"
+                @end="onDragEnd"
+              >
+                <template #item="{ element }">
+                  <div
+                    class="rounded py-1.5 text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
+                  >
+                    <span class="flex items-center gap-2 px-2">
+                      <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
+                      {{ element.exercise.name }}
+                      <span class="text-xs text-gray-400 dark:text-muted"
+                        >（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span
+                      >
+                    </span>
 
-          <p v-if="routine.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
-            種目がまだ登録されていません
-          </p>
-          <ClientOnly v-else>
-            <draggable
-              v-model="routine.exercises"
-              item-key="id"
-              handle=".drag-handle"
-              class="space-y-1"
-              @end="onDragEnd"
-            >
-              <template #item="{ element }">
-                <div
-                  class="rounded py-1.5 text-sm text-gray-700 dark:text-ink hover:bg-gray-100 dark:hover:bg-white/5"
-                >
-                  <span class="flex items-center gap-2 px-2">
-                    <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
-                    {{ element.exercise.name }}
-                    <span class="text-xs text-gray-400 dark:text-muted"
-                      >（{{ muscleGroupLabel(element.exercise.muscleGroup) }}）</span
-                    >
-                  </span>
-
-                  <div class="mt-1 pl-2">
-                    <!-- ③記録作成のセット表示と見た目を揃えたヘッダー帯付きコンパクト表形式
+                    <div class="mt-1 pl-2">
+                      <!-- ③記録作成のセット表示と見た目を揃えたヘッダー帯付きコンパクト表形式
                          （ユーザー指摘、2026-09-05）。重量・回数の列はfrで幅いっぱいまで伸ばし、
                          入力欄の右に単位（kg・回）を添えている。列にminmaxで下限を設けているのは、
                          画面幅が狭いと回数欄が数字の入る幅より縮んで「10」が見切れて「1」に
@@ -345,123 +345,127 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                          残しつつ、見切れの心配がないセット番号列の幅・列間の余白・外側の余白を
                          削って全体の下限を縮め、スマホ幅（320px程度）でもスクロール無しで収まるように
                          調整した -->
-                    <div v-if="element.targetSets.length > 0" class="overflow-x-auto">
-                      <div class="min-w-[15rem] overflow-hidden rounded-lg">
-                        <div
-                          class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-2 py-1.5"
-                        >
-                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
-                            >セット</span
-                          >
-                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
-                            >重量</span
-                          >
-                          <span class="text-xs font-semibold text-gray-500 dark:text-muted"
-                            >回数</span
-                          >
-                          <span></span>
-                        </div>
-                        <div
-                          v-for="(set, index) in element.targetSets"
-                          :key="index"
-                        >
+                      <div v-if="element.targetSets.length > 0" class="overflow-x-auto">
+                        <div class="min-w-[15rem] overflow-hidden rounded-lg">
                           <div
-                            v-if="confirmingTargetSetDelete === targetSetKey(element.id, index)"
-                            class="flex items-center gap-2 px-2 py-1.5"
-                            :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                            class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-2 py-1.5"
                           >
-                            <p class="flex-1 text-xs text-gray-700 dark:text-ink">
-                              {{ Number(index) + 1 }}セット目を削除しますか？（元に戻せません）
-                            </p>
-                            <button
-                              type="button"
-                              class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink"
-                              @click="confirmingTargetSetDelete = null"
+                            <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                              >セット</span
                             >
-                              キャンセル
-                            </button>
-                            <button
-                              type="button"
-                              class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white"
-                              @click="removeTargetSet(element, index)"
+                            <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                              >重量</span
                             >
-                              削除する
-                            </button>
+                            <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                              >回数</span
+                            >
+                            <span></span>
                           </div>
-                          <div
-                            v-else
-                            class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2 px-2 py-1.5"
-                            :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
-                          >
-                            <span
-                              class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                              >{{ Number(index) + 1 }}</span
+                          <div v-for="(set, index) in element.targetSets" :key="index">
+                            <div
+                              v-if="confirmingTargetSetDelete === targetSetKey(element.id, index)"
+                              class="flex items-center gap-2 px-2 py-1.5"
+                              :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                             >
-                            <span class="flex min-w-0 items-baseline gap-1.5">
-                              <input
-                                v-model="set.weightKg"
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                placeholder="自重"
-                                class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                                @blur="saveTargetSets(element)"
-                              />
-                              <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
-                            </span>
-                            <span class="flex min-w-0 items-baseline gap-1.5">
-                              <input
-                                v-model="set.reps"
-                                type="number"
-                                min="1"
-                                class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                                @blur="saveTargetSets(element)"
-                              />
-                              <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
-                            </span>
-                            <span class="flex justify-center">
+                              <p class="flex-1 text-xs text-gray-700 dark:text-ink">
+                                {{ Number(index) + 1 }}セット目を削除しますか？（元に戻せません）
+                              </p>
                               <button
                                 type="button"
-                                class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
-                                aria-label="この目安セットを削除"
-                                @click="confirmingTargetSetDelete = targetSetKey(element.id, index)"
+                                class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink"
+                                @click="confirmingTargetSetDelete = null"
                               >
-                                <TrashIcon class="h-3.5 w-3.5" />
+                                キャンセル
                               </button>
-                            </span>
+                              <button
+                                type="button"
+                                class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white"
+                                @click="removeTargetSet(element, index)"
+                              >
+                                削除する
+                              </button>
+                            </div>
+                            <div
+                              v-else
+                              class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2 px-2 py-1.5"
+                              :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                            >
+                              <span
+                                class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                                >{{ Number(index) + 1 }}</span
+                              >
+                              <span class="flex min-w-0 items-baseline gap-1.5">
+                                <input
+                                  v-model="set.weightKg"
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  placeholder="自重"
+                                  class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                                  @blur="saveTargetSets(element)"
+                                />
+                                <span class="shrink-0 text-xs text-gray-500 dark:text-muted"
+                                  >kg</span
+                                >
+                              </span>
+                              <span class="flex min-w-0 items-baseline gap-1.5">
+                                <input
+                                  v-model="set.reps"
+                                  type="number"
+                                  min="1"
+                                  class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                                  @blur="saveTargetSets(element)"
+                                />
+                                <span class="shrink-0 text-xs text-gray-500 dark:text-muted"
+                                  >回</span
+                                >
+                              </span>
+                              <span class="flex justify-center">
+                                <button
+                                  type="button"
+                                  class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
+                                  aria-label="この目安セットを削除"
+                                  @click="
+                                    confirmingTargetSetDelete = targetSetKey(element.id, index)
+                                  "
+                                >
+                                  <TrashIcon class="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        class="mt-1 text-xs text-brand-600 dark:text-accent"
+                        @click="addTargetSet(element)"
+                      >
+                        ＋目安セットを追加
+                      </button>
+                      <p
+                        v-if="targetSetsSaving[element.id]"
+                        class="mt-1 text-xs text-gray-400 dark:text-muted"
+                      >
+                        保存中...
+                      </p>
+                      <p
+                        v-if="targetSetsErrors[element.id]"
+                        class="mt-1 text-xs text-red-600 dark:text-red-400"
+                      >
+                        {{ targetSetsErrors[element.id] }}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      class="mt-1 text-xs text-brand-600 dark:text-accent"
-                      @click="addTargetSet(element)"
-                    >
-                      ＋目安セットを追加
-                    </button>
-                    <p
-                      v-if="targetSetsSaving[element.id]"
-                      class="mt-1 text-xs text-gray-400 dark:text-muted"
-                    >
-                      保存中...
-                    </p>
-                    <p
-                      v-if="targetSetsErrors[element.id]"
-                      class="mt-1 text-xs text-red-600 dark:text-red-400"
-                    >
-                      {{ targetSetsErrors[element.id] }}
-                    </p>
                   </div>
-                </div>
-              </template>
-            </draggable>
-          </ClientOnly>
-          <p v-if="exerciseError" class="mt-2 text-sm text-red-600 dark:text-red-400">
-            {{ exerciseError }}
-          </p>
-        </div>
-      </template>
+                </template>
+              </draggable>
+            </ClientOnly>
+            <p v-if="exerciseError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+              {{ exerciseError }}
+            </p>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 </template>

@@ -481,77 +481,74 @@ async function onGoToExercisePicker() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <button type="button" class="text-sm text-gray-500 dark:text-muted" @click="onLeaveWorkout">
-          ← ホームに戻る
-        </button>
-        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">{{ targetDate }}の記録</h1>
-      </div>
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader back-label="ホームに戻る" :title="`${targetDate}の記録`" @back="onLeaveWorkout" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <section class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+          <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
+            メモ
+            <textarea
+              v-model="memoInput"
+              rows="2"
+              maxlength="500"
+              placeholder="今日の体調・気づいたことなど"
+              class="rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+              @blur="onMemoBlur"
+            />
+          </label>
+          <p class="mt-1 text-xs text-gray-400 dark:text-muted">
+            {{ memoSaving ? '保存中...' : '' }}
+          </p>
+          <p v-if="memoError" class="mt-1 text-xs text-red-600 dark:text-red-400">
+            {{ memoError }}
+          </p>
+        </section>
 
-      <section class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
-          メモ
-          <textarea
-            v-model="memoInput"
-            rows="2"
-            maxlength="500"
-            placeholder="今日の体調・気づいたことなど"
-            class="rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
-            @blur="onMemoBlur"
-          />
-        </label>
-        <p class="mt-1 text-xs text-gray-400 dark:text-muted">
-          {{ memoSaving ? '保存中...' : '' }}
-        </p>
-        <p v-if="memoError" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ memoError }}</p>
-      </section>
-
-      <p
-        v-if="achievement && achievement.milestoneDays !== null"
-        class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
-      >
-        <FlagIcon class="h-4.5 w-4.5 shrink-0" />
-        <span class="font-semibold">通算{{ achievement.milestoneDays }}日目のトレーニング！</span>
-      </p>
-      <p
-        v-if="achievement?.comeback"
-        class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
-      >
-        <ArrowPathIcon class="h-4.5 w-4.5 shrink-0" />
-        <span class="font-semibold">お帰りなさい！久しぶりのトレーニング</span>
-      </p>
-
-      <ClientOnly>
-        <draggable
-          v-model="session.exercises"
-          item-key="id"
-          handle=".drag-handle"
-          class="flex flex-col gap-4"
-          @end="onExerciseDragEnd"
+        <p
+          v-if="achievement && achievement.milestoneDays !== null"
+          class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
         >
-          <template #item="{ element }">
-            <section
-              v-if="groupFor(element.exerciseId)"
-              class="rounded-lg bg-white dark:bg-panel p-4 shadow"
-            >
-              <div class="mb-2 flex items-center justify-between">
-                <span class="flex items-center gap-2">
-                  <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-ink">
-                    {{ groupFor(element.exerciseId)!.name }}
-                  </p>
-                </span>
-                <button
-                  type="button"
-                  class="text-xs text-brand-600 dark:text-accent"
-                  @click="onAddSet(element.exerciseId)"
-                >
-                  ＋セット追加
-                </button>
-              </div>
-              <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
+          <FlagIcon class="h-4.5 w-4.5 shrink-0" />
+          <span class="font-semibold">通算{{ achievement.milestoneDays }}日目のトレーニング！</span>
+        </p>
+        <p
+          v-if="achievement?.comeback"
+          class="flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+        >
+          <ArrowPathIcon class="h-4.5 w-4.5 shrink-0" />
+          <span class="font-semibold">お帰りなさい！久しぶりのトレーニング</span>
+        </p>
+
+        <ClientOnly>
+          <draggable
+            v-model="session.exercises"
+            item-key="id"
+            handle=".drag-handle"
+            class="flex flex-col gap-4"
+            @end="onExerciseDragEnd"
+          >
+            <template #item="{ element }">
+              <section
+                v-if="groupFor(element.exerciseId)"
+                class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+              >
+                <div class="mb-2 flex items-center justify-between">
+                  <span class="flex items-center gap-2">
+                    <span class="drag-handle cursor-grab text-gray-400 dark:text-muted">⠿</span>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-ink">
+                      {{ groupFor(element.exerciseId)!.name }}
+                    </p>
+                  </span>
+                  <button
+                    type="button"
+                    class="text-xs text-brand-600 dark:text-accent"
+                    @click="onAddSet(element.exerciseId)"
+                  >
+                    ＋セット追加
+                  </button>
+                </div>
+                <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
                    各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。重量・回数の列は
                    frで種目カードの幅いっぱいまで伸ばし、右端に余白が余らないようにしている。それぞれの
                    入力欄の右に単位（kg・回）を添えることで、見出しの文言を短くできている。
@@ -559,219 +556,226 @@ async function onGoToExercisePicker() {
                    「10」が見切れて「1」に見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。
                    下限を割り込むほど狭い場合は個別にoverflow-x-autoで横スクロールさせ、他の要素を
                    巻き込んで崩れないようにする -->
-              <div class="overflow-x-auto">
-                <div class="min-w-[17rem] overflow-hidden rounded-lg">
-                  <div
-                    class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
-                  >
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">セット</span>
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
-                    <span></span>
-                  </div>
-                  <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
-                    <div v-if="setInputs[set.id]">
-                      <div
-                        v-if="confirmingSetDeleteId === set.id"
-                        class="flex items-center gap-2 px-3 py-1.5"
-                        :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                <div class="overflow-x-auto">
+                  <div class="min-w-[17rem] overflow-hidden rounded-lg">
+                    <div
+                      class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                    >
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                        >セット</span
                       >
-                        <p class="flex-1 text-xs text-gray-700 dark:text-ink">
-                          {{ set.setOrder }}セット目を削除しますか？（元に戻せません）
-                        </p>
-                        <button
-                          type="button"
-                          :disabled="setDeleting[set.id]"
-                          class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
-                          @click="confirmingSetDeleteId = null"
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
+                      <span></span>
+                    </div>
+                    <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
+                      <div v-if="setInputs[set.id]">
+                        <div
+                          v-if="confirmingSetDeleteId === set.id"
+                          class="flex items-center gap-2 px-3 py-1.5"
+                          :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                         >
-                          キャンセル
-                        </button>
-                        <button
-                          type="button"
-                          :disabled="setDeleting[set.id]"
-                          class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                          @click="onDeleteSet(set.id)"
-                        >
-                          {{ setDeleting[set.id] ? '削除中...' : '削除する' }}
-                        </button>
-                      </div>
-                      <div
-                        v-else
-                        class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
-                        :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
-                      >
-                        <span
-                          class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                          >{{ set.setOrder }}</span
-                        >
-                        <span class="flex min-w-0 items-baseline gap-1.5">
-                          <input
-                            v-model="setInputs[set.id]!.weight"
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            placeholder="自重"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                            @blur="onSetFieldBlur(set.id)"
-                          />
-                          <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
-                        </span>
-                        <span class="flex min-w-0 items-baseline gap-1.5">
-                          <input
-                            v-model="setInputs[set.id]!.reps"
-                            type="number"
-                            min="1"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                            @blur="onSetFieldBlur(set.id)"
-                          />
-                          <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
-                        </span>
-                        <span class="flex justify-center">
+                          <p class="flex-1 text-xs text-gray-700 dark:text-ink">
+                            {{ set.setOrder }}セット目を削除しますか？（元に戻せません）
+                          </p>
                           <button
                             type="button"
-                            class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
-                            aria-label="このセットを削除"
-                            @click="confirmingSetDeleteId = set.id"
+                            :disabled="setDeleting[set.id]"
+                            class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
+                            @click="confirmingSetDeleteId = null"
                           >
-                            <TrashIcon class="h-3.5 w-3.5" />
+                            キャンセル
                           </button>
-                        </span>
+                          <button
+                            type="button"
+                            :disabled="setDeleting[set.id]"
+                            class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                            @click="onDeleteSet(set.id)"
+                          >
+                            {{ setDeleting[set.id] ? '削除中...' : '削除する' }}
+                          </button>
+                        </div>
+                        <div
+                          v-else
+                          class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                          :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                        >
+                          <span
+                            class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                            >{{ set.setOrder }}</span
+                          >
+                          <span class="flex min-w-0 items-baseline gap-1.5">
+                            <input
+                              v-model="setInputs[set.id]!.weight"
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              placeholder="自重"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              @blur="onSetFieldBlur(set.id)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
+                          </span>
+                          <span class="flex min-w-0 items-baseline gap-1.5">
+                            <input
+                              v-model="setInputs[set.id]!.reps"
+                              type="number"
+                              min="1"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              @blur="onSetFieldBlur(set.id)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
+                          </span>
+                          <span class="flex justify-center">
+                            <button
+                              type="button"
+                              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
+                              aria-label="このセットを削除"
+                              @click="confirmingSetDeleteId = set.id"
+                            >
+                              <TrashIcon class="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </template>
+                    </template>
+                  </div>
                 </div>
-              </div>
-              <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
-                <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
-                  {{ set.setOrder }}セット目を保存中...
-                </p>
-                <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600 dark:text-red-400">
-                  {{ setErrors[set.id] }}
-                </p>
-                <p v-if="setDeleteErrors[set.id]" class="mt-1 text-xs text-red-600 dark:text-red-400">
-                  {{ setDeleteErrors[set.id] }}
-                </p>
-              </template>
-              <p
-                v-if="personalBestFor(element.exerciseId)"
-                class="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
-              >
-                <TrophyIcon class="h-4.5 w-4.5 shrink-0" />
-                <span>
-                  <span class="font-semibold">自己ベスト更新！</span>
-                  {{ personalBestFor(element.exerciseId)!.weightKg }}kg
-                  <span class="text-xs text-amber-800 dark:text-amber-300"
-                    >（これまで {{ personalBestFor(element.exerciseId)!.previousBestKg }}kg）</span
+                <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
+                  <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
+                    {{ set.setOrder }}セット目を保存中...
+                  </p>
+                  <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600 dark:text-red-400">
+                    {{ setErrors[set.id] }}
+                  </p>
+                  <p
+                    v-if="setDeleteErrors[set.id]"
+                    class="mt-1 text-xs text-red-600 dark:text-red-400"
                   >
-                </span>
-              </p>
-            </section>
-          </template>
-        </draggable>
-      </ClientOnly>
+                    {{ setDeleteErrors[set.id] }}
+                  </p>
+                </template>
+                <p
+                  v-if="personalBestFor(element.exerciseId)"
+                  class="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+                >
+                  <TrophyIcon class="h-4.5 w-4.5 shrink-0" />
+                  <span>
+                    <span class="font-semibold">自己ベスト更新！</span>
+                    {{ personalBestFor(element.exerciseId)!.weightKg }}kg
+                    <span class="text-xs text-amber-800 dark:text-amber-300"
+                      >（これまで
+                      {{ personalBestFor(element.exerciseId)!.previousBestKg }}kg）</span
+                    >
+                  </span>
+                </p>
+              </section>
+            </template>
+          </draggable>
+        </ClientOnly>
 
-      <p v-if="exerciseOrderError" class="text-center text-sm text-red-600 dark:text-red-400">
-        {{ exerciseOrderError }}
-      </p>
-
-      <p v-if="addSetError" class="text-center text-sm text-red-600 dark:text-red-400">
-        {{ addSetError }}
-      </p>
-
-      <p
-        v-if="groupedSets.length === 0 && pendingExercises.length === 0"
-        class="text-center text-sm text-gray-500 dark:text-muted"
-      >
-        まだ種目が追加されていません
-      </p>
-
-      <section
-        v-if="pendingExercises.length > 0"
-        class="rounded-lg bg-white dark:bg-panel p-4 shadow"
-      >
-        <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">入力待ちの種目</p>
-        <ul class="space-y-1">
-          <li v-for="p in pendingExercises" :key="p.exerciseId">
-            <button
-              type="button"
-              class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink"
-              @click="onStartPendingExercise(p.exerciseId)"
-            >
-              {{ p.name }}
-            </button>
-          </li>
-        </ul>
-      </section>
-
-      <section v-if="showRoutinePicker" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-        <div class="mb-2 flex items-center justify-between">
-          <p class="text-sm font-semibold text-gray-900 dark:text-ink">ルーティンを選ぶ</p>
-          <button
-            type="button"
-            :disabled="routineApplying"
-            class="text-xs text-gray-500 dark:text-muted disabled:opacity-50"
-            @click="onCloseRoutinePicker"
-          >
-            閉じる
-          </button>
-        </div>
-        <p v-if="routinePickerPending" class="text-sm text-gray-500 dark:text-muted">
-          読み込み中...
+        <p v-if="exerciseOrderError" class="text-center text-sm text-red-600 dark:text-red-400">
+          {{ exerciseOrderError }}
         </p>
-        <p v-else-if="routineApplying" class="text-sm text-gray-500 dark:text-muted">適用中...</p>
-        <template v-else-if="routines && routines.length > 0">
+
+        <p v-if="addSetError" class="text-center text-sm text-red-600 dark:text-red-400">
+          {{ addSetError }}
+        </p>
+
+        <p
+          v-if="groupedSets.length === 0 && pendingExercises.length === 0"
+          class="text-center text-sm text-gray-500 dark:text-muted"
+        >
+          まだ種目が追加されていません
+        </p>
+
+        <section
+          v-if="pendingExercises.length > 0"
+          class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+        >
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">入力待ちの種目</p>
           <ul class="space-y-1">
-            <li v-for="r in routines" :key="r.id">
+            <li v-for="p in pendingExercises" :key="p.exerciseId">
               <button
                 type="button"
-                :disabled="routineApplying"
-                class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-                @click="onApplyRoutine(r.id)"
+                class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink"
+                @click="onStartPendingExercise(p.exerciseId)"
               >
-                {{ r.name }}
+                {{ p.name }}
               </button>
             </li>
           </ul>
-        </template>
-        <p v-else class="text-sm text-gray-500 dark:text-muted">
-          ルーティンがまだ登録されていません。
-          <NuxtLink to="/routines" class="text-brand-600 dark:text-accent"
-            >ルーティンを登録する</NuxtLink
-          >
-        </p>
-        <p v-if="routineApplyError" class="mt-2 text-sm text-red-600 dark:text-red-400">
-          {{ routineApplyError }}
-        </p>
-        <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600 dark:text-muted">
+        </section>
+
+        <section v-if="showRoutinePicker" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+          <div class="mb-2 flex items-center justify-between">
+            <p class="text-sm font-semibold text-gray-900 dark:text-ink">ルーティンを選ぶ</p>
+            <button
+              type="button"
+              :disabled="routineApplying"
+              class="text-xs text-gray-500 dark:text-muted disabled:opacity-50"
+              @click="onCloseRoutinePicker"
+            >
+              閉じる
+            </button>
+          </div>
+          <p v-if="routinePickerPending" class="text-sm text-gray-500 dark:text-muted">
+            読み込み中...
+          </p>
+          <p v-else-if="routineApplying" class="text-sm text-gray-500 dark:text-muted">適用中...</p>
+          <template v-else-if="routines && routines.length > 0">
+            <ul class="space-y-1">
+              <li v-for="r in routines" :key="r.id">
+                <button
+                  type="button"
+                  :disabled="routineApplying"
+                  class="w-full rounded border border-gray-300 dark:border-border-dark px-2 py-1.5 text-left text-sm text-gray-700 dark:text-ink disabled:opacity-50"
+                  @click="onApplyRoutine(r.id)"
+                >
+                  {{ r.name }}
+                </button>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="text-sm text-gray-500 dark:text-muted">
+            ルーティンがまだ登録されていません。
+            <NuxtLink to="/routines" class="text-brand-600 dark:text-accent"
+              >ルーティンを登録する</NuxtLink
+            >
+          </p>
+          <p v-if="routineApplyError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+            {{ routineApplyError }}
+          </p>
+          <p v-if="routineApplyNotice" class="mt-2 text-sm text-gray-600 dark:text-muted">
+            {{ routineApplyNotice }}
+          </p>
+        </section>
+
+        <!-- 一部の種目のみ重複除外された場合の通知（Issue #84）。適用成功でピッカーは閉じるため、
+           ピッカーの外に置いてピッカーが閉じた後も表示され続けるようにする -->
+        <p
+          v-if="routineApplyNotice && !showRoutinePicker"
+          class="rounded-lg bg-white dark:bg-panel p-4 text-sm text-gray-600 dark:text-muted shadow"
+        >
           {{ routineApplyNotice }}
         </p>
-      </section>
 
-      <!-- 一部の種目のみ重複除外された場合の通知（Issue #84）。適用成功でピッカーは閉じるため、
-           ピッカーの外に置いてピッカーが閉じた後も表示され続けるようにする -->
-      <p
-        v-if="routineApplyNotice && !showRoutinePicker"
-        class="rounded-lg bg-white dark:bg-panel p-4 text-sm text-gray-600 dark:text-muted shadow"
-      >
-        {{ routineApplyNotice }}
-      </p>
-
-      <div class="flex gap-2">
-        <button
-          type="button"
-          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
-          @click="onGoToExercisePicker"
-        >
-          ＋種目を追加
-        </button>
-        <button
-          type="button"
-          class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
-          @click="onOpenRoutinePicker"
-        >
-          ＋ルーティンから選ぶ
-        </button>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
+            @click="onGoToExercisePicker"
+          >
+            ＋種目を追加
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
+            @click="onOpenRoutinePicker"
+          >
+            ＋ルーティンから選ぶ
+          </button>
+        </div>
       </div>
     </div>
   </div>

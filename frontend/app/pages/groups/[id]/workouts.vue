@@ -148,7 +148,9 @@ async function toggleComments(workoutId: string) {
     // （再度開いたときに古い確認状態が残って見えるのを防ぐ）
     if (
       confirmingCommentDeleteId.value &&
-      commentsByWorkoutId.value.get(workoutId)?.some((c) => c.id === confirmingCommentDeleteId.value)
+      commentsByWorkoutId.value
+        .get(workoutId)
+        ?.some((c) => c.id === confirmingCommentDeleteId.value)
     ) {
       confirmingCommentDeleteId.value = null
     }
@@ -242,325 +244,330 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500 dark:text-muted"
-          >← グループに戻る</NuxtLink
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader :back-to="`/groups/${groupId}`" back-label="グループに戻る" title="みんなの記録" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
+          記録の取得に失敗しました。時間をおいて再度お試しください
+        </p>
+        <p
+          v-else-if="!workouts || workouts.length === 0"
+          class="text-center text-sm text-gray-500 dark:text-muted"
         >
-        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">みんなの記録</h1>
-      </div>
+          まだ記録がありません
+        </p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
-        記録の取得に失敗しました。時間をおいて再度お試しください
-      </p>
-      <p
-        v-else-if="!workouts || workouts.length === 0"
-        class="text-center text-sm text-gray-500 dark:text-muted"
-      >
-        まだ記録がありません
-      </p>
-
-      <ul v-else class="flex flex-col gap-3">
-        <li
-          v-for="workout in workouts"
-          :id="`workout-${workout.id}`"
-          :key="workout.id"
-          class="rounded-lg bg-white dark:bg-panel p-4 shadow"
-          :class="workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400 dark:ring-accent' : ''"
-        >
-          <div class="flex items-center gap-2.5">
-            <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-sm font-semibold text-brand-700 dark:text-accent"
-            >
-              {{ workout.displayName.slice(0, 1) }}
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold text-gray-900 dark:text-ink">
-                {{ workout.displayName }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-muted">{{ workout.performedAt }}</p>
-            </div>
-          </div>
-          <p v-if="workout.memo" class="mt-2 text-xs text-gray-500 dark:text-muted">
-            {{ workout.memo }}
-          </p>
-
-          <p
-            v-if="workout.exercises.length === 0"
-            class="mt-2 text-xs text-gray-400 dark:text-muted"
+        <ul v-else class="flex flex-col gap-3">
+          <li
+            v-for="workout in workouts"
+            :id="`workout-${workout.id}`"
+            :key="workout.id"
+            class="rounded-lg bg-white dark:bg-panel p-4 shadow"
+            :class="
+              workout.id === highlightWorkoutId ? 'ring-2 ring-brand-400 dark:ring-accent' : ''
+            "
           >
-            記録内容はまだありません
-          </p>
-          <div v-else class="mt-3 flex flex-wrap gap-1.5">
-            <div v-for="ex in workout.exercises" :key="ex.exerciseId" class="w-full">
-              <button
-                type="button"
-                class="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-accent/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-accent"
-                :aria-expanded="isExerciseOpen(workout.id, ex.exerciseId)"
-                @click="toggleExercise(workout.id, ex.exerciseId)"
+            <div class="flex items-center gap-2.5">
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-sm font-semibold text-brand-700 dark:text-accent"
               >
-                {{ ex.name }}・{{ ex.sets.length }}セット
-                <span
-                  class="text-[10px] transition-transform"
-                  :class="isExerciseOpen(workout.id, ex.exerciseId) ? 'rotate-180' : ''"
-                >
-                  ▾
-                </span>
-              </button>
+                {{ workout.displayName.slice(0, 1) }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-gray-900 dark:text-ink">
+                  {{ workout.displayName }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-muted">{{ workout.performedAt }}</p>
+              </div>
+            </div>
+            <p v-if="workout.memo" class="mt-2 text-xs text-gray-500 dark:text-muted">
+              {{ workout.memo }}
+            </p>
 
-              <!-- セット表示は②ホームの記録カードと同じグリッド表形式に揃える(frontend/app/pages/index.vue参照) -->
-              <div v-if="isExerciseOpen(workout.id, ex.exerciseId)" class="mt-1.5 overflow-x-auto">
-                <div class="min-w-[15rem] overflow-hidden rounded-lg">
-                  <div
-                    class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1"
+            <p
+              v-if="workout.exercises.length === 0"
+              class="mt-2 text-xs text-gray-400 dark:text-muted"
+            >
+              記録内容はまだありません
+            </p>
+            <div v-else class="mt-3 flex flex-wrap gap-1.5">
+              <div v-for="ex in workout.exercises" :key="ex.exerciseId" class="w-full">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-accent/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-accent"
+                  :aria-expanded="isExerciseOpen(workout.id, ex.exerciseId)"
+                  @click="toggleExercise(workout.id, ex.exerciseId)"
+                >
+                  {{ ex.name }}・{{ ex.sets.length }}セット
+                  <span
+                    class="text-[10px] transition-transform"
+                    :class="isExerciseOpen(workout.id, ex.exerciseId) ? 'rotate-180' : ''"
                   >
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">セット</span>
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
-                    <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
-                  </div>
-                  <div
-                    v-for="(set, i) in ex.sets"
-                    :key="set.id"
-                    class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
-                    :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
-                  >
-                    <span
-                      class="text-center text-sm font-bold tabular-nums text-gray-900 dark:text-ink"
+                    ▾
+                  </span>
+                </button>
+
+                <!-- セット表示は②ホームの記録カードと同じグリッド表形式に揃える(frontend/app/pages/index.vue参照) -->
+                <div
+                  v-if="isExerciseOpen(workout.id, ex.exerciseId)"
+                  class="mt-1.5 overflow-x-auto"
+                >
+                  <div class="min-w-[15rem] overflow-hidden rounded-lg">
+                    <div
+                      class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1"
                     >
-                      {{ set.setOrder }}
-                    </span>
-                    <span class="flex min-w-0 items-baseline justify-end gap-1">
-                      <span
-                        class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted"
+                        >セット</span
                       >
-                        {{ set.weightKg ?? '自重' }}
-                      </span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
+                    </div>
+                    <div
+                      v-for="(set, i) in ex.sets"
+                      :key="set.id"
+                      class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] items-center gap-x-2.5 px-3 py-1"
+                      :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                    >
                       <span
-                        v-if="set.weightKg !== null"
-                        class="shrink-0 text-xs text-gray-500 dark:text-muted"
+                        class="text-center text-sm font-bold tabular-nums text-gray-900 dark:text-ink"
                       >
-                        kg
+                        {{ set.setOrder }}
                       </span>
-                    </span>
-                    <span class="flex min-w-0 items-baseline justify-end gap-1">
-                      <span
-                        class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
-                      >
-                        {{ set.reps }}
+                      <span class="flex min-w-0 items-baseline justify-end gap-1">
+                        <span
+                          class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
+                        >
+                          {{ set.weightKg ?? '自重' }}
+                        </span>
+                        <span
+                          v-if="set.weightKg !== null"
+                          class="shrink-0 text-xs text-gray-500 dark:text-muted"
+                        >
+                          kg
+                        </span>
                       </span>
-                      <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
-                    </span>
+                      <span class="flex min-w-0 items-baseline justify-end gap-1">
+                        <span
+                          class="min-w-0 truncate text-right text-sm tabular-nums text-gray-900 dark:text-ink"
+                        >
+                          {{ set.reps }}
+                        </span>
+                        <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div
-            class="mt-3 flex items-center gap-1 border-t border-gray-100 dark:border-white/5 pt-2.5"
-          >
-            <!-- 自分の記録：いいねボタンは押せず(トグル無し)、いいねしてくれた人の一覧を開閉する専用ボタンになる(#149) -->
-            <button
-              v-if="isOwnWorkout(workout)"
-              type="button"
-              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
-              :class="
-                isReactorsOpen(workout.id)
-                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
-                  : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
-              "
-              :aria-expanded="isReactorsOpen(workout.id)"
-              @click="toggleReactorsPanel(workout.id)"
+            <div
+              class="mt-3 flex items-center gap-1 border-t border-gray-100 dark:border-white/5 pt-2.5"
             >
-              <HeartIcon :filled="workout.reactionCount > 0" class="h-4 w-4" />
-              <span class="tabular-nums">{{ workout.reactionCount }}</span>
-            </button>
-            <button
-              v-else
-              type="button"
-              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
-              :class="
-                workout.reactedByMe
-                  ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
-                  : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
-              "
-              :disabled="likePending.has(workout.id)"
-              :aria-pressed="workout.reactedByMe"
-              @click="toggleLike(workout)"
-            >
-              <HeartIcon :filled="workout.reactedByMe" class="h-4 w-4" />
-              <span v-if="workout.reactionCount > 0" class="tabular-nums">
-                {{ workout.reactionCount }}
-              </span>
-              <span v-else>いいね</span>
-            </button>
-            <button
-              type="button"
-              class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium text-gray-500 dark:text-muted transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
-              :aria-expanded="isCommentsOpen(workout.id)"
-              @click="toggleComments(workout.id)"
-            >
-              <CommentIcon class="h-4 w-4" />
-              <span v-if="workout.commentCount > 0" class="tabular-nums">
-                {{ workout.commentCount }}
-              </span>
-              <span v-else>コメント</span>
-            </button>
-          </div>
-
-          <!-- いいねしてくれた人の一覧(#149)。自分の記録でのみ開ける -->
-          <div
-            v-if="isOwnWorkout(workout) && isReactorsOpen(workout.id)"
-            class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
-          >
-            <p
-              v-if="workout.reactorNames.length === 0"
-              class="text-xs text-gray-500 dark:text-muted"
-            >
-              まだいいねがありません
-            </p>
-            <ul v-else class="flex flex-col gap-2">
-              <li
-                v-for="(name, i) in workout.reactorNames"
-                :key="`${workout.id}-${i}`"
-                class="flex items-center gap-2"
+              <!-- 自分の記録：いいねボタンは押せず(トグル無し)、いいねしてくれた人の一覧を開閉する専用ボタンになる(#149) -->
+              <button
+                v-if="isOwnWorkout(workout)"
+                type="button"
+                class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
+                :class="
+                  isReactorsOpen(workout.id)
+                    ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
+                    : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
+                "
+                :aria-expanded="isReactorsOpen(workout.id)"
+                @click="toggleReactorsPanel(workout.id)"
               >
-                <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
-                >
-                  {{ name.slice(0, 1) }}
+                <HeartIcon :filled="workout.reactionCount > 0" class="h-4 w-4" />
+                <span class="tabular-nums">{{ workout.reactionCount }}</span>
+              </button>
+              <button
+                v-else
+                type="button"
+                class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
+                :class="
+                  workout.reactedByMe
+                    ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
+                    : 'text-gray-500 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5'
+                "
+                :disabled="likePending.has(workout.id)"
+                :aria-pressed="workout.reactedByMe"
+                @click="toggleLike(workout)"
+              >
+                <HeartIcon :filled="workout.reactedByMe" class="h-4 w-4" />
+                <span v-if="workout.reactionCount > 0" class="tabular-nums">
+                  {{ workout.reactionCount }}
                 </span>
-                <span class="text-sm text-gray-700 dark:text-ink">{{ name }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div
-            v-if="isCommentsOpen(workout.id)"
-            class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
-          >
-            <p
-              v-if="commentLoadError.has(workout.id)"
-              class="text-xs text-red-600 dark:text-red-400"
-            >
-              コメントの取得に失敗しました。時間をおいて再度お試しください
-            </p>
-            <p
-              v-else-if="!commentsByWorkoutId.has(workout.id)"
-              class="text-xs text-gray-500 dark:text-muted"
-            >
-              読み込み中...
-            </p>
-            <ul v-else class="flex flex-col gap-2">
-              <li
-                v-for="comment in commentsByWorkoutId.get(workout.id)"
-                :key="comment.id"
-                class="flex items-start gap-2"
-              >
-                <span
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
-                >
-                  {{ comment.displayName.slice(0, 1) }}
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div
-                    class="rounded-lg px-2.5 py-1.5"
-                    :class="
-                      comment.userId === user?.id
-                        ? 'bg-brand-50 dark:bg-accent/10'
-                        : 'bg-gray-100 dark:bg-white/5'
-                    "
-                  >
-                    <p
-                      class="text-xs font-medium"
-                      :class="
-                        comment.userId === user?.id
-                          ? 'text-brand-700 dark:text-accent'
-                          : 'text-gray-600 dark:text-muted'
-                      "
-                    >
-                      {{ comment.displayName }}{{ comment.userId === user?.id ? '（自分）' : '' }}
-                    </p>
-                    <p
-                      class="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900 dark:text-ink"
-                    >
-                      {{ comment.body }}
-                    </p>
-                  </div>
-                  <div v-if="confirmingCommentDeleteId === comment.id" class="mt-1">
-                    <div class="flex items-center gap-2">
-                      <p class="text-xs text-gray-700 dark:text-ink">
-                        このコメントを削除しますか？（元に戻せません）
-                      </p>
-                      <button
-                        type="button"
-                        :disabled="commentDeleting.has(comment.id)"
-                        class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
-                        @click="confirmingCommentDeleteId = null"
-                      >
-                        キャンセル
-                      </button>
-                      <button
-                        type="button"
-                        :disabled="commentDeleting.has(comment.id)"
-                        class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                        @click="onDeleteComment(workout, comment)"
-                      >
-                        {{ commentDeleting.has(comment.id) ? '削除中...' : '削除する' }}
-                      </button>
-                    </div>
-                    <p
-                      v-if="commentDeleteErrors.get(comment.id)"
-                      class="mt-1 text-xs text-red-600 dark:text-red-400"
-                    >
-                      {{ commentDeleteErrors.get(comment.id) }}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  v-if="comment.userId === user?.id && confirmingCommentDeleteId !== comment.id"
-                  type="button"
-                  class="relative flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-[11px] before:content-['']"
-                  aria-label="このコメントを削除"
-                  @click="confirmingCommentDeleteId = comment.id"
-                >
-                  <TrashIcon class="h-3 w-3" />
-                </button>
-              </li>
-              <li
-                v-if="commentsByWorkoutId.get(workout.id)?.length === 0"
-                class="text-xs text-gray-500 dark:text-muted"
-              >
-                まだコメントがありません
-              </li>
-            </ul>
-
-            <div class="mt-2 flex gap-1.5">
-              <input
-                :value="commentInputs.get(workout.id) ?? ''"
-                type="text"
-                placeholder="コメントを入力"
-                maxlength="500"
-                class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 dark:border-border-dark px-3 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
-                @keydown.enter="onCommentEnter($event, workout)"
-              />
+                <span v-else>いいね</span>
+              </button>
               <button
                 type="button"
-                class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
-                :disabled="
-                  commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()
-                "
-                @click="onPostComment(workout)"
+                class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium text-gray-500 dark:text-muted transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+                :aria-expanded="isCommentsOpen(workout.id)"
+                @click="toggleComments(workout.id)"
               >
-                送信
+                <CommentIcon class="h-4 w-4" />
+                <span v-if="workout.commentCount > 0" class="tabular-nums">
+                  {{ workout.commentCount }}
+                </span>
+                <span v-else>コメント</span>
               </button>
             </div>
-          </div>
-        </li>
-      </ul>
+
+            <!-- いいねしてくれた人の一覧(#149)。自分の記録でのみ開ける -->
+            <div
+              v-if="isOwnWorkout(workout) && isReactorsOpen(workout.id)"
+              class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
+            >
+              <p
+                v-if="workout.reactorNames.length === 0"
+                class="text-xs text-gray-500 dark:text-muted"
+              >
+                まだいいねがありません
+              </p>
+              <ul v-else class="flex flex-col gap-2">
+                <li
+                  v-for="(name, i) in workout.reactorNames"
+                  :key="`${workout.id}-${i}`"
+                  class="flex items-center gap-2"
+                >
+                  <span
+                    class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
+                  >
+                    {{ name.slice(0, 1) }}
+                  </span>
+                  <span class="text-sm text-gray-700 dark:text-ink">{{ name }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div
+              v-if="isCommentsOpen(workout.id)"
+              class="mt-2.5 border-t border-gray-100 dark:border-white/5 pt-2.5"
+            >
+              <p
+                v-if="commentLoadError.has(workout.id)"
+                class="text-xs text-red-600 dark:text-red-400"
+              >
+                コメントの取得に失敗しました。時間をおいて再度お試しください
+              </p>
+              <p
+                v-else-if="!commentsByWorkoutId.has(workout.id)"
+                class="text-xs text-gray-500 dark:text-muted"
+              >
+                読み込み中...
+              </p>
+              <ul v-else class="flex flex-col gap-2">
+                <li
+                  v-for="comment in commentsByWorkoutId.get(workout.id)"
+                  :key="comment.id"
+                  class="flex items-start gap-2"
+                >
+                  <span
+                    class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-[10px] font-semibold text-brand-700 dark:text-accent"
+                  >
+                    {{ comment.displayName.slice(0, 1) }}
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div
+                      class="rounded-lg px-2.5 py-1.5"
+                      :class="
+                        comment.userId === user?.id
+                          ? 'bg-brand-50 dark:bg-accent/10'
+                          : 'bg-gray-100 dark:bg-white/5'
+                      "
+                    >
+                      <p
+                        class="text-xs font-medium"
+                        :class="
+                          comment.userId === user?.id
+                            ? 'text-brand-700 dark:text-accent'
+                            : 'text-gray-600 dark:text-muted'
+                        "
+                      >
+                        {{ comment.displayName }}{{ comment.userId === user?.id ? '（自分）' : '' }}
+                      </p>
+                      <p
+                        class="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900 dark:text-ink"
+                      >
+                        {{ comment.body }}
+                      </p>
+                    </div>
+                    <div v-if="confirmingCommentDeleteId === comment.id" class="mt-1">
+                      <div class="flex items-center gap-2">
+                        <p class="text-xs text-gray-700 dark:text-ink">
+                          このコメントを削除しますか？（元に戻せません）
+                        </p>
+                        <button
+                          type="button"
+                          :disabled="commentDeleting.has(comment.id)"
+                          class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
+                          @click="confirmingCommentDeleteId = null"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="commentDeleting.has(comment.id)"
+                          class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                          @click="onDeleteComment(workout, comment)"
+                        >
+                          {{ commentDeleting.has(comment.id) ? '削除中...' : '削除する' }}
+                        </button>
+                      </div>
+                      <p
+                        v-if="commentDeleteErrors.get(comment.id)"
+                        class="mt-1 text-xs text-red-600 dark:text-red-400"
+                      >
+                        {{ commentDeleteErrors.get(comment.id) }}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    v-if="comment.userId === user?.id && confirmingCommentDeleteId !== comment.id"
+                    type="button"
+                    class="relative flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-[11px] before:content-['']"
+                    aria-label="このコメントを削除"
+                    @click="confirmingCommentDeleteId = comment.id"
+                  >
+                    <TrashIcon class="h-3 w-3" />
+                  </button>
+                </li>
+                <li
+                  v-if="commentsByWorkoutId.get(workout.id)?.length === 0"
+                  class="text-xs text-gray-500 dark:text-muted"
+                >
+                  まだコメントがありません
+                </li>
+              </ul>
+
+              <div class="mt-2 flex gap-1.5">
+                <input
+                  :value="commentInputs.get(workout.id) ?? ''"
+                  type="text"
+                  placeholder="コメントを入力"
+                  maxlength="500"
+                  class="h-[34px] min-w-0 flex-1 rounded-full border border-gray-300 dark:border-border-dark px-3 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                  @input="onCommentInput(workout.id, ($event.target as HTMLInputElement).value)"
+                  @keydown.enter="onCommentEnter($event, workout)"
+                />
+                <button
+                  type="button"
+                  class="h-[34px] shrink-0 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
+                  :disabled="
+                    commentPosting.has(workout.id) || !(commentInputs.get(workout.id) ?? '').trim()
+                  "
+                  @click="onPostComment(workout)"
+                >
+                  送信
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>

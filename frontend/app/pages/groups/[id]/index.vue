@@ -92,169 +92,172 @@ async function onDelete() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink to="/groups" class="text-sm text-gray-500 dark:text-muted"
-          >← グループに戻る</NuxtLink
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader back-to="/groups" back-label="グループに戻る" title="グループ詳細" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p
+          v-else-if="loadError || !group"
+          class="text-center text-sm text-red-600 dark:text-red-400"
         >
-        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">グループ詳細</h1>
-      </div>
+          グループの取得に失敗しました。時間をおいて再度お試しください
+        </p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="loadError || !group" class="text-center text-sm text-red-600 dark:text-red-400">
-        グループの取得に失敗しました。時間をおいて再度お試しください
-      </p>
-
-      <template v-else>
-        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <div class="flex items-center gap-2">
-            <h2 class="flex-1 text-base font-bold text-gray-900 dark:text-ink">{{ group.name }}</h2>
-            <span
-              v-if="isOwner"
-              class="shrink-0 rounded-full bg-brand-50 dark:bg-accent/10 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-accent"
-            >
-              オーナー
-            </span>
-          </div>
-          <p class="mt-1 text-xs text-gray-500 dark:text-muted">
-            メンバー {{ group.members.length }} / {{ group.memberLimit }}人
-          </p>
-          <NuxtLink
-            :to="`/groups/${groupId}/workouts`"
-            class="mt-3 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
-          >
-            みんなの記録を見る
-          </NuxtLink>
-          <NuxtLink
-            :to="`/groups/${groupId}/ranking`"
-            class="mt-2 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
-          >
-            ランキングを見る
-          </NuxtLink>
-        </div>
-
-        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">招待コード</h3>
-          <p
-            class="mt-2 break-all rounded border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-surface px-3 py-2 font-mono text-sm"
-          >
-            {{ group.inviteCode }}
-          </p>
-          <div class="mt-2 flex gap-2">
-            <button
-              type="button"
-              class="flex-1 rounded border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold text-brand-600 dark:text-accent"
-              @click="onCopyInviteCode"
-            >
-              {{ copied ? 'コピーしました' : 'コピー' }}
-            </button>
-            <button
-              v-if="isOwner"
-              type="button"
-              :disabled="reissuing"
-              class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-              @click="onReissueInvite"
-            >
-              {{ reissuing ? '再発行中...' : '再発行' }}
-            </button>
-          </div>
-          <p v-if="reissueError" class="mt-2 text-sm text-red-600 dark:text-red-400">
-            {{ reissueError }}
-          </p>
-        </div>
-
-        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">メンバー</h3>
-          <ul class="mt-2 flex flex-col gap-2">
-            <li
-              v-for="member in group.members"
-              :key="member.userId"
-              class="flex items-center gap-2 text-sm text-gray-800 dark:text-ink"
-            >
-              <span class="flex-1">{{ member.displayName }}</span>
+        <template v-else>
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <div class="flex items-center gap-2">
+              <h2 class="flex-1 text-base font-bold text-gray-900 dark:text-ink">
+                {{ group.name }}
+              </h2>
               <span
-                v-if="member.role === 'owner'"
-                class="text-xs font-semibold text-brand-700 dark:text-accent"
+                v-if="isOwner"
+                class="shrink-0 rounded-full bg-brand-50 dark:bg-accent/10 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:text-accent"
               >
                 オーナー
               </span>
-            </li>
-          </ul>
-        </div>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-muted">
+              メンバー {{ group.members.length }} / {{ group.memberLimit }}人
+            </p>
+            <NuxtLink
+              :to="`/groups/${groupId}/workouts`"
+              class="mt-3 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
+            >
+              みんなの記録を見る
+            </NuxtLink>
+            <NuxtLink
+              :to="`/groups/${groupId}/ranking`"
+              class="mt-2 block rounded border border-brand-600 dark:border-accent py-1.5 text-center text-sm font-semibold text-brand-600 dark:text-accent"
+            >
+              ランキングを見る
+            </NuxtLink>
+          </div>
 
-        <div class="flex flex-col gap-2">
-          <template v-if="confirmingLeave">
-            <p class="text-sm text-gray-700 dark:text-ink">このグループを退会しますか？</p>
-            <div class="flex gap-2">
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">招待コード</h3>
+            <p
+              class="mt-2 break-all rounded border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-surface px-3 py-2 font-mono text-sm"
+            >
+              {{ group.inviteCode }}
+            </p>
+            <div class="mt-2 flex gap-2">
               <button
                 type="button"
-                :disabled="leaving"
-                class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-                @click="confirmingLeave = false"
+                class="flex-1 rounded border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold text-brand-600 dark:text-accent"
+                @click="onCopyInviteCode"
               >
-                キャンセル
+                {{ copied ? 'コピーしました' : 'コピー' }}
               </button>
               <button
+                v-if="isOwner"
                 type="button"
-                :disabled="leaving"
-                class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                @click="onLeave"
+                :disabled="reissuing"
+                class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
+                @click="onReissueInvite"
               >
-                {{ leaving ? '退会中...' : '退会する' }}
+                {{ reissuing ? '再発行中...' : '再発行' }}
               </button>
             </div>
-          </template>
-          <button
-            v-else
-            type="button"
-            class="rounded border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 py-2 text-sm font-semibold text-red-600 dark:text-red-400"
-            @click="confirmingLeave = true"
-          >
-            このグループを退会する
-          </button>
-          <p v-if="leaveError" class="text-sm text-red-600 dark:text-red-400">{{ leaveError }}</p>
+            <p v-if="reissueError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+              {{ reissueError }}
+            </p>
+          </div>
 
-          <template v-if="isOwner">
-            <template v-if="confirmingDelete">
-              <p class="text-sm text-gray-700 dark:text-ink">
-                「{{
-                  group.name
-                }}」を削除しますか？（元に戻せません。メンバー全員が参加できなくなります）
-              </p>
+          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">メンバー</h3>
+            <ul class="mt-2 flex flex-col gap-2">
+              <li
+                v-for="member in group.members"
+                :key="member.userId"
+                class="flex items-center gap-2 text-sm text-gray-800 dark:text-ink"
+              >
+                <span class="flex-1">{{ member.displayName }}</span>
+                <span
+                  v-if="member.role === 'owner'"
+                  class="text-xs font-semibold text-brand-700 dark:text-accent"
+                >
+                  オーナー
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <template v-if="confirmingLeave">
+              <p class="text-sm text-gray-700 dark:text-ink">このグループを退会しますか？</p>
               <div class="flex gap-2">
                 <button
                   type="button"
-                  :disabled="deleting"
+                  :disabled="leaving"
                   class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-                  @click="confirmingDelete = false"
+                  @click="confirmingLeave = false"
                 >
                   キャンセル
                 </button>
                 <button
                   type="button"
-                  :disabled="deleting"
+                  :disabled="leaving"
                   class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                  @click="onDelete"
+                  @click="onLeave"
                 >
-                  {{ deleting ? '削除中...' : '削除する' }}
+                  {{ leaving ? '退会中...' : '退会する' }}
                 </button>
               </div>
             </template>
             <button
               v-else
               type="button"
-              class="rounded border border-red-600 py-2 text-sm font-semibold text-red-600 dark:text-red-400"
-              @click="confirmingDelete = true"
+              class="rounded border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 py-2 text-sm font-semibold text-red-600 dark:text-red-400"
+              @click="confirmingLeave = true"
             >
-              このグループを削除する
+              このグループを退会する
             </button>
-            <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
-              {{ deleteError }}
-            </p>
-          </template>
-        </div>
-      </template>
+            <p v-if="leaveError" class="text-sm text-red-600 dark:text-red-400">{{ leaveError }}</p>
+
+            <template v-if="isOwner">
+              <template v-if="confirmingDelete">
+                <p class="text-sm text-gray-700 dark:text-ink">
+                  「{{
+                    group.name
+                  }}」を削除しますか？（元に戻せません。メンバー全員が参加できなくなります）
+                </p>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    :disabled="deleting"
+                    class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
+                    @click="confirmingDelete = false"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="deleting"
+                    class="flex-1 rounded bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    @click="onDelete"
+                  >
+                    {{ deleting ? '削除中...' : '削除する' }}
+                  </button>
+                </div>
+              </template>
+              <button
+                v-else
+                type="button"
+                class="rounded border border-red-600 py-2 text-sm font-semibold text-red-600 dark:text-red-400"
+                @click="confirmingDelete = true"
+              >
+                このグループを削除する
+              </button>
+              <p v-if="deleteError" class="text-sm text-red-600 dark:text-red-400">
+                {{ deleteError }}
+              </p>
+            </template>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 </template>

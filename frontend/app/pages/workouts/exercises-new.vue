@@ -68,68 +68,69 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <NuxtLink
-        :to="{ path: '/workouts/exercises', query: { returnTo } }"
-        class="text-sm text-gray-500 dark:text-muted"
-      >
-        ← 種目選択に戻る
-      </NuxtLink>
-      <h1 class="text-base font-semibold text-gray-900 dark:text-ink">種目を追加</h1>
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader
+      :back-to="{ path: '/workouts/exercises', query: { returnTo } }"
+      back-label="種目選択に戻る"
+      title="種目を追加"
+    />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
+          <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
+            部位
+            <select
+              v-model="muscleGroup"
+              class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+            >
+              <option v-for="group in MUSCLE_GROUPS" :key="group" :value="group">
+                {{ muscleGroupLabel(group) }}
+              </option>
+            </select>
+          </label>
 
-      <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
-        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
-          部位
-          <select
-            v-model="muscleGroup"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+          <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
+            種目名
+            <input
+              v-model="name"
+              type="text"
+              maxlength="50"
+              placeholder="例：インクラインダンベルプレス"
+              class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
+            />
+          </label>
+
+          <div
+            v-if="similarExercises.length > 0"
+            class="rounded border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-3"
           >
-            <option v-for="group in MUSCLE_GROUPS" :key="group" :value="group">
-              {{ muscleGroupLabel(group) }}
-            </option>
-          </select>
-        </label>
+            <p class="text-xs text-amber-800 dark:text-amber-300">似た名前の種目がすでにあります</p>
+            <ul class="mt-1 space-y-1">
+              <li v-for="exercise in similarExercises" :key="exercise.id">
+                <button
+                  type="button"
+                  class="w-full rounded px-2 py-1 text-left text-sm text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                  @click="selectSimilarExercise(exercise.id)"
+                >
+                  {{ exercise.name }}
+                </button>
+              </li>
+            </ul>
+          </div>
 
-        <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
-          種目名
-          <input
-            v-model="name"
-            type="text"
-            maxlength="50"
-            placeholder="例：インクラインダンベルプレス"
-            class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
-          />
-        </label>
+          <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
+            {{ errorMessage }}
+          </p>
 
-        <div
-          v-if="similarExercises.length > 0"
-          class="rounded border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-3"
-        >
-          <p class="text-xs text-amber-800 dark:text-amber-300">似た名前の種目がすでにあります</p>
-          <ul class="mt-1 space-y-1">
-            <li v-for="exercise in similarExercises" :key="exercise.id">
-              <button
-                type="button"
-                class="w-full rounded px-2 py-1 text-left text-sm text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                @click="selectSimilarExercise(exercise.id)"
-              >
-                {{ exercise.name }}
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
-
-        <button
-          type="submit"
-          :disabled="!name.trim() || submitting"
-          class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
-        >
-          追加する
-        </button>
-      </form>
+          <button
+            type="submit"
+            :disabled="!name.trim() || submitting"
+            class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
+          >
+            追加する
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </template>
