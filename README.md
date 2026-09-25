@@ -4,6 +4,8 @@
 
 詳細は [`CLAUDE.md`](./CLAUDE.md) および [`docs/`](./docs/) 参照。
 
+コードを初めて読む場合は [`docs/dev/architecture.md`](./docs/dev/architecture.md)（全体構成・認証フロー）から始めると理解しやすい。
+
 ## セットアップ
 
 ### 前提
