@@ -241,8 +241,104 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
 - **列挙対策は「同じ結果を返す」ことで実現する** — 「ユーザーが存在しない」と「パスワードが違う」を別のエラーにしない、存在しない場合もダミーハッシュとの比較で処理時間を揃える、という2つの工夫で、外部から「そのメールアドレスが登録済みかどうか」を探れないようにしている
 - **ログイン成功時にセッションIDを再生成する** — `req.session.userId = ...`の前に必ず`req.session.regenerate()`を呼び、ログイン前後でセッションIDを変える。これを省略すると、ログイン前に外部から仕込まれたセッションIDがログイン後もそのまま有効になってしまう(セッション固定化)
 
+## 具体例3：グループの権限を判定するとき
+
+もう1つの例として、[`backend/src/routes/groups.ts`](../../backend/src/routes/groups.ts)のGET `/groups/:id`・DELETE `/groups/:id`を追う。「所属していない人からは404で隠す」「所属していてもオーナーでなければ403」という、2段階の認可判定がどう書かれているかを見る。
+
+### 1. まず動かしてみる
+
+具体例1で作った`test@example.com`(A、以下Aと呼ぶ)に加えて、もう2アカウント作る。
+
+```bash
+# B・Cを作成し、それぞれのCookieを別ファイルに保存してログインしておく
+curl -c cookieB.txt -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test-b@example.com","password":"password123","displayName":"けんしょうB","birthYearMonth":"no_answer","gender":"no_answer","occupation":"no_answer"}'
+curl -c cookieB.txt -X POST http://localhost:3001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test-b@example.com","password":"password123"}'
+
+curl -c cookieC.txt -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test-c@example.com","password":"password123","displayName":"けんしょうC","birthYearMonth":"no_answer","gender":"no_answer","occupation":"no_answer"}'
+curl -c cookieC.txt -X POST http://localhost:3001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test-c@example.com","password":"password123"}'
+```
+
+Aでグループを作り(Aがオーナーになる)、招待コードでBだけを参加させる。Cはどちらにも参加させない。
+
+```bash
+# Aでグループ作成(cookie.txtは具体例1・2で作ったAのログイン済みCookie)。レスポンスのidとinviteCodeを控える
+curl -X POST http://localhost:3001/groups \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"権限検証グループ"}'
+# => {"id":"<groupId>","inviteCode":"<code>", ..., "role":"owner"}
+
+# Bが招待コードで参加する
+curl -X POST http://localhost:3001/groups/join \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d '{"inviteCode":"<code>"}'
+```
+
+ここで3パターン試してほしい(`<groupId>`は実際のIDに置き換える)。
+
+- **Cで(未所属のまま)グループ詳細を取得する** → `curl -b cookieC.txt http://localhost:3001/groups/<groupId>` は`404 {"error":"not_found"}`。DELETEも同様に`curl -X DELETE -b cookieC.txt http://localhost:3001/groups/<groupId>`で`404`になる。「存在するかどうかさえ教えない」形
+- **Bで(所属しているがオーナーではない)グループを削除する** → `curl -X DELETE -b cookieB.txt http://localhost:3001/groups/<groupId>`は`403 {"error":"forbidden"}`。存在は認めた上で「権限が無い」と明確に伝えている
+- **Aで(オーナー)グループを削除する** → `curl -X DELETE -b cookie.txt http://localhost:3001/groups/<groupId>`は`204`で成功する
+
+同じ「入れない」結果でも、Cには404(存在自体を隠す)、Bには403(存在は認めるが権限が無い)と、使い分けているのがポイント。次はこれがコードのどこで起きているかを追う。
+
+### 2. コードを実行順に追う
+
+```ts
+// 退会済み(leftAt有り)は対象外。アクティブなメンバーシップのみを「所属」として扱う
+async function findActiveMembership(userId: string, groupId: string) {
+  return prisma.groupMember.findFirst({
+    where: { userId, groupId, leftAt: null, group: { deletedAt: null } },
+  })
+}
+
+groupsRouter.delete('/:id', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const groupId = req.params.id as string
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  if (membership.role !== 'owner') {
+    res.status(403).json({ error: 'forbidden' })
+    return
+  }
+
+  await prisma.group.update({ where: { id: groupId }, data: { deletedAt: new Date() } })
+  res.status(204).send()
+})
+```
+
+| ステップ | 何が起きるか | Cで試したとき | Bで試したとき |
+|---|---|---|---|
+| ① `findActiveMembership(userId, groupId)` | そのユーザーがこのグループのアクティブなメンバーかどうかを1回のクエリで見る | `membership`は`null`(所属していない) | `membership`は`{ role: 'member', ... }` |
+| ② `if (!membership)` | 所属していなければここで404。「存在しない」と「所属していない」を区別せず同じ404にすることで、未所属者にグループの存在自体を教えない(IDOR対策。具体例1の`findOwnWorkout`と同じ考え方) | ここで打ち切り。以降のコードには進まない | 通過(`membership`があるため) |
+| ③ `if (membership.role !== 'owner')` | 所属はしているが`role`が`'owner'`でなければ403。ここは「存在は認めた上で権限を伝える」ので404とは違うステータスを使う | (到達しない) | ここで打ち切り |
+| ④ `prisma.group.update({ data: { deletedAt: ... } })` | ソフトデリート。Aだけがここまで到達する | - | - |
+
+GET `/groups/:id`(具体例3の1で最初に試した取得の方)も①②は全く同じ形で、③の代わりに詳細データを組み立てて返す。「所属チェックで404 → 必要なら追加のロール確認で403」という2段構成は、`groups.ts`の他のエンドポイント(招待コード再発行・退会など)にも繰り返し出てくる。
+
+### 3. 自分で壊して確かめる
+
+- `if (membership.role !== 'owner')`のブロックを一時的にコメントアウトして保存する(`tsx watch`が自動再起動)。その状態でBの`cookieB.txt`を使ってグループを削除するcurlを送ると、本来403になるはずが`204`で消えてしまうはずだ。メンバーなら誰でもグループを削除できてしまう、という深刻な権限不備が起きる。**試したら必ず元に戻すこと**
+- `findActiveMembership`の`where`から`leftAt: null`を一時的に外してみる。退会済み(`leftAt`が入っている)のメンバーでも所属者として扱われるようになり、退会したはずの人がグループ詳細を見たり削除したりできてしまう。これが「アクティブなメンバーのみ」という条件を明示している理由
+
+## 具体例3から読み取れる設計上の判断
+
+- **「存在を隠す404」と「権限不足を伝える403」を使い分ける** — 未所属者にはグループの存在自体を教えない(404)一方、所属しているメンバーには「権限が無い」ことを403で明確に伝える。どちらも`findActiveMembership()`という同じ関数の結果から2段階で判定している
+- **判定関数は「何に対する権限か」で使い分ける** — `groups.ts`の`findActiveMembership()`は「このグループの操作(詳細取得・削除など)ができるか」を1グループ単位で見る。一方、具体例1の`findOwnWorkout()`と同じ並びで`workouts.ts`にある`shareActiveGroup()`は「いずれかのグループで同席しているか」を見るもので、他人のworkoutへのいいね・コメント(投稿・一覧取得)の対象範囲に使われる(`findAccessibleWorkout()`経由。グループを横断する判定)。どちらも「所属していないメンバーの情報には触れない」という同じ方針だが、対象がグループ自体かworkoutかで判定の単位が違う
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
-- `backend/src/routes/workouts.ts`の`shareActiveGroup()` — グループ機能の「誰が誰の記録を見られるか」の判定ロジック
+- `backend/src/routes/groups.ts`の`POST /groups/join`(招待コードで参加する処理) — 定員超過・招待コード期限切れ・退会後の再参加といった分岐
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
