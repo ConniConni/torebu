@@ -28,8 +28,8 @@
 > このセッションの経緯を参照）。
 
 - [x] ワークアウト記録の作成（`POST /workouts`）— backend-guide.md／frontend-guide.mdで対応済み
-- [ ] ログイン・セッション確立（`POST /auth/login`）— `architecture.md`の認証フロー図と対応させやすく、
-      次点で学習価値が高い
+- [x] ログイン・セッション確立（`POST /auth/login`）— backend-guide.md／frontend-guide.mdの「具体例2」で対応済み
+      （2026-09-25）。セッション固定化対策・メールアドレス列挙対策・`index.vue`の`fetchMe()`保険まで扱った
 - [ ] グループ機能の権限判定（`shareActiveGroup()`等、IDOR対策の考え方）— backend-guide.mdの
       「次に読むと理解が深まるファイル」に既出。認可ロジックの読み方を学べる
 - [ ] ルーティン機能（③記録作成との関係。目安セットの即登録など、ワークアウト作成と似た「選択した瞬間に
