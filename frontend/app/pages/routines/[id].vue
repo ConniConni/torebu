@@ -253,8 +253,17 @@ function addTargetSet(element: RoutineExerciseItem) {
 // 目安セットを最後の1件まで削除すると、種目自体も削除する（ルーティンが種目0件になると
 // 自動削除されるのと同じ「空になったら消える」考え方を、routine_exercise単位にも揃えた。
 // ユーザー指摘、2026-09-05・Issue #93）
+//
+// 削除は他の削除操作と同じ2段階確認に揃える（backlog.md「削除確認フローの不統一」、Issue #261）。
+// 目安セットには固有IDが無いため、`${routine_exercise.id}:${配列index}`をキーに確認状態を持つ
+function targetSetKey(elementId: string, index: number | string) {
+  return `${elementId}:${index}`
+}
+const confirmingTargetSetDelete = ref<string | null>(null)
+
 function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
   element.targetSets = element.targetSets.filter((_, i) => i !== Number(index))
+  confirmingTargetSetDelete.value = null
   if (element.targetSets.length === 0) {
     removeExercise(element.id)
     return
@@ -355,45 +364,72 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                         <div
                           v-for="(set, index) in element.targetSets"
                           :key="index"
-                          class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2 px-2 py-1.5"
-                          :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                         >
-                          <span
-                            class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                            >{{ Number(index) + 1 }}</span
+                          <div
+                            v-if="confirmingTargetSetDelete === targetSetKey(element.id, index)"
+                            class="flex items-center gap-2 px-2 py-1.5"
+                            :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                           >
-                          <span class="flex min-w-0 items-baseline gap-1.5">
-                            <input
-                              v-model="set.weightKg"
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              placeholder="自重"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                              @blur="saveTargetSets(element)"
-                            />
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
-                          </span>
-                          <span class="flex min-w-0 items-baseline gap-1.5">
-                            <input
-                              v-model="set.reps"
-                              type="number"
-                              min="1"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
-                              @blur="saveTargetSets(element)"
-                            />
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
-                          </span>
-                          <span class="flex justify-center">
+                            <p class="flex-1 text-xs text-gray-700 dark:text-ink">
+                              {{ Number(index) + 1 }}セット目を削除しますか？（元に戻せません）
+                            </p>
                             <button
                               type="button"
-                              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
-                              aria-label="この目安セットを削除"
+                              class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink"
+                              @click="confirmingTargetSetDelete = null"
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              type="button"
+                              class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white"
                               @click="removeTargetSet(element, index)"
                             >
-                              <TrashIcon class="h-3.5 w-3.5" />
+                              削除する
                             </button>
-                          </span>
+                          </div>
+                          <div
+                            v-else
+                            class="grid grid-cols-[2.25rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2 px-2 py-1.5"
+                            :class="Number(index) % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                          >
+                            <span
+                              class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                              >{{ Number(index) + 1 }}</span
+                            >
+                            <span class="flex min-w-0 items-baseline gap-1.5">
+                              <input
+                                v-model="set.weightKg"
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                placeholder="自重"
+                                class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                                @blur="saveTargetSets(element)"
+                              />
+                              <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
+                            </span>
+                            <span class="flex min-w-0 items-baseline gap-1.5">
+                              <input
+                                v-model="set.reps"
+                                type="number"
+                                min="1"
+                                class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                                @blur="saveTargetSets(element)"
+                              />
+                              <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
+                            </span>
+                            <span class="flex justify-center">
+                              <button
+                                type="button"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                                aria-label="この目安セットを削除"
+                                @click="confirmingTargetSetDelete = targetSetKey(element.id, index)"
+                              >
+                                <TrashIcon class="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

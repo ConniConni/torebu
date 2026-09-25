@@ -117,6 +117,10 @@ const commentLoadError = ref(new Set<string>())
 const commentInputs = ref(new Map<string, string>())
 const commentPosting = ref(new Set<string>())
 const commentDeleting = ref(new Set<string>())
+// 他の削除操作（グループ・ワークアウト・ルーティン・カスタム種目）と同じ2段階確認に揃える
+// （backlog.md「削除確認フローの不統一」、Issue #261）
+const confirmingCommentDeleteId = ref<string | null>(null)
+const commentDeleteErrors = ref(new Map<string, string>())
 
 function isCommentsOpen(workoutId: string) {
   return openCommentWorkoutIds.value.has(workoutId)
@@ -140,6 +144,14 @@ async function toggleComments(workoutId: string) {
   if (next.has(workoutId)) {
     next.delete(workoutId)
     openCommentWorkoutIds.value = next
+    // 閉じたコメント欄に確認中の削除ダイアログが残っていたらリセットする
+    // （再度開いたときに古い確認状態が残って見えるのを防ぐ）
+    if (
+      confirmingCommentDeleteId.value &&
+      commentsByWorkoutId.value.get(workoutId)?.some((c) => c.id === confirmingCommentDeleteId.value)
+    ) {
+      confirmingCommentDeleteId.value = null
+    }
     return
   }
   next.add(workoutId)
@@ -195,6 +207,9 @@ async function onDeleteComment(
   const deleting = new Set(commentDeleting.value)
   deleting.add(comment.id)
   commentDeleting.value = deleting
+  const errors = new Map(commentDeleteErrors.value)
+  errors.delete(comment.id)
+  commentDeleteErrors.value = errors
   try {
     await deleteComment(workout.id, comment.id)
     const map = new Map(commentsByWorkoutId.value)
@@ -204,8 +219,11 @@ async function onDeleteComment(
     )
     commentsByWorkoutId.value = map
     workout.commentCount = Math.max(0, workout.commentCount - 1)
+    confirmingCommentDeleteId.value = null
   } catch {
-    // 通信失敗時は表示をそのまま。専用のエラー表示は今回は設けない
+    const nextErrors = new Map(commentDeleteErrors.value)
+    nextErrors.set(comment.id, '削除に失敗しました。時間をおいて再度お試しください')
+    commentDeleteErrors.value = nextErrors
   } finally {
     const next = new Set(commentDeleting.value)
     next.delete(comment.id)
@@ -471,14 +489,42 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                       {{ comment.body }}
                     </p>
                   </div>
+                  <div v-if="confirmingCommentDeleteId === comment.id" class="mt-1">
+                    <div class="flex items-center gap-2">
+                      <p class="text-xs text-gray-700 dark:text-ink">
+                        このコメントを削除しますか？（元に戻せません）
+                      </p>
+                      <button
+                        type="button"
+                        :disabled="commentDeleting.has(comment.id)"
+                        class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
+                        @click="confirmingCommentDeleteId = null"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="commentDeleting.has(comment.id)"
+                        class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        @click="onDeleteComment(workout, comment)"
+                      >
+                        {{ commentDeleting.has(comment.id) ? '削除中...' : '削除する' }}
+                      </button>
+                    </div>
+                    <p
+                      v-if="commentDeleteErrors.get(comment.id)"
+                      class="mt-1 text-xs text-red-600 dark:text-red-400"
+                    >
+                      {{ commentDeleteErrors.get(comment.id) }}
+                    </p>
+                  </div>
                 </div>
                 <button
-                  v-if="comment.userId === user?.id"
+                  v-if="comment.userId === user?.id && confirmingCommentDeleteId !== comment.id"
                   type="button"
                   class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                   aria-label="このコメントを削除"
-                  :disabled="commentDeleting.has(comment.id)"
-                  @click="onDeleteComment(workout, comment)"
+                  @click="confirmingCommentDeleteId = comment.id"
                 >
                   <TrashIcon class="h-3 w-3" />
                 </button>
