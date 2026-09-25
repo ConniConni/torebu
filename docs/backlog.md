@@ -33,8 +33,12 @@
 - [x] グループ機能の権限判定（`findActiveMembership()`・`shareActiveGroup()`、IDOR対策の考え方）—
       backend-guide.md／frontend-guide.mdの「具体例3」で対応済み（2026-09-26）。404(存在を隠す)と
       403(権限不足を伝える)の使い分け、フロントの`isOwner`表示制御とバックエンド側の最終防衛まで扱った
-- [ ] ルーティン機能（③記録作成との関係。目安セットの即登録など、ワークアウト作成と似た「選択した瞬間に
-      デフォルト値で保存される」設計が別の画面にもあることを示せる）
+- [x] ルーティン機能（③記録作成との関係。目安セットの即登録など、ワークアウト作成と似た「選択した瞬間に
+      デフォルト値で保存される」設計が別の画面にもあることを示せる）— backend-guide.md／frontend-guide.mdの
+      「具体例4」で対応済み（2026-09-26）。目安セットの追加/更新API(POST/PATCH)と、フロント側の
+      `addExercise()`→`addTargetSet()`の2段保存の流れまで扱った。検証中に実際のバグ
+      （`targetSetsSaving`の宣言順序によるReferenceErrorでPATCHが一度も飛ばない不具合）を発見し、
+      [Issue #278](https://github.com/ConniConni/torebu/issues/278)で修正した
 - [ ] 統計・集計（`stats.ts`。ランキング等の集計ロジック）
 - [ ] 通知（5分遅延・表示時再確認の設計。`docs/backlog.md`「通知の種類の拡張」節と合わせて読むと
       設計判断の背景まで追える）

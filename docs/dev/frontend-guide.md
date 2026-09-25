@@ -264,9 +264,102 @@ const isOwner = computed(() => group.value?.role === 'owner')
 - **権限の判定結果(`role`)はバックエンドの値をそのまま使う** — フロントは「オーナーかどうか」を独自ロジックで判定し直さず、APIレスポンスの`role`フィールドを`computed`で真偽値に変換するだけ。判定ロジックの二重管理を避けている
 - **操作できないボタンは「隠す」、操作した結果の権限エラーは「汎用メッセージ」** — オーナー限定の操作はそもそもボタンを出さない(`v-if`)ことでミスクリックを防ぎつつ、直接APIを叩かれた場合(上の「3. 自分で壊して確かめる」参照)の403は個別の丁寧なメッセージ(`groupErrorMessage()`のマップ)で返す。一方、閲覧系(グループ詳細の取得自体)の404は個別扱いせず汎用エラーメッセージにまとめている。「操作の失敗は具体的に」「閲覧の失敗は汎用的に」という向きの違いがある
 
+## 具体例4：ルーティンで種目を追加すると目安セットが即登録される
+
+[`backend-guide.md`](./backend-guide.md)具体例4で追ったPOST `/routines/:id/exercises`・PATCH `/routines/:id/exercises/:routineExerciseId`を、フロント側からどう呼んでいるかを見る。対象は[`frontend/app/pages/routines/[id].vue`](../../frontend/app/pages/routines/[id].vue)(ルーティン編集画面)。具体例1で見た「種目を選んだ瞬間にデフォルト値で保存される」設計が、ワークアウト記録作成とは別の画面にも同じ形で現れている例になっている。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動する。ログイン後、`/routines`を開き「新しいルーティン名」に何か入力して「追加」を押す(ルーティン編集画面に遷移する)。Networkタブを開いた状態で、「＋種目を追加」から種目を1つ選んでみる。
+
+- **種目名をタップした瞬間** → 画面が`/routines/<id>`へ自動で戻ると同時に、`POST /api/routines/<id>/exercises`と`PATCH /api/routines/<id>/exercises/<routineExerciseId>`が続けて流れる。戻ってきた画面には既に「回数10」が入った目安セットが1件表示されている
+
+具体例1の「種目を選んだ瞬間に`POST /api/workouts`と`POST /api/workouts/:id/sets`が続けて流れる」のと全く同じ構図で、ここでは「`POST`(種目をルーティンに追加)→`PATCH`(目安セット1件をデフォルト値で保存)」という2段の自動保存になっている。
+
+### 2. コードを実行順に追う
+
+種目選択画面([`pages/workouts/exercises.vue`](../../frontend/app/pages/workouts/exercises.vue))で種目をタップすると`returnTo`パラメータの画面(ここでは`/routines/<id>`)に戻り、`routines/[id].vue`のスクリプト先頭付近にあるこの分岐が実行される。
+
+```ts
+// ④種目選択・⑦種目追加(returnTo=このページ)から選ばれた種目を、戻ってきたタイミングで追加する
+const pickedExerciseId = usePickedExerciseId()
+if (pickedExerciseId.value) {
+  const exerciseId = pickedExerciseId.value
+  pickedExerciseId.value = null
+  try {
+    await addExercise(exerciseId)
+  } catch {
+    exerciseError.value = '種目の追加に失敗しました。時間をおいて再度お試しください'
+  }
+}
+```
+
+`addExercise()`の中身。
+
+```ts
+async function addExercise(exerciseId: string) {
+  if (!routine.value) return
+  if (routine.value.exercises.some((e) => e.exerciseId === exerciseId)) {
+    exerciseError.value = 'この種目はすでに追加されています'
+    return
+  }
+  const nextSortOrder = /* ... */
+  const created = await $fetch(`/api/routines/${routineId}/exercises`, {
+    method: 'POST',
+    body: { exerciseId, sortOrder: nextSortOrder },
+  })
+  const newItem: RoutineExerciseItem = { ...created, exercise: /* ... */ }
+  routine.value.exercises = [...routine.value.exercises, newItem]
+  addTargetSet(newItem)
+}
+```
+
+`addTargetSet()`・`saveTargetSets()`が目安セットの自動保存を担う。
+
+```ts
+function addTargetSet(element: RoutineExerciseItem) {
+  element.targetSets = [...element.targetSets, { weightKg: null, reps: 10 }]
+  saveTargetSets(element)
+}
+
+async function saveTargetSets(element: RoutineExerciseItem) {
+  const normalized = normalizeTargetSets(element.targetSets)
+  if (!isValidTargetSets(normalized)) return
+  targetSetsSaving.value = { ...targetSetsSaving.value, [element.id]: true }
+  try {
+    const updated = await $fetch(`/api/routines/${routineId}/exercises/${element.id}`, {
+      method: 'PATCH', body: { targetSets: normalized },
+    })
+    element.targetSets = updated.targetSets
+  } finally {
+    targetSetsSaving.value = { ...targetSetsSaving.value, [element.id]: false }
+  }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `addExercise(exerciseId)` | 既に追加済みの種目でないか確認してから、`POST /api/routines/:id/exercises`を送る。Networkタブで最初に見えたのはこの瞬間 |
+| ② `routine.value.exercises = [...]` | レスポンス(`targetSets: []`)を元に、ローカルの`routine.value.exercises`に1件追加する |
+| ③ `addTargetSet(newItem)` | ②で追加した種目に対し、`{weightKg: null, reps: 10}`(自重・10回)をローカルの`targetSets`にpushしてから`saveTargetSets()`を呼ぶ |
+| ④ `saveTargetSets(element)` | `normalizeTargetSets()`・`isValidTargetSets()`を通した後、`PATCH /api/routines/:id/exercises/:routineExerciseId`を送る。Networkタブで2番目に見えたのはこの瞬間 |
+
+具体例1の`ensureWorkout()`(POST 1回)と違い、ここでは「種目行を作るPOST」と「目安セット1件を保存するPATCH」が別々のエンドポイントへの2回のリクエストに分かれている点に注目してほしい。`routine_exercise`という1つのリソースを作る操作(POST)と、その中の`targetSets`列を更新する操作(PATCH)が分離しているのは、[backend-guide.md](./backend-guide.md)具体例4で見た「`targetSets`はPOST時点では省略可能」という設計に対応している。
+
+### 3. 自分で壊して確かめる
+
+- `targetSetsSaving`・`targetSetsErrors`の`ref()`宣言(現在は`pickedExerciseId`の分岐より上にある)を、一時的に`saveTargetSets()`の直前(ファイル後半)まで移動して保存してみる(`tsx watch`ならぬViteのHMRで即反映)。その状態で「＋種目を追加」から種目を選ぶと、ブラウザのコンソールに`ReferenceError: Cannot access 'targetSetsSaving' before initialization`が出て、`PATCH`が一度も飛ばなくなる(`POST`だけは成功するため、画面上は目安セットの行が一瞬表示されるが、ページを再読み込みすると消えている)。これは**このガイドを書く過程で実際に踏んだ不具合**そのもので、`<script setup>`はトップレベルの文を上から順に実行するため、`pickedExerciseId`の分岐(`addExercise`→`addTargetSet`→`saveTargetSets`を呼ぶ)が、`targetSetsSaving`を`const`で宣言する行より前に実行されると、そのconstはまだ初期化されていない(TDZ = Temporal Dead Zone)。関数宣言(`function addExercise() {...}`)自体は巻き上げられて先に呼べるが、その関数が参照する`ref()`の宣言は巻き上げられない、という2つの性質の違いがこの不具合の正体。**試したら必ず元に戻すこと**
+- `saveTargetSets()`の`if (!isValidTargetSets(normalized)) return`を一時的にコメントアウトして保存し、目安セットの回数欄を空にしてフォーカスを外す(blur)してみる → 本来は不正な値として保存をスキップするはずが、`NaN`を含んだ`targetSets`が`PATCH`で送られ、バックエンドの`repsSchema`(`z.number().int().positive()`)に弾かれて`400`になる。バリデーションをフロントとバックエンドの二重で行っている理由(通信を減らす・入力欄の値をそのまま残せる)が体感できる。**試したら必ず元に戻すこと**
+
+## 具体例4から読み取れる設計上の判断
+
+- **「選んだ瞬間にデフォルト値で保存される」設計は複数の画面で繰り返されている** — ワークアウト記録作成(具体例1)の`ensureWorkout()`+セット追加と、ルーティン編集の`addExercise()`+`addTargetSet()`は、「種目を選ぶ操作そのものが暗黙の保存操作になっている」という同じ設計方針をそれぞれの画面で独立に実装している。保存ボタンを持たない画面がこのアプリに複数あることの一貫性を支えている
+- **`<script setup>`のトップレベルの実行順序は、宣言の位置に依存する** — `pickedExerciseId`の分岐のように「画面を開いた直後に副作用のある処理を実行する」コードは、その処理が参照する`ref()`・`const`宣言より下に書くと、意図に反してTDZエラーになる。これは今回のガイド作成中に実際に踏んだ不具合で修正した([Issue #278](https://github.com/ConniConni/torebu/issues/278))。関数宣言は巻き上げられるが中身の変数参照はそうではない、という違いを意識する必要がある
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
 - `frontend/app/middleware/` — 未ログイン時のリダイレクトなど、ページ遷移前のガード
 - `frontend/app/composables/useGroups.ts`の`ERROR_MESSAGES` — バックエンドのエラーコードと日本語メッセージの対応関係一覧
+- `frontend/app/pages/workouts/new.vue`の`onApplyRoutine()` — ルーティンをワークアウト作成に適用すると、目安セットが(デフォルト値ではなく)実際の重量・回数で一括登録される。具体例1・4で見た「デフォルト値で即登録」とは異なるもう1つの適用パターン
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧

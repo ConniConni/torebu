@@ -337,6 +337,134 @@ GET `/groups/:id`(具体例3の1で最初に試した取得の方)も①②は�
 - **「存在を隠す404」と「権限不足を伝える403」を使い分ける** — 未所属者にはグループの存在自体を教えない(404)一方、所属しているメンバーには「権限が無い」ことを403で明確に伝える。どちらも`findActiveMembership()`という同じ関数の結果から2段階で判定している
 - **判定関数は「何に対する権限か」で使い分ける** — `groups.ts`の`findActiveMembership()`は「このグループの操作(詳細取得・削除など)ができるか」を1グループ単位で見る。一方、具体例1の`findOwnWorkout()`と同じ並びで`workouts.ts`にある`shareActiveGroup()`は「いずれかのグループで同席しているか」を見るもので、他人のworkoutへのいいね・コメント(投稿・一覧取得)の対象範囲に使われる(`findAccessibleWorkout()`経由。グループを横断する判定)。どちらも「所属していないメンバーの情報には触れない」という同じ方針だが、対象がグループ自体かworkoutかで判定の単位が違う
 
+## 具体例4：ルーティンに目安セットを追加するとき
+
+もう1つの例として、[`backend/src/routes/routines.ts`](../../backend/src/routes/routines.ts)のPOST `/routines/:id/exercises`・PATCH `/routines/:id/exercises/:routineExerciseId`を追う。「ルーティン」は、種目ごとに「目安セット(重量・回数)」をあらかじめ登録しておき、記録作成時に一括で呼び出せる機能。[frontend-guide.md](./frontend-guide.md)具体例4で見るように、ルーティン編集画面で種目を追加すると、目安セット1件が具体例1と同じ「選んだ瞬間にデフォルト値で保存される」形で即登録される。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。アカウントが無ければ具体例1の手順で`test@example.com`を作成しログインしておく(`cookie.txt`を使う)。
+
+```bash
+# ルーティンを作る
+curl -s -X POST http://localhost:3001/routines \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"胸の日"}'
+# => {"id":"<routineId>", "name":"胸の日", ...}
+
+# 種目一覧からexerciseIdを1つ控える(公式種目。ここではベンチプレスを使う)
+curl -s -b cookie.txt http://localhost:3001/exercises | grep -o '"id":"[^"]*","createdBy":null,"deletedAt":null,"equipment":"バーベル","lastSet":null,"mainMuscle":"大胸筋"' | head -1
+```
+
+種目を(まだ目安セット無しで)ルーティンに追加する。
+
+```bash
+curl -i -X POST http://localhost:3001/routines/<routineId>/exercises \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<exerciseId>","sortOrder":1}'
+```
+
+```json
+HTTP/1.1 201 Created
+{"id":"<routineExerciseId>","routineId":"<routineId>","exerciseId":"<exerciseId>","sortOrder":1,"targetSets":[]}
+```
+
+目安セットを1件設定する(PATCH。配列をまるごと送る)。
+
+```bash
+curl -i -X PATCH http://localhost:3001/routines/<routineId>/exercises/<routineExerciseId> \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"targetSets":[{"weightKg":60,"reps":8}]}'
+```
+
+```json
+HTTP/1.1 200 OK
+{"id":"<routineExerciseId>", ..., "targetSets":[{"weightKg":60,"reps":8}]}
+```
+
+ここで2つ試してほしい。
+
+- **空のPATCH(`{}`)を送る** → `400 {"error":"invalid_request","details":{"errors":["sortOrder・targetSetsのいずれかを指定してください"]}}`。「何も変更しないPATCH」を弾く仕組みがある
+- **`weightKg`を`60.3`(0.5kg刻みでない値)にして送る** → `400`で`weightKg`の`errors`に「重量は0.5kg刻みで入力してください」が入る。ワークアウト記録の`weightKgSchema`([backend-guide.md](./backend-guide.md)は参照していないが`workouts.ts`で定義)を`routines.ts`が`import`して使い回しているため、同じ基準がここでも効いている
+
+### 2. コードを実行順に追う
+
+```ts
+const addExerciseSchema = z.object({
+  exerciseId: z.string().uuid(),
+  sortOrder: z.number().int().positive(),
+  targetSets: targetSetsSchema.optional(), // 省略時は目安セット無し(null)
+})
+
+routinesRouter.post('/:id/exercises', requireAuth, async (req, res) => {
+  const parsed = addExerciseSchema.safeParse(req.body)
+  if (!parsed.success) { /* 400 */ }
+  const userId = req.session.userId!
+  const routine = await findOwnRoutine(userId, req.params.id as string)
+  if (!routine) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const visible = await isExerciseVisible(userId, parsed.data.exerciseId)
+  if (!visible) {
+    res.status(400).json({ error: 'invalid_exercise' })
+    return
+  }
+
+  const routineExercise = await prisma.routineExercise.create({
+    data: { routineId: routine.id, exerciseId: parsed.data.exerciseId, sortOrder: parsed.data.sortOrder, targetSets: parsed.data.targetSets },
+  })
+
+  res.status(201).json(serializeRoutineExercise(routineExercise))
+})
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `addExerciseSchema.safeParse(req.body)` | `exerciseId`(UUID)・`sortOrder`(正の整数)を検証。`targetSets`は`.optional()`なので、具体例1のcurlのように省略すれば`undefined`のまま次に進む |
+| ② `findOwnRoutine(userId, routineId)` | 具体例1の`findOwnWorkout()`・具体例3の`findActiveMembership()`と同じ形の「自分のものか」チェック。他人のroutineなら404(IDOR対策)。`routines.ts`のコード中コメントにある通り、routineには`deletedAt`が無く物理削除なので、`findOwnRoutine`は`userId`一致だけを見ればよい(`docs/schema.md`参照) |
+| ③ `isExerciseVisible(userId, exerciseId)` | `GET /exercises`と同じ基準(公式種目 or 自分のカスタム種目、かつ削除されていない)で、そのexerciseIdがこのユーザーから見えるものかを確認する。他人専用のカスタム種目・削除済みのカスタム種目を指定すると、ここで`400 invalid_exercise`になる |
+| ④ `prisma.routineExercise.create(...)` | `targetSets`が`undefined`なら、Prismaはこれを「そのカラムを指定しない」として扱い、DB側のデフォルト(`null`)が入る。レスポンスの`targetSets`が`[]`なのは、`serializeRoutineExercise()`が`null`を`[]`に変換しているため(19-26行目付近) |
+
+続いてPATCH側。
+
+```ts
+const updateRoutineExerciseSchema = z
+  .object({
+    sortOrder: z.number().int().positive().optional(),
+    targetSets: targetSetsSchema.optional(),
+  })
+  .refine((data) => data.sortOrder !== undefined || data.targetSets !== undefined, {
+    message: 'sortOrder・targetSetsのいずれかを指定してください',
+  })
+```
+
+`.refine()`はzodで「複数フィールドにまたがる条件」を書くための仕組み。`sortOrder`・`targetSets`のどちらも`undefined`(＝空のPATCH)だった場合にだけ、指定したメッセージ付きでバリデーションエラーにする。空のcurlを送ったときの400はここで発生している。
+
+`targetSets`自体の検証は、ファイル先頭の`targetSetSchema`(10-17行目)が担う。
+
+```ts
+const targetSetSchema = z.object({
+  weightKg: weightKgSchema.nullable().optional(), // null/省略 = 自重
+  reps: repsSchema,
+})
+const targetSetsSchema = z.array(targetSetSchema).max(20)
+```
+
+`weightKgSchema`・`repsSchema`は`workouts.ts`からimportしたもの(5行目)で、`workout_sets`の重量・回数と全く同じ基準(0.5kg刻み・999.5kg以下、正の整数・999以下)を使い回している。`weightKg`に`60.3`を送ると`400`になったのは、`workouts.ts`側で定義された`.refine((value) => Math.round(value * 2) === value * 2, ...)`がそのまま効いているため。
+
+### 3. 自分で壊して確かめる
+
+- `updateRoutineExerciseSchema`の`.refine(...)`のブロックを一時的にコメントアウトして保存する(`tsx watch`が自動再起動)。その状態で空のPATCH(`{}`)を送ると、`200`で成功してしまうはずだ(実際には何もフィールドを更新しないPrismaの`update({data: {}})`が呼ばれ、変化しないレコードがそのまま返る)。「意味の無いリクエストを弾く」ためだけに見えるこの1行が無いと、フロント側の書き間違い(例えば`saveTargetSets`の呼び出し漏れ)にサーバー側で気づけなくなる。**試したら必ず元に戻すこと**
+- `isExerciseVisible`の呼び出しをコメントアウトして保存し、他アカウントの非公開カスタム種目のIDを指定してPOSTしてみる → 本来`400 invalid_exercise`になるはずが`201`で追加できてしまう。他人のカスタム種目を自分のルーティンに紐付けられてしまう、という設計上望ましくない状態が体感できる。**試したら必ず元に戻すこと**
+
+## 具体例4から読み取れる設計上の判断
+
+- **配列カラムはまるごと置き換える設計にしている** — `targetSets`は`jsonb`カラムに配列としてそのまま保存され、PATCHのたびに配列全体を送り直す。`workout_sets`のような「1セットごとに個別のPATCH/DELETEエンドポイントを持つ」設計とは違う(コード中のコメント参照)。1ルーティンあたりの目安セット数が`.max(20)`で小さく抑えられているため、まるごと送っても実用上問題にならないという判断
+- **「何も変更しないリクエスト」を`.refine()`で弾く** — 空のPATCHをサーバー側で明示的にエラーにすることで、フロント側の実装ミス(更新対象を渡し忘れる等)に気づきやすくしている。具体例1・3のようなIDOR対策の404/403とは違う種類の「壊れたリクエストを弾く」設計判断
+- **バリデーションスキーマを機能をまたいで再利用する** — `weightKgSchema`・`repsSchema`を`workouts.ts`からexportして`routines.ts`がimportする形にすることで、「重量・回数として妥当な値」の基準を1箇所にまとめている。目安セットと実際のワークアウトのセットで基準がズレる心配がない
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
