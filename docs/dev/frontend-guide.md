@@ -210,8 +210,63 @@ export default defineNuxtRouteMiddleware(async () => {
 - **ログインのレスポンスをそのまま状態に使う** — ログイン成功後に改めて`/auth/me`を呼び直さず、`login()`のレスポンスをそのまま`user`に入れることでリクエスト回数を減らしている。ただし`/`のように別経路で`fetchMe()`を呼ぶ保険が入っている画面もあるため、「必ず`login()`経由でしか`user`が埋まらない」という前提はしない方がよい
 - **画面ごとのガードは`middleware`に集約する** — 「ログイン必須」「未ログイン専用」をページの`.vue`ファイルに書かず、`definePageMeta({ middleware: 'auth' | 'guest' })`で指定する形にすることで、そのページがどちらの制約を受けるかが宣言部分を見るだけでわかる。ただし「/」のようにどちらのミドルウェアも使わず、ページ自身がログイン状態で表示を出し分ける設計もある(Issue #151。全ページ一律ではない点に注意)
 
+## 具体例3：グループの権限をフロントでどう扱うか
+
+[`backend-guide.md`](./backend-guide.md)で追ったGET `/groups/:id`・DELETE `/groups/:id`の404/403を、フロント側がどう見せているかを見る。対象は[`frontend/app/pages/groups/[id]/index.vue`](../../frontend/app/pages/groups/[id]/index.vue)(グループ詳細画面)。
+
+### 1. まず動かして観察する
+
+具体例1・2と同様、`test@example.com`(A、オーナー)ともう1アカウント(B、招待コードで参加させたメンバー)をブラウザから作っておく。Aでログインし、`/groups/<groupId>`(グループ詳細)を開く。
+
+- **Aで開いたとき** → 画面上部に「オーナー」バッジが表示され、「招待コードの再発行」ボタンと「このグループを削除する」ボタンが両方とも見える
+- **ログアウトしてBでログインし直し、同じ`/groups/<groupId>`を開いたとき** → 「オーナー」バッジは無く、「再発行」「削除」ボタンごと画面に存在しない(グレーアウトではなく、要素自体が無い)。「このグループを退会する」ボタンだけが見える
+
+つまり、B(メンバー)はそもそも削除・再発行のボタンをクリックできる状態にすら到達しない。バックエンドがBからのDELETEを403で弾く(具体例3参照)のに対し、フロントはその手前でボタンごと隠している。この「見せない」判定がどこで行われているかを次で追う。
+
+### 2. コードを実行順に追う
+
+```ts
+// pages/groups/[id]/index.vue
+const group = ref<Awaited<ReturnType<typeof fetchGroupDetail>> | null>(null)
+
+async function load() {
+  try {
+    group.value = await fetchGroupDetail(groupId) // GET /api/groups/:id
+  } catch {
+    loadError.value = true
+  }
+}
+
+const isOwner = computed(() => group.value?.role === 'owner')
+```
+
+```html
+<button v-if="isOwner" @click="onReissueInvite">再発行</button>
+...
+<button v-if="isOwner" @click="onDelete">このグループを削除する</button>
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `fetchGroupDetail(groupId)` | `GET /api/groups/:id`を呼ぶ。バックエンド([backend-guide.md](./backend-guide.md)具体例3参照)は`findActiveMembership()`で所属を確認し、所属していれば`role`(`'owner'`か`'member'`)を含めてレスポンスを返す |
+| ② `group.value = await fetchGroupDetail(...)` | レスポンスの`role`がそのまま`group.value.role`に入る。Aなら`'owner'`、Bなら`'member'` |
+| ③ `isOwner = computed(() => group.value?.role === 'owner')` | ①②で得た`role`を見て真偽値に変換するだけの薄いcomputed |
+| ④ `v-if="isOwner"` | テンプレート側で`isOwner`が`false`のときはボタンのDOM自体を描画しない(非表示ではなく不存在) |
+
+**バックエンドの`role`をそのまま信じている**点がポイント。フロント側で「オーナーかどうか」を独自に再計算するロジックは無く、APIレスポンスの`role`フィールドを渡しているだけ。もしBが未所属のグループ(Cの立場)のURLを直接開いたら、`fetchGroupDetail`が`404`で失敗して`catch`に落ち、`loadError.value = true`になる。この画面の`loadError`は「グループの取得に失敗しました。時間をおいて再度お試しください」という汎用メッセージで、404(権限が無い)と500(サーバーエラー)を区別しない実装になっている。具体例1のいいね(`toggleLike`)の`catch`が「専用のエラー表示は設けない」としていたのと同じ考え方で、認可エラー専用のメッセージは用意していない。
+
+### 3. 自分で壊して確かめる
+
+- `isOwner`の定義を一時的に`const isOwner = computed(() => true)`に変えて保存する(HMRで即反映)。Bでログインした状態で`/groups/<groupId>`を開き直すと、メンバーのはずなのに「再発行」「削除」ボタンが見えてしまう。ただしボタンを実際に押すと、`DELETE /api/groups/:id`がバックエンドの`403 forbidden`で弾かれ、`groupErrorMessage()`が「この操作はオーナーのみ行えます」という日本語メッセージに変換して画面に出す(`onDelete`の`catch`)。**フロントのボタン非表示はあくまでUX上の配慮で、実際の権限はバックエンドの`membership.role !== 'owner'`チェックが最後の砦になっている**ことが体感できる(具体例2で見た`middleware/auth.ts`とバックエンドの`requireAuth`の関係と同じ構図)。試したら元に戻すこと
+
+## 具体例3から読み取れる設計上の判断
+
+- **権限の判定結果(`role`)はバックエンドの値をそのまま使う** — フロントは「オーナーかどうか」を独自ロジックで判定し直さず、APIレスポンスの`role`フィールドを`computed`で真偽値に変換するだけ。判定ロジックの二重管理を避けている
+- **操作できないボタンは「隠す」、操作した結果の権限エラーは「汎用メッセージ」** — オーナー限定の操作はそもそもボタンを出さない(`v-if`)ことでミスクリックを防ぎつつ、直接APIを叩かれた場合(具体例3の「壊して確かめる」参照)の403は個別の丁寧なメッセージ(`groupErrorMessage()`のマップ)で返す。一方、閲覧系(グループ詳細の取得自体)の404は個別扱いせず汎用エラーメッセージにまとめている。「操作の失敗は具体的に」「閲覧の失敗は汎用的に」という向きの違いがある
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
 - `frontend/app/middleware/` — 未ログイン時のリダイレクトなど、ページ遷移前のガード
+- `frontend/app/composables/useGroups.ts`の`ERROR_MESSAGES` — バックエンドのエラーコードと日本語メッセージの対応関係一覧
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧

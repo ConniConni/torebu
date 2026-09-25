@@ -30,8 +30,9 @@
 - [x] ワークアウト記録の作成（`POST /workouts`）— backend-guide.md／frontend-guide.mdで対応済み
 - [x] ログイン・セッション確立（`POST /auth/login`）— backend-guide.md／frontend-guide.mdの「具体例2」で対応済み
       （2026-09-25）。セッション固定化対策・メールアドレス列挙対策・`index.vue`の`fetchMe()`保険まで扱った
-- [ ] グループ機能の権限判定（`shareActiveGroup()`等、IDOR対策の考え方）— backend-guide.mdの
-      「次に読むと理解が深まるファイル」に既出。認可ロジックの読み方を学べる
+- [x] グループ機能の権限判定（`findActiveMembership()`・`shareActiveGroup()`、IDOR対策の考え方）—
+      backend-guide.md／frontend-guide.mdの「具体例3」で対応済み（2026-09-26）。404(存在を隠す)と
+      403(権限不足を伝える)の使い分け、フロントの`isOwner`表示制御とバックエンド側の最終防衛まで扱った
 - [ ] ルーティン機能（③記録作成との関係。目安セットの即登録など、ワークアウト作成と似た「選択した瞬間に
       デフォルト値で保存される」設計が別の画面にもあることを示せる）
 - [ ] 統計・集計（`stats.ts`。ランキング等の集計ロジック）
