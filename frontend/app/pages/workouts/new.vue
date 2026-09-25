@@ -719,9 +719,7 @@ async function onGoToExercisePicker() {
               閉じる
             </button>
           </div>
-          <p v-if="routinePickerPending" class="text-sm text-gray-500 dark:text-muted">
-            読み込み中...
-          </p>
+          <LoadingText v-if="routinePickerPending" />
           <p v-else-if="routineApplying" class="text-sm text-gray-500 dark:text-muted">適用中...</p>
           <template v-else-if="routines && routines.length > 0">
             <ul class="space-y-1">

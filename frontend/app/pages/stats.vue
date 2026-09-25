@@ -173,9 +173,7 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
 
       <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
         <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">合計負荷重量の推移</p>
-        <p v-if="volumePending" class="text-center text-sm text-gray-500 dark:text-muted">
-          読み込み中...
-        </p>
+        <LoadingText v-if="volumePending" center />
         <p v-else-if="volumeError" class="text-center text-sm text-red-600 dark:text-red-400">
           データの取得に失敗しました。時間をおいて再度お試しください
         </p>
@@ -202,9 +200,7 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
           <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
 
-        <p v-if="historyPending" class="text-center text-sm text-gray-500 dark:text-muted">
-          読み込み中...
-        </p>
+        <LoadingText v-if="historyPending" center />
         <p v-else-if="historyError" class="text-center text-sm text-red-600 dark:text-red-400">
           データの取得に失敗しました。時間をおいて再度お試しください
         </p>

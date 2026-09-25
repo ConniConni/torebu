@@ -80,7 +80,7 @@ async function onLogout() {
               >統計を見る →</NuxtLink
             >
           </div>
-          <p v-if="summaryPending" class="text-xs text-gray-400 dark:text-muted">読み込み中...</p>
+          <LoadingText v-if="summaryPending" size="xs" subtle />
           <p v-else-if="summaryError" class="text-xs text-red-600 dark:text-red-400">
             サマリーの取得に失敗しました
           </p>
@@ -104,7 +104,7 @@ async function onLogout() {
            含めない。docs/backlog.md参照） -->
         <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
           <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">所属グループ</p>
-          <p v-if="groupsPending" class="text-xs text-gray-400 dark:text-muted">読み込み中...</p>
+          <LoadingText v-if="groupsPending" size="xs" subtle />
           <p v-else-if="groupsError" class="text-xs text-red-600 dark:text-red-400">
             グループの取得に失敗しました
           </p>

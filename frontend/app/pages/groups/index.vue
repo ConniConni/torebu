@@ -61,7 +61,7 @@ async function onCreate() {
       </form>
       <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <LoadingText v-if="pending" center />
       <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
         グループ一覧の取得に失敗しました。時間をおいて再度お試しください
       </p>

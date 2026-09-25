@@ -255,7 +255,7 @@ async function onDeleteWorkout(id: string) {
         </div>
       </div>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
+      <LoadingText v-if="pending" center />
       <p v-else-if="error" class="text-center text-sm text-red-600 dark:text-red-400">
         記録の取得に失敗しました。時間をおいて再度お試しください
       </p>
@@ -265,9 +265,7 @@ async function onDeleteWorkout(id: string) {
              「今週のサマリー」の2種類のカードを1枚に統合した（モックで複数案を比較して決定。
              経緯はdocs/spec.md参照）。このAPI呼び出し（GET /stats/volume）だけ失敗しても
              他の表示は妨げないよう独立してエラー処理する -->
-        <p v-if="weeklyVolumePending" class="text-xs text-gray-400 dark:text-muted">
-          サマリーを読み込み中...
-        </p>
+        <LoadingText v-if="weeklyVolumePending" size="xs" subtle>サマリーを読み込み中...</LoadingText>
         <p v-else-if="weeklyVolumeError" class="text-xs text-red-600 dark:text-red-400">
           サマリーの取得に失敗しました
         </p>
@@ -436,12 +434,7 @@ async function onDeleteWorkout(id: string) {
                     {{ workout.memo }}
                   </p>
 
-                  <p
-                    v-if="summaryPending[workout.id]"
-                    class="text-sm text-gray-500 dark:text-muted"
-                  >
-                    読み込み中...
-                  </p>
+                  <LoadingText v-if="summaryPending[workout.id]" />
                   <!-- セット0件（メモのみ）の記録は、カード自体が③記録作成へのリンクになっている
                      ことを踏まえ、「＋この日の記録を始める」等の既存の能動的な文言と語彙を揃えた
                      表現にする（Issue #99。以前の「種目未登録」は受動的で分かりにくいという指摘） -->

@@ -96,9 +96,7 @@ async function onDelete() {
     <PageHeader back-to="/groups" back-label="グループに戻る" title="グループ詳細" />
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
-        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
-          読み込み中...
-        </p>
+        <LoadingText v-if="pending" center />
         <p
           v-else-if="loadError || !group"
           class="text-center text-sm text-red-600 dark:text-red-400"
