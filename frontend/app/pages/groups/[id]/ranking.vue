@@ -162,229 +162,229 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink :to="`/groups/${groupId}`" class="text-sm text-gray-500 dark:text-muted"
-          >← グループに戻る</NuxtLink
-        >
-        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">ランキング</h1>
-      </div>
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader :back-to="`/groups/${groupId}`" back-label="グループに戻る" title="ランキング" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+            :class="
+              metric === 'total'
+                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+            "
+            @click="onSelectMetric('total')"
+          >
+            合計
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+            :class="
+              metric === 'exercise'
+                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+            "
+            @click="onSelectMetric('exercise')"
+          >
+            種目別
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+            :class="
+              metric === 'attendance'
+                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+            "
+            @click="onSelectMetric('attendance')"
+          >
+            継続
+          </button>
+        </div>
 
-      <div class="flex gap-2">
-        <button
-          type="button"
-          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
-          :class="
-            metric === 'total'
-              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
-          "
-          @click="onSelectMetric('total')"
+        <select
+          v-if="metric === 'exercise'"
+          :value="selectedExerciseId ?? ''"
+          class="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-panel px-3 py-2 text-sm text-gray-900 dark:text-ink"
+          @change="onSelectExercise(($event.target as HTMLSelectElement).value)"
         >
-          合計
-        </button>
-        <button
-          type="button"
-          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
-          :class="
-            metric === 'exercise'
-              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
-          "
-          @click="onSelectMetric('exercise')"
+          <option v-if="(rankingExercises ?? []).length === 0" value="" disabled>
+            種目がありません
+          </option>
+          <option v-for="e in rankingExercises ?? []" :key="e.id" :value="e.id">
+            {{ e.name }}
+          </option>
+        </select>
+
+        <div
+          v-if="metric !== 'attendance'"
+          class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent"
         >
-          種目別
-        </button>
-        <button
-          type="button"
-          class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
-          :class="
-            metric === 'attendance'
-              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
-          "
-          @click="onSelectMetric('attendance')"
+          <button
+            v-for="p in PERIODS"
+            :key="p.value"
+            type="button"
+            class="flex-1 py-1.5 text-sm font-semibold"
+            :class="
+              period === p.value
+                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+            "
+            @click="period = p.value"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
+          ランキングの取得に失敗しました。時間をおいて再度お試しください
+        </p>
+        <p
+          v-else-if="!ranking || ranking.length === 0"
+          class="text-center text-sm text-gray-500 dark:text-muted"
         >
-          継続
-        </button>
-      </div>
-
-      <select
-        v-if="metric === 'exercise'"
-        :value="selectedExerciseId ?? ''"
-        class="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-panel px-3 py-2 text-sm text-gray-900 dark:text-ink"
-        @change="onSelectExercise(($event.target as HTMLSelectElement).value)"
-      >
-        <option v-if="(rankingExercises ?? []).length === 0" value="" disabled>
-          種目がありません
-        </option>
-        <option v-for="e in rankingExercises ?? []" :key="e.id" :value="e.id">{{ e.name }}</option>
-      </select>
-
-      <div
-        v-if="metric !== 'attendance'"
-        class="flex overflow-hidden rounded-lg border border-brand-600 dark:border-accent"
-      >
-        <button
-          v-for="p in PERIODS"
-          :key="p.value"
-          type="button"
-          class="flex-1 py-1.5 text-sm font-semibold"
-          :class="
-            period === p.value
-              ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
-              : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
-          "
-          @click="period = p.value"
-        >
-          {{ p.label }}
-        </button>
-      </div>
-
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
-        ランキングの取得に失敗しました。時間をおいて再度お試しください
-      </p>
-      <p
-        v-else-if="!ranking || ranking.length === 0"
-        class="text-center text-sm text-gray-500 dark:text-muted"
-      >
-        メンバーがいません
-      </p>
-
-      <template v-else>
-        <!-- 継続タブ：順位を持たない別軸の一覧。名前順（あいうえお順）に並べ、
-           各メンバーの直近28日の参加・継続スタンプだけを見せる -->
-        <template v-if="metric === 'attendance'">
-          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-            <ul class="flex flex-col">
-              <li
-                v-for="entry in attendanceSorted"
-                :key="entry.userId"
-                class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
-                :class="
-                  entry.userId === user?.id
-                    ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
-                    : ''
-                "
-              >
-                <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
-                  {{ entry.displayName }}
-                  <span
-                    v-if="entry.userId === user?.id"
-                    class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
-                  >
-                    自分
-                  </span>
-                </span>
-                <span
-                  class="inline-flex h-5 w-28 shrink-0 items-center justify-center rounded text-[10px] font-bold"
-                  :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
-                >
-                  {{ attendanceLabel(entry) }}
-                </span>
-              </li>
-            </ul>
-          </div>
-          <p class="text-center text-xs text-gray-400 dark:text-muted">
-            順位ではなく、直近28日にトレーニングした日数の目安です（ハイペース:18日〜
-            コンスタント:7日〜 たまに:1日〜）
-          </p>
-        </template>
+          メンバーがいません
+        </p>
 
         <template v-else>
-          <div v-if="top3.length > 0" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-            <div class="grid grid-cols-3 items-end gap-2">
-              <div
-                v-for="entry in podiumOrder"
-                :key="entry?.userId ?? entry?.rank"
-                class="flex flex-col items-center gap-1.5"
-              >
-                <template v-if="entry">
-                  <div
-                    class="flex items-center justify-center rounded-full font-bold tabular-nums"
-                    :class="[
-                      entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm',
-                      medalClasses(entry.rank),
-                    ]"
-                  >
-                    {{ entry.rank }}
-                  </div>
-                  <p
-                    class="max-w-[80px] truncate text-xs font-semibold text-gray-900 dark:text-ink"
-                  >
+          <!-- 継続タブ：順位を持たない別軸の一覧。名前順（あいうえお順）に並べ、
+           各メンバーの直近28日の参加・継続スタンプだけを見せる -->
+          <template v-if="metric === 'attendance'">
+            <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+              <ul class="flex flex-col">
+                <li
+                  v-for="entry in attendanceSorted"
+                  :key="entry.userId"
+                  class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
+                  :class="
+                    entry.userId === user?.id
+                      ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
+                      : ''
+                  "
+                >
+                  <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
                     {{ entry.displayName }}
-                  </p>
-                  <p class="text-xs font-bold tabular-nums text-gray-700 dark:text-ink">
-                    {{ formatVolume(entry.totalVolumeKg) }}kg
-                  </p>
-                  <!-- 実績（合計挙上重量）を1位比の相対的な高さで示す棒。実際の値でこそ意味があるため
+                    <span
+                      v-if="entry.userId === user?.id"
+                      class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                    >
+                      自分
+                    </span>
+                  </span>
+                  <span
+                    class="inline-flex h-5 w-28 shrink-0 items-center justify-center rounded text-[10px] font-bold"
+                    :class="ATTENDANCE_STAMP_CLASSES[entry.attendanceStamp]"
+                  >
+                    {{ attendanceLabel(entry) }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+            <p class="text-center text-xs text-gray-400 dark:text-muted">
+              順位ではなく、直近28日にトレーニングした日数の目安です（ハイペース:18日〜
+              コンスタント:7日〜 たまに:1日〜）
+            </p>
+          </template>
+
+          <template v-else>
+            <div v-if="top3.length > 0" class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+              <div class="grid grid-cols-3 items-end gap-2">
+                <div
+                  v-for="entry in podiumOrder"
+                  :key="entry?.userId ?? entry?.rank"
+                  class="flex flex-col items-center gap-1.5"
+                >
+                  <template v-if="entry">
+                    <div
+                      class="flex items-center justify-center rounded-full font-bold tabular-nums"
+                      :class="[
+                        entry.rank === 1 ? 'h-14 w-14 text-base' : 'h-10 w-10 text-sm',
+                        medalClasses(entry.rank),
+                      ]"
+                    >
+                      {{ entry.rank }}
+                    </div>
+                    <p
+                      class="max-w-[80px] truncate text-xs font-semibold text-gray-900 dark:text-ink"
+                    >
+                      {{ entry.displayName }}
+                    </p>
+                    <p class="text-xs font-bold tabular-nums text-gray-700 dark:text-ink">
+                      {{ formatVolume(entry.totalVolumeKg) }}kg
+                    </p>
+                    <!-- 実績（合計挙上重量）を1位比の相対的な高さで示す棒。実際の値でこそ意味があるため
                      ランクの見た目上の並び(2-1-3)ではなく実測値から高さを都度計算する -->
-                  <div
-                    class="w-full rounded-t"
-                    :style="{ height: `${podiumBarHeightPx(entry.totalVolumeKg)}px` }"
-                    :class="medalBarClass(entry.rank)"
-                  />
-                </template>
+                    <div
+                      class="w-full rounded-t"
+                      :style="{ height: `${podiumBarHeightPx(entry.totalVolumeKg)}px` }"
+                      :class="medalBarClass(entry.rank)"
+                    />
+                  </template>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-            <ul class="flex flex-col">
-              <li
-                v-for="entry in ranking"
-                :key="entry.userId"
-                class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
-                :class="
-                  entry.userId === user?.id
-                    ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
-                    : ''
-                "
-              >
-                <span
-                  v-if="entry.rank <= 3"
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold tabular-nums"
-                  :class="medalClasses(entry.rank)"
+            <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+              <ul class="flex flex-col">
+                <li
+                  v-for="entry in ranking"
+                  :key="entry.userId"
+                  class="flex items-center gap-2.5 border-t border-gray-100 dark:border-white/5 py-2.5 first:border-t-0"
+                  :class="
+                    entry.userId === user?.id
+                      ? '-mx-2 rounded-lg bg-brand-50 dark:bg-accent/10 px-2'
+                      : ''
+                  "
                 >
-                  {{ entry.rank }}
-                </span>
-                <span
-                  v-else
-                  class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400 dark:text-muted"
-                >
-                  {{ entry.rank }}
-                </span>
-                <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
-                  {{ entry.displayName }}
                   <span
-                    v-if="entry.userId === user?.id"
-                    class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                    v-if="entry.rank <= 3"
+                    class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold tabular-nums"
+                    :class="medalClasses(entry.rank)"
                   >
-                    自分
+                    {{ entry.rank }}
                   </span>
-                </span>
-                <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
-                  {{ formatVolume(entry.totalVolumeKg)
-                  }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
-                </span>
-              </li>
-            </ul>
-          </div>
-          <p class="text-center text-xs text-gray-400 dark:text-muted">
-            <template v-if="metric === 'exercise'">
-              {{
-                (rankingExercises ?? []).find((e) => e.id === selectedExerciseId)?.name ??
-                '選択した種目'
-              }}の挙上重量でランキングしています
-            </template>
-            <template v-else>
-              合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています
-            </template>
-          </p>
+                  <span
+                    v-else
+                    class="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-gray-400 dark:text-muted"
+                  >
+                    {{ entry.rank }}
+                  </span>
+                  <span class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-ink">
+                    {{ entry.displayName }}
+                    <span
+                      v-if="entry.userId === user?.id"
+                      class="ml-1 rounded-full bg-brand-100 dark:bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-accent"
+                    >
+                      自分
+                    </span>
+                  </span>
+                  <span class="shrink-0 text-sm font-bold tabular-nums text-gray-700 dark:text-ink">
+                    {{ formatVolume(entry.totalVolumeKg)
+                    }}<span class="text-xs font-medium text-gray-400 dark:text-muted">kg</span>
+                  </span>
+                </li>
+              </ul>
+            </div>
+            <p class="text-center text-xs text-gray-400 dark:text-muted">
+              <template v-if="metric === 'exercise'">
+                {{
+                  (rankingExercises ?? []).find((e) => e.id === selectedExerciseId)?.name ??
+                  '選択した種目'
+                }}の挙上重量でランキングしています
+              </template>
+              <template v-else>
+                合計挙上重量（公式種目のみ、自重種目は0kg扱い）でランキングしています
+              </template>
+            </p>
+          </template>
         </template>
-      </template>
+      </div>
     </div>
   </div>
 </template>

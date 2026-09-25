@@ -75,100 +75,100 @@ function targetLink(n: AppNotification) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-surface px-4 py-6">
-    <div class="mx-auto flex max-w-sm flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="text-sm text-gray-500 dark:text-muted">← ホームに戻る</NuxtLink>
-        <h1 class="text-base font-semibold text-gray-900 dark:text-ink">通知</h1>
-      </div>
+  <div class="min-h-screen bg-gray-50 dark:bg-surface">
+    <PageHeader back-to="/" back-label="ホームに戻る" title="通知" />
+    <div class="px-4 pb-6">
+      <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
+          読み込み中...
+        </p>
+        <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
+          通知の取得に失敗しました。時間をおいて再度お試しください
+        </p>
+        <p
+          v-else-if="!notifications || notifications.length === 0"
+          class="text-center text-sm text-gray-500 dark:text-muted"
+        >
+          通知はまだありません
+        </p>
 
-      <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">読み込み中...</p>
-      <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
-        通知の取得に失敗しました。時間をおいて再度お試しください
-      </p>
-      <p
-        v-else-if="!notifications || notifications.length === 0"
-        class="text-center text-sm text-gray-500 dark:text-muted"
-      >
-        通知はまだありません
-      </p>
-
-      <ul v-else class="flex flex-col gap-2">
-        <li v-for="n in notifications" :key="n.id">
-          <NuxtLink
-            :to="targetLink(n)"
-            class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
-            :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-accent/10'"
-          >
-            <span
-              v-if="!n.isRead"
-              class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-accent"
-            />
-            <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
+        <ul v-else class="flex flex-col gap-2">
+          <li v-for="n in notifications" :key="n.id">
+            <NuxtLink
+              :to="targetLink(n)"
+              class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
+              :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-accent/10'"
             >
-              {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
-            </span>
-            <HeartIcon
-              v-if="n.type === 'reaction'"
-              filled
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <TrophyIcon
-              v-else-if="n.type === 'personal_best'"
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <FlagIcon
-              v-else-if="n.type === 'milestone'"
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <ArrowPathIcon
-              v-else-if="n.type === 'comeback'"
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <GroupIcon
-              v-else-if="n.type === 'member_joined'"
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <CommentIcon
-              v-else
-              class="mt-0.5 h-4.5 w-4.5 shrink-0"
-              :class="
-                n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-              "
-            />
-            <div class="min-w-0 flex-1">
-              <p
-                class="text-sm leading-relaxed"
-                :class="n.isRead ? 'text-gray-700 dark:text-ink' : 'text-gray-900 dark:text-ink'"
+              <span
+                v-if="!n.isRead"
+                class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-accent"
+              />
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
               >
-                {{ notificationText(n) }}
-              </p>
-              <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
-                {{ targetSummary(n) }}
-              </p>
-              <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
-                {{ formatRelativeTime(n.createdAt) }}
-              </p>
-            </div>
-          </NuxtLink>
-        </li>
-      </ul>
+                {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
+              </span>
+              <HeartIcon
+                v-if="n.type === 'reaction'"
+                filled
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <TrophyIcon
+                v-else-if="n.type === 'personal_best'"
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <FlagIcon
+                v-else-if="n.type === 'milestone'"
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <ArrowPathIcon
+                v-else-if="n.type === 'comeback'"
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <GroupIcon
+                v-else-if="n.type === 'member_joined'"
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <CommentIcon
+                v-else
+                class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                :class="
+                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                "
+              />
+              <div class="min-w-0 flex-1">
+                <p
+                  class="text-sm leading-relaxed"
+                  :class="n.isRead ? 'text-gray-700 dark:text-ink' : 'text-gray-900 dark:text-ink'"
+                >
+                  {{ notificationText(n) }}
+                </p>
+                <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
+                  {{ targetSummary(n) }}
+                </p>
+                <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
+                  {{ formatRelativeTime(n.createdAt) }}
+                </p>
+              </div>
+            </NuxtLink>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
