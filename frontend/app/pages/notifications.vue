@@ -79,9 +79,7 @@ function targetLink(n: AppNotification) {
     <PageHeader back-to="/" back-label="ホームに戻る" title="通知" />
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
-        <p v-if="pending" class="text-center text-sm text-gray-500 dark:text-muted">
-          読み込み中...
-        </p>
+        <LoadingText v-if="pending" center />
         <p v-else-if="loadError" class="text-center text-sm text-red-600 dark:text-red-400">
           通知の取得に失敗しました。時間をおいて再度お試しください
         </p>
