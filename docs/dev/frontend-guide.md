@@ -20,7 +20,7 @@ frontend/app/
 
 Nuxtでは`pages/workouts/new.vue`が自動的に`/workouts/new`というURLになる。「composable」はReactでいう独自Hookに近いもので、`use〇〇`という名前の関数としてロジックをまとめ、複数のページから呼び出す。
 
-## 具体例：ワークアウト記録を1件作るとき
+## 具体例1：ワークアウト記録を1件作るとき
 
 [`backend-guide.md`](./backend-guide.md)で追ったPOST `/workouts`を、フロント側からどう呼んでいるかを見る。
 
@@ -110,13 +110,108 @@ async function ensureWorkout() {
 
 この2つの動作の違いを実際に試してみてほしい。この区別は些細に見えて、実は動作確認のときに落とし穴になる。「アプリ内のリンクをクリックして遷移する」確認と「URLバーに直接ページを打ち込んで開く(フルリロード相当)」確認では、`useState`のキャッシュが古いままかどうかの見え方が変わってしまうことがある(詳しくは[プロジェクトのCLAUDE.md](../../CLAUDE.md)のセルフチェック項目を参照。Issue #116で実際に踏んだ問題)。
 
-## この例から読み取れる設計上の判断
+## 具体例1から読み取れる設計上の判断
 
 - **API呼び出しは`pages/`に直接書かず、composableに集約する** — ページ(`.vue`)はUIの表示とユーザー操作のハンドリングに専念し、「何を・いつAPIに送るか」のロジックはcomposable側が持つ。同じデータを複数の画面で使う場合に重複を避けられる
 - **キャッシュの更新漏れに注意する** — `useWorkouts()`のような一覧データを`useState`でキャッシュしている箇所は、保存操作のたびに変わりうる値(前回実績・集計値など)を持たせると、更新処理を書き忘れたときにページ遷移後も古い値が残り続けるバグになりやすい(過去にIssue #116で発覚した)。新しくcomposableを書くときはこの点を意識する
 
+## 具体例2：ログインしてセッションを確立するとき
+
+[`backend-guide.md`](./backend-guide.md)で追ったPOST `/auth/login`を、フロント側からどう呼んでいるかを見る。ログイン状態を画面ごとにどう出し分けているか([`frontend/app/middleware/`](../../frontend/app/middleware/)のガード)も合わせて扱う。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動する。ログイン済みならヘッダーの「ログアウト」から一旦ログアウトしておく。Networkタブを開いた状態で`http://localhost:3000/login`を開き、メールアドレス・パスワードを入力して「ログイン」を押す。
+
+- **ログインボタンを押した瞬間** → `POST /api/auth/login`が流れ、`200`でユーザー情報(`id`・`email`・`displayName`・`gender`)が返る。この直後に画面は`/`へ遷移する
+- **`/`に遷移した直後** → 何も追加のリクエストは流れない。ログイン画面のフォームで受け取ったレスポンスだけでヘッダーの表示名等が更新されている
+
+次に、ログイン済みの状態で`http://localhost:3000/login`をアプリ内リンクではなく直接URLバーに入力して開いてみる(フルリロード) → **`/login`にはとどまらず`/`へ自動的に戻される**。逆にログアウトした状態で`http://localhost:3000/routines`を直接開く → **`/login`へ戻される**。この2つの「勝手にリダイレクトされる」挙動がどこで起きているかを、次でコードから確認する。
+
+### 2. コードを実行順に追う
+
+ログインフォームの送信は[`frontend/app/pages/login.vue`](../../frontend/app/pages/login.vue)から[`useAuth()`](../../frontend/app/composables/useAuth.ts)の`login()`を呼ぶだけ。
+
+```ts
+// login.vue
+async function onSubmit() {
+  try {
+    await login({ email: email.value, password: password.value })
+    await navigateTo('/')
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  }
+}
+```
+
+```ts
+// useAuth.ts
+async function login(payload: LoginPayload) {
+  user.value = await $fetch<AuthUser>('/api/auth/login', { method: 'POST', body: payload })
+  return user.value
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `login()`を呼ぶ | `$fetch('/api/auth/login', ...)`が発行される。Networkタブで見えたのはこの瞬間 |
+| ② `user.value = await $fetch(...)` | ログインAPIのレスポンス(`{id, email, displayName, gender}`)を、`useState`で管理している`user`にそのまま代入する。この時点でヘッダー等、`user`を参照している箇所は全て更新済みになる |
+| ③ 失敗時(401等) | `$fetch`が例外を投げるので`catch`に落ち、[`authErrorMessage()`](../../frontend/app/composables/useAuth.ts)がbackendのエラーコード(`invalid_credentials`など。[backend-guide.md](./backend-guide.md)参照)を日本語メッセージに変換する |
+| ④ `await navigateTo('/')` | `user.value`が既に②で入っているので、SPA内遷移した`/`は追加のAPI呼び出し無しでログイン後の見た目になる |
+
+「`/`に遷移した直後は何も追加のリクエストが流れない」のは、`login()`が`user.value`に直接レスポンスを代入しているから。ここで押さえておきたいのは、[`frontend/app/pages/index.vue`](../../frontend/app/pages/index.vue)自身に`if (!user.value) { await fetchMe() }`という保険のコードがあることだ。**もし`login()`が`user.value`を更新し忘れていても、`/`のこの保険により`GET /api/auth/me`が呼ばれて結局は正しいログイン状態が表示される**(3で実際に確かめる)。「/」は`auth`ミドルウェアを使わず未ログイン時もページ自体は表示する設計(未ログインなら`WelcomeScreen`、ログイン中なら`HomeScreen`)なので、この判定はミドルウェアではなくページ側に書かれている。
+
+一方、`/login`や`/routines`のような他のページは`definePageMeta({ middleware: 'guest' })` / `{ middleware: 'auth' }`で保護されている。
+
+```ts
+// middleware/auth.ts(ログイン必須ページ用)
+export default defineNuxtRouteMiddleware(async () => {
+  const { user, fetchMe } = useAuth()
+  if (!user.value) {
+    await fetchMe()
+  }
+  if (!user.value) {
+    return navigateTo('/login')
+  }
+})
+```
+
+```ts
+// middleware/guest.ts(未ログイン専用ページ用)
+export default defineNuxtRouteMiddleware(async () => {
+  const { user, fetchMe } = useAuth()
+  if (!user.value) {
+    await fetchMe()
+  }
+  if (user.value) {
+    return navigateTo('/')
+  }
+})
+```
+
+`auth`と`guest`はほぼ同じ形で、`fetchMe()`で(必要なら)最新のログイン状態を取得してから、条件が逆向きのリダイレクトをするだけの違い。ログイン中に`/login`を直接開くと`guest`ミドルウェアが`user.value`ありと判定して`/`へ戻し、未ログインで`/routines`を開くと`auth`ミドルウェアが`user.value`無しと判定して`/login`へ戻す。これがさっき観察した2つのリダイレクトの正体。
+
+### 3. 自分で壊して確かめる
+
+- `useAuth.ts`の`login()`を一時的に次のように変え、`user.value`への代入をやめてみる。
+
+  ```ts
+  async function login(payload: LoginPayload) {
+    const loggedInUser = await $fetch<AuthUser>('/api/auth/login', { method: 'POST', body: payload })
+    return loggedInUser
+  }
+  ```
+
+  この状態でログインすると、見た目には**ログインは成功しヘッダーも正しく表示される**(エラーにはならない)。ただしNetworkタブをよく見ると、ログイン成功後に`GET /api/auth/me`が追加でもう1回流れているはずだ。これは2で説明した`index.vue`の保険(`if (!user.value) { await fetchMe() }`)が代わりに動いているから。つまりこの1行を消しても`/`では気づきにくいが、「ログインのレスポンスを使わず、わざわざもう1回サーバーに問い合わせている」という無駄が生まれている。試したら元に戻すこと
+- `middleware/auth.ts`の`return navigateTo('/login')`を一時的にコメントアウトして保存し、ログアウトした状態で`/routines`を開いてみる → リダイレクトされずに`/routines`のページ自体は表示されてしまう。ただし中の`GET /api/routines`は`backend`側の`requireAuth`で`401`になるため、画面には「ルーティン一覧の取得に失敗しました。時間をおいて再度お試しください」というエラーメッセージが出る。フロント側のガードとバックエンド側の`requireAuth`(具体例1参照)は別々の仕組みで、フロント側を外してもバックエンド側が最後の砦として残ることが体感できる(ただし本来リダイレクトされるべき画面がエラー表示のまま出てしまうこと自体はUX上望ましくないので、フロント側のガードも省略はできない)。試したら元に戻すこと
+
+## 具体例2から読み取れる設計上の判断
+
+- **ログインのレスポンスをそのまま状態に使う** — ログイン成功後に改めて`/auth/me`を呼び直さず、`login()`のレスポンスをそのまま`user`に入れることでリクエスト回数を減らしている。ただし`/`のように別経路で`fetchMe()`を呼ぶ保険が入っている画面もあるため、「必ず`login()`経由でしか`user`が埋まらない」という前提はしない方がよい
+- **画面ごとのガードは`middleware`に集約する** — 「ログイン必須」「未ログイン専用」をページの`.vue`ファイルに書かず、`definePageMeta({ middleware: 'auth' | 'guest' })`で指定する形にすることで、そのページがどちらの制約を受けるかが宣言部分を見るだけでわかる。ただし「/」のようにどちらのミドルウェアも使わず、ページ自身がログイン状態で表示を出し分ける設計もある(Issue #151。全ページ一律ではない点に注意)
+
 ## 次に読むと理解が深まるファイル
 
-- `frontend/app/composables/useAuth.ts` — ログイン状態の判定・SSR時のCookie転送の扱い
+- `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
 - `frontend/app/middleware/` — 未ログイン時のリダイレクトなど、ページ遷移前のガード
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧
