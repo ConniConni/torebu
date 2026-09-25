@@ -269,8 +269,8 @@ curl -c cookieC.txt -X POST http://localhost:3001/auth/login \
 Aでグループを作り(Aがオーナーになる)、招待コードでBだけを参加させる。Cはどちらにも参加させない。
 
 ```bash
-# Aでグループ作成。レスポンスのidとinviteCodeを控える
-curl -c cookie.txt -X POST http://localhost:3001/groups \
+# Aでグループ作成(cookie.txtは具体例1・2で作ったAのログイン済みCookie)。レスポンスのidとinviteCodeを控える
+curl -X POST http://localhost:3001/groups \
   -H "Content-Type: application/json" -b cookie.txt \
   -d '{"name":"権限検証グループ"}'
 # => {"id":"<groupId>","inviteCode":"<code>", ..., "role":"owner"}
@@ -335,10 +335,10 @@ GET `/groups/:id`(具体例3の1で最初に試した取得の方)も①②は�
 ## 具体例3から読み取れる設計上の判断
 
 - **「存在を隠す404」と「権限不足を伝える403」を使い分ける** — 未所属者にはグループの存在自体を教えない(404)一方、所属しているメンバーには「権限が無い」ことを403で明確に伝える。どちらも`findActiveMembership()`という同じ関数の結果から2段階で判定している
-- **判定関数は「何に対する権限か」で使い分ける** — `groups.ts`の`findActiveMembership()`は「このグループの操作(詳細取得・削除など)ができるか」を1グループ単位で見る。一方、具体例1で触れた`workouts.ts`の`shareActiveGroup()`は「いずれかのグループで同席しているか」を見るもので、workoutの閲覧・いいね・コメントの対象範囲に使われる(グループを横断する判定)。どちらも「所属していないメンバーの情報には触れない」という同じ方針だが、対象がグループ自体かworkoutかで判定の単位が違う
+- **判定関数は「何に対する権限か」で使い分ける** — `groups.ts`の`findActiveMembership()`は「このグループの操作(詳細取得・削除など)ができるか」を1グループ単位で見る。一方、具体例1の`findOwnWorkout()`と同じ並びで`workouts.ts`にある`shareActiveGroup()`は「いずれかのグループで同席しているか」を見るもので、他人のworkoutへのいいね・コメント(投稿・一覧取得)の対象範囲に使われる(`findAccessibleWorkout()`経由。グループを横断する判定)。どちらも「所属していないメンバーの情報には触れない」という同じ方針だが、対象がグループ自体かworkoutかで判定の単位が違う
 
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
-- `backend/src/routes/groups.ts`の`joinGroup`まわり(`POST /groups/join`) — 定員超過・招待コード期限切れ・退会後の再参加といった分岐
+- `backend/src/routes/groups.ts`の`POST /groups/join`(招待コードで参加する処理) — 定員超過・招待コード期限切れ・退会後の再参加といった分岐
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
