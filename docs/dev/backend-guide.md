@@ -352,8 +352,8 @@ curl -s -X POST http://localhost:3001/routines \
   -d '{"name":"胸の日"}'
 # => {"id":"<routineId>", "name":"胸の日", ...}
 
-# 種目一覧からexerciseIdを1つ控える(公式種目。ここではベンチプレスを使う)
-curl -s -b cookie.txt http://localhost:3001/exercises | grep -o '"id":"[^"]*","createdBy":null,"deletedAt":null,"equipment":"バーベル","lastSet":null,"mainMuscle":"大胸筋"' | head -1
+# 種目一覧を取得し、レスポンスの中から"name":"ベンチプレス"の行のidを控える(公式種目なので誰でも使える)
+curl -s -b cookie.txt http://localhost:3001/exercises
 ```
 
 種目を(まだ目安セット無しで)ルーティンに追加する。
@@ -385,7 +385,7 @@ HTTP/1.1 200 OK
 ここで2つ試してほしい。
 
 - **空のPATCH(`{}`)を送る** → `400 {"error":"invalid_request","details":{"errors":["sortOrder・targetSetsのいずれかを指定してください"]}}`。「何も変更しないPATCH」を弾く仕組みがある
-- **`weightKg`を`60.3`(0.5kg刻みでない値)にして送る** → `400`で`weightKg`の`errors`に「重量は0.5kg刻みで入力してください」が入る。ワークアウト記録の`weightKgSchema`([backend-guide.md](./backend-guide.md)は参照していないが`workouts.ts`で定義)を`routines.ts`が`import`して使い回しているため、同じ基準がここでも効いている
+- **`weightKg`を`60.3`(0.5kg刻みでない値)にして送る** → `400`で`weightKg`の`errors`に「重量は0.5kg刻みで入力してください」が入る。ワークアウト記録の重量チェックと同じ基準(`workouts.ts`で定義された`weightKgSchema`)を`routines.ts`が`import`して使い回しているため、同じ基準がここでも効いている
 
 ### 2. コードを実行順に追う
 
@@ -425,7 +425,7 @@ routinesRouter.post('/:id/exercises', requireAuth, async (req, res) => {
 | ① `addExerciseSchema.safeParse(req.body)` | `exerciseId`(UUID)・`sortOrder`(正の整数)を検証。`targetSets`は`.optional()`なので、具体例1のcurlのように省略すれば`undefined`のまま次に進む |
 | ② `findOwnRoutine(userId, routineId)` | 具体例1の`findOwnWorkout()`・具体例3の`findActiveMembership()`と同じ形の「自分のものか」チェック。他人のroutineなら404(IDOR対策)。`routines.ts`のコード中コメントにある通り、routineには`deletedAt`が無く物理削除なので、`findOwnRoutine`は`userId`一致だけを見ればよい(`docs/schema.md`参照) |
 | ③ `isExerciseVisible(userId, exerciseId)` | `GET /exercises`と同じ基準(公式種目 or 自分のカスタム種目、かつ削除されていない)で、そのexerciseIdがこのユーザーから見えるものかを確認する。他人専用のカスタム種目・削除済みのカスタム種目を指定すると、ここで`400 invalid_exercise`になる |
-| ④ `prisma.routineExercise.create(...)` | `targetSets`が`undefined`なら、Prismaはこれを「そのカラムを指定しない」として扱い、DB側のデフォルト(`null`)が入る。レスポンスの`targetSets`が`[]`なのは、`serializeRoutineExercise()`が`null`を`[]`に変換しているため(19-26行目付近) |
+| ④ `prisma.routineExercise.create(...)` | `targetSets`が`undefined`なら、Prismaはこれを「そのカラムを指定しない」として扱い、DB側のデフォルト(`null`)が入る。レスポンスの`targetSets`が`[]`なのは、`serializeRoutineExercise()`が`null`を`[]`に変換しているため(28-36行目付近) |
 
 続いてPATCH側。
 

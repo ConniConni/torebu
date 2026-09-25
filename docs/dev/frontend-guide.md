@@ -349,7 +349,7 @@ async function saveTargetSets(element: RoutineExerciseItem) {
 ### 3. 自分で壊して確かめる
 
 - `targetSetsSaving`・`targetSetsErrors`の`ref()`宣言(現在は`pickedExerciseId`の分岐より上にある)を、一時的に`saveTargetSets()`の直前(ファイル後半)まで移動して保存してみる(`tsx watch`ならぬViteのHMRで即反映)。その状態で「＋種目を追加」から種目を選ぶと、ブラウザのコンソールに`ReferenceError: Cannot access 'targetSetsSaving' before initialization`が出て、`PATCH`が一度も飛ばなくなる(`POST`だけは成功するため、画面上は目安セットの行が一瞬表示されるが、ページを再読み込みすると消えている)。これは**このガイドを書く過程で実際に踏んだ不具合**そのもので、`<script setup>`はトップレベルの文を上から順に実行するため、`pickedExerciseId`の分岐(`addExercise`→`addTargetSet`→`saveTargetSets`を呼ぶ)が、`targetSetsSaving`を`const`で宣言する行より前に実行されると、そのconstはまだ初期化されていない(TDZ = Temporal Dead Zone)。関数宣言(`function addExercise() {...}`)自体は巻き上げられて先に呼べるが、その関数が参照する`ref()`の宣言は巻き上げられない、という2つの性質の違いがこの不具合の正体。**試したら必ず元に戻すこと**
-- `saveTargetSets()`の`if (!isValidTargetSets(normalized)) return`を一時的にコメントアウトして保存し、目安セットの回数欄を空にしてフォーカスを外す(blur)してみる → 本来は不正な値として保存をスキップするはずが、`NaN`を含んだ`targetSets`が`PATCH`で送られ、バックエンドの`repsSchema`(`z.number().int().positive()`)に弾かれて`400`になる。バリデーションをフロントとバックエンドの二重で行っている理由(通信を減らす・入力欄の値をそのまま残せる)が体感できる。**試したら必ず元に戻すこと**
+- `saveTargetSets()`の`if (!isValidTargetSets(normalized)) return`を一時的にコメントアウトして保存し、目安セットの回数欄を空にしてフォーカスを外す(blur)してみる → 本来は不正な値として保存をスキップするはずが、`normalizeTargetSets()`の`Number(s.reps)`は空文字列を`0`に変換する(`Number('')`は`NaN`ではなく`0`)ため、`{reps: 0, ...}`を含んだ`targetSets`が`PATCH`で送られ、バックエンドの`repsSchema`(`z.number().int().positive()`。`0`は`positive()`を満たさない)に弾かれて`400`になる。バリデーションをフロントとバックエンドの二重で行っている理由(通信を減らす・入力欄の値をそのまま残せる)が体感できる。**試したら必ず元に戻すこと**
 
 ## 具体例4から読み取れる設計上の判断
 
