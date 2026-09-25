@@ -522,7 +522,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                 <button
                   v-if="comment.userId === user?.id && confirmingCommentDeleteId !== comment.id"
                   type="button"
-                  class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                  class="relative flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-[11px] before:content-['']"
                   aria-label="このコメントを削除"
                   @click="confirmingCommentDeleteId = comment.id"
                 >

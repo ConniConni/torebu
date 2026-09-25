@@ -422,7 +422,7 @@ function removeTargetSet(element: RoutineExerciseItem, index: number | string) {
                             <span class="flex justify-center">
                               <button
                                 type="button"
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                                class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-['']"
                                 aria-label="この目安セットを削除"
                                 @click="confirmingTargetSetDelete = targetSetKey(element.id, index)"
                               >
