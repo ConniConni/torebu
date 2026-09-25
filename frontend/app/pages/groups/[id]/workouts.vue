@@ -144,6 +144,14 @@ async function toggleComments(workoutId: string) {
   if (next.has(workoutId)) {
     next.delete(workoutId)
     openCommentWorkoutIds.value = next
+    // 閉じたコメント欄に確認中の削除ダイアログが残っていたらリセットする
+    // （再度開いたときに古い確認状態が残って見えるのを防ぐ）
+    if (
+      confirmingCommentDeleteId.value &&
+      commentsByWorkoutId.value.get(workoutId)?.some((c) => c.id === confirmingCommentDeleteId.value)
+    ) {
+      confirmingCommentDeleteId.value = null
+    }
     return
   }
   next.add(workoutId)
@@ -481,36 +489,35 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                       {{ comment.body }}
                     </p>
                   </div>
-                  <div
-                    v-if="confirmingCommentDeleteId === comment.id"
-                    class="mt-1 flex items-center gap-2"
-                  >
-                    <p class="text-xs text-gray-700 dark:text-ink">
-                      このコメントを削除しますか？（元に戻せません）
+                  <div v-if="confirmingCommentDeleteId === comment.id" class="mt-1">
+                    <div class="flex items-center gap-2">
+                      <p class="text-xs text-gray-700 dark:text-ink">
+                        このコメントを削除しますか？（元に戻せません）
+                      </p>
+                      <button
+                        type="button"
+                        :disabled="commentDeleting.has(comment.id)"
+                        class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
+                        @click="confirmingCommentDeleteId = null"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="commentDeleting.has(comment.id)"
+                        class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        @click="onDeleteComment(workout, comment)"
+                      >
+                        {{ commentDeleting.has(comment.id) ? '削除中...' : '削除する' }}
+                      </button>
+                    </div>
+                    <p
+                      v-if="commentDeleteErrors.get(comment.id)"
+                      class="mt-1 text-xs text-red-600 dark:text-red-400"
+                    >
+                      {{ commentDeleteErrors.get(comment.id) }}
                     </p>
-                    <button
-                      type="button"
-                      :disabled="commentDeleting.has(comment.id)"
-                      class="shrink-0 rounded border border-gray-300 dark:border-border-dark px-2 py-1 text-xs text-gray-700 dark:text-ink disabled:opacity-50"
-                      @click="confirmingCommentDeleteId = null"
-                    >
-                      キャンセル
-                    </button>
-                    <button
-                      type="button"
-                      :disabled="commentDeleting.has(comment.id)"
-                      class="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                      @click="onDeleteComment(workout, comment)"
-                    >
-                      {{ commentDeleting.has(comment.id) ? '削除中...' : '削除する' }}
-                    </button>
                   </div>
-                  <p
-                    v-if="commentDeleteErrors.get(comment.id)"
-                    class="mt-1 text-xs text-red-600 dark:text-red-400"
-                  >
-                    {{ commentDeleteErrors.get(comment.id) }}
-                  </p>
                 </div>
                 <button
                   v-if="comment.userId === user?.id && confirmingCommentDeleteId !== comment.id"
