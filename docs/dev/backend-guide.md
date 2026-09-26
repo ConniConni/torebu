@@ -1588,10 +1588,172 @@ authRouter.post('/register', async (req, res) => {
 - **「作成できた」と「ログイン状態になった」を分離する** — `POST /auth/register`は`req.session`に一切触れない。ログイン状態への遷移は具体例2の`POST /auth/login`が担う。1つのAPIが2つの意味(アカウント作成とログイン)を持たないようにすることで、それぞれの処理(パスワード再ハッシュ化の有無、レート制限の要否など)を独立に変更しやすくしている。実際にログイン専用の`loginRateLimiter`(具体例2)は登録には付いていない
 - **UIの入力単位とDBの保存単位が違うときは、変換の境界を1箇所に集める** — フォームの「年」「月」の2つの選択欄を`birthYearMonth`という1つのオブジェクトとしてバリデーションし、DBの`birthDate`(日付型・日は1日固定)への変換をハンドラー内の1箇所(`Date.UTC(...)`)に集約している。変換ロジックが散らばっていないため、「月を0始まりで渡す」というJavaScriptの`Date`特有の癖への対応も1箇所直せばよい
 
+## 具体例13：自己ベスト更新・通算の節目・久しぶりの復帰を判定するとき
+
+もう1つの例として、[`backend/src/routes/workouts.ts`](../../backend/src/routes/workouts.ts)の`evaluatePersonalBest()`・`evaluateAchievements()`を追う。具体例6は「保存はその場で行うが、表示するかどうかは後から判定する」という**取得側**の仕組みだったが、こちらは対になる**保存側**の話：セットを保存した瞬間に「これは自己ベストか」「通算日数の節目か」「久しぶりの復帰か」を判定し、①仲間への通知(`personal_best`・`milestone`・`comeback`。表示の遅延・再確認は具体例6と同じ`DELAYED_TYPES`の仕組みをそのまま使う)と、②保存APIの応答に載せて返す本人向けのその場の表示、という**2つの宛先**に振り分ける。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。アカウントが無ければ具体例1の手順で`test@example.com`を作成しログインしておく(`cookie.txt`を使う)。`<benchId>`は具体例5と同じく`curl -b cookie.txt http://localhost:3001/exercises`のレスポンスから`"name":"ベンチプレス"`の`id`を控える。
+
+まず、十分に古い日付で1件目の記録を作る(自己ベストの「比べる相手」を用意するため)。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt": "2024-01-01"}'
+# => {"id":"<workout1Id>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workout1Id>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":60,"reps":8}'
+```
+
+初めて記録する種目なので、`personalBest`は`null`、`achievements`も両方対象外になるはずだ。
+
+```json
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":60,"reps":8,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
+ "personalBest": null,
+ "achievements": {"milestoneDays": null, "comeback": false}}
+```
+
+次に、別の日付(まだ「今日」ではない、十分離れた日付)で2件目の記録を作り、さっきより重い重量を記録する。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt": "2024-01-10"}'
+# => {"id":"<workout2Id>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workout2Id>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":65,"reps":5}'
+```
+
+今度は`personalBest`が返ってくるはずだ(`previousBestKg`は1件目の`60`)。
+
+```json
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":65,"reps":5,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
+ "personalBest": {"exerciseId": "<benchId>", "weightKg": 65, "previousBestKg": 60},
+ "achievements": {"milestoneDays": null, "comeback": false}}
+```
+
+最後に、**今日の日付**(タイムゾーンをJSTに指定した`date`コマンドで求める)で3件目の記録を作り、さらに重い重量を記録する。
+
+```bash
+today=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d "{\"performedAt\": \"$today\"}"
+# => {"id":"<workout3Id>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workout3Id>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":70,"reps":3}'
+```
+
+`personalBest`は引き続き更新される(`previousBestKg`は今度の直近ベスト`65`)一方、`achievements.comeback`が**`true`**に変わるはずだ(実際に試すとそうなる)。
+
+```json
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":70,"reps":3,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
+ "personalBest": {"exerciseId": "<benchId>", "weightKg": 70, "previousBestKg": 65},
+ "achievements": {"milestoneDays": null, "comeback": true}}
+```
+
+「1件目は比べる相手が無いので`null`」「2件目は自己ベストだが`comeback`は`false`」「3件目は自己ベストかつ`comeback`が`true`」という3通りの違いが、次のコードのどの分岐に対応するかを意識しながら読む。
+
+### 2. コードを実行順に追う
+
+まず自己ベスト判定(`evaluatePersonalBest`)。
+
+```ts
+async function evaluatePersonalBest(userId: string, set: WorkoutSetModel) {
+  const weightKg = toWeightNumber(set.weightKg)
+  if (weightKg === null) return null
+
+  const [bestExceptThisSet, bestInOtherWorkouts] = await Promise.all([
+    maxOwnWeight(userId, set.exerciseId, { setId: set.id }),
+    maxOwnWeight(userId, set.exerciseId, { workoutId: set.workoutId }),
+  ])
+
+  if (bestInOtherWorkouts !== null && weightKg > bestInOtherWorkouts) {
+    await notifyPersonalBest(userId, set.workoutId, set.exerciseId, bestInOtherWorkouts)
+  }
+
+  if (bestExceptThisSet === null || weightKg <= bestExceptThisSet) return null
+  return { exerciseId: set.exerciseId, weightKg, previousBestKg: bestExceptThisSet }
+}
+```
+
+| ステップ | 何が起きるか | このときの値(3件目・70kg保存時) |
+|---|---|---|
+| ① `toWeightNumber(set.weightKg)` | 自重セット(`weightKg: null`)はここで`null`を返して終了。自重種目が「自己ベスト」の対象外になっているのはここ | `70` |
+| ② `bestExceptThisSet = maxOwnWeight(..., { setId: set.id })` | **このセット自身だけを除いた**自分の最大重量。同じ記録内の他のセットも含む | `65`(2件目の`65kg`。1件目の`60`より大きい方) |
+| ③ `bestInOtherWorkouts = maxOwnWeight(..., { workoutId: set.workoutId })` | **この記録(workout)全体を除いた**、つまり別の日の記録だけでの自分の最大重量 | `65`(この時点で3件目のworkoutには他のセットが無いので②と同じ値になる) |
+| ④ `if (bestInOtherWorkouts !== null && weightKg > bestInOtherWorkouts)` | 「別の日の記録」を上回っていれば、仲間への`personal_best`通知を作る(①の宛先) | `70 > 65` → 通知を作る |
+| ⑤ `if (bestExceptThisSet === null \|\| weightKg <= bestExceptThisSet) return null` | 「このセット以外の全部」を上回っていなければ、本人向けの表示は無し(`return null`) | `70 > 65` → 条件に合わず通過 |
+| ⑥ `return { exerciseId, weightKg, previousBestKg: bestExceptThisSet }` | 本人向けの表示内容を返す(②の宛先) | `{exerciseId: "<benchId>", weightKg: 70, previousBestKg: 65}` |
+
+④(仲間への通知)と⑤⑥(本人への表示)が**別の基準**(`bestInOtherWorkouts` vs `bestExceptThisSet`)で判定されている点に注目してほしい。同じ記録の中で60kg→65kgと更新していった場合、仲間への通知は「別の日の記録」との比較なので1回しか作られない(`notifyPersonalBest`側にも同じ記録・同じ種目につき1件までという重複防止がある)一方、本人への表示は「セットを追加するたびに、それまでの自分の最高を更新したかどうか」を毎回返す、という設計。コード冒頭のコメントにも同じ説明がある。
+
+次にC1(通算の節目)・C2(久しぶりの復帰)の判定(`evaluateAchievements`)。
+
+```ts
+async function evaluateAchievements(userId, workout, isFirstSetOfWorkout) {
+  if (!isFirstSetOfWorkout) return { milestoneDays: null, comeback: false }
+
+  const totalDays = await countDaysWithSets(userId)
+  const milestoneDays = isMilestoneDayCount(totalDays) ? totalDays : null
+  if (milestoneDays !== null) await notifyMilestone(userId, workout.id, milestoneDays)
+
+  const performedAt = workout.performedAt.toISOString().slice(0, 10)
+  const today = todayInJst()
+  const yesterday = shiftDateString(today, -1)
+  let comeback = false
+  if (totalDays > 1 && (performedAt === today || performedAt === yesterday)) {
+    const rangeStart = shiftDateString(performedAt, -14)
+    const rangeEnd = shiftDateString(performedAt, 1)
+    const otherDayInRange = await prisma.workout.findFirst({
+      where: { userId, deletedAt: null, id: { not: workout.id }, sets: { some: {} },
+        performedAt: { gte: new Date(`${rangeStart}T00:00:00Z`), lte: new Date(`${rangeEnd}T00:00:00Z`) } },
+      select: { id: true },
+    })
+    comeback = otherDayInRange === null
+  }
+  if (comeback) await notifyComeback(userId, workout.id)
+  return { milestoneDays, comeback }
+}
+```
+
+| ステップ | 何が起きるか | このときの値(3件目) |
+|---|---|---|
+| ① `if (!isFirstSetOfWorkout) return ...` | この記録(workout)に**既にセットがあれば**即座に対象外を返す。curlの3件目で1セット目にしか達成が付かなかったのはこれが理由(2セット目以降を追加しても常に`null`/`false`になる) | 1セット目なので通過 |
+| ② `countDaysWithSets(userId)` | セットが1件以上ある日付(workout)の総数。1ユーザー1日1workoutのため「日数」と「workout数」が一致する | `3`(1/1・1/10・今日) |
+| ③ `isMilestoneDayCount(totalDays)` | `10・30・50・100の倍数・365`のいずれかでなければ`null`のまま | `3`は該当せず`milestoneDays: null` |
+| ④ `today = todayInJst()` / `yesterday` | curlの2件目(`2024-01-10`)は`today`とも`yesterday`とも一致しないため、この時点で`comeback`は`false`のまま次に進まない。3件目(`$today`)は一致するので⑤に進む | `performedAt === today` → 一致 |
+| ⑤ `rangeStart`〜`rangeEnd`の`findFirst` | 「`performedAt`の14日前から1日後まで」に、**この記録以外に**セットのある記録が無いかを探す | 1/1・1/10はどちらも今日から遠すぎるため範囲外 → `otherDayInRange === null` |
+| ⑥ `comeback = otherDayInRange === null` | ⑤が見つからなければ`comeback: true` | `true` |
+
+「前14日間**と翌日**」に翌日まで含めているのは、コード冒頭のコメントの通り「今日の分を記録した後に昨日の分を後入力する」という操作をしたときに同じ復帰が2回判定されるのを防ぐため(今日の記録が先にあれば、翌日=今日にあたる範囲に引っかかって2回目の判定が`false`になる)。
+
+### 3. 自分で壊して確かめる
+
+- `countDaysWithSets`で実際に9日分の履歴を作るのは大変なので、`isMilestoneDayCount`を一時的に`return true`だけにして保存する(`tsx watch`が自動再起動)。その状態で(新しいアカウントで)初めての記録を1件作ると、`milestoneDays`が`null`ではなく**`1`**で返ってくる(実際に試すとそうなる。`totalDays`が`1`の時点で「節目」判定が素通りするため)。`10`日目まで待たなくても、判定がどの値を見ているかが体感できる。**試したら必ず元に戻すこと**
+- `evaluatePersonalBest`の`if (bestExceptThisSet === null || weightKg <= bestExceptThisSet) return null`を`if (bestExceptThisSet === null) return null`に変える(「今保存した重量が、それまでの自分の最高を上回っているか」の比較を外す)。その状態で、1つの記録の中で60kg→65kg→62kgと保存すると、本来3セット目(62kg)は`personalBest: null`のはずが、`{weightKg: 62, previousBestKg: 65}`が返ってきてしまう(実際に試すとそうなる)。「今回の重量が過去の自分を上回っていなければ、達成として表示しない」という前提が、この1行の比較(`weightKg <= bestExceptThisSet`)で支えられていることが体感できる。**試したら必ず元に戻すこと**
+
+## 具体例13から読み取れる設計上の判断
+
+- **「仲間への通知」と「本人への表示」は判定基準も届け方も別** — 同じ`evaluatePersonalBest()`の中で、仲間への通知(`bestInOtherWorkouts`基準・非同期に`notification`行を作るだけ)と本人への表示(`bestExceptThisSet`基準・保存APIの応答にその場で載せる)を分けて計算している。前者は具体例6の5分遅延の仕組みに乗るため「後から仲間が見る」、後者は「保存した本人が今まさに見る」という届くタイミングの違いがあり、基準が違うのもその違いを反映している
+- **「初めての記録」「比べる相手が無い」は達成の条件そのものに埋め込む** — 自重種目(`weightKg === null`)・初めて記録した種目(`bestExceptThisSet === null`)・初めての記録(`totalDays`が節目に該当しない限り`milestoneDays`は`null`のまま)・初回記録(コード上`totalDays > 1`のガードで`comeback`は判定にすら入らない)は、どれも「エラーではないが対象外」を`null`/`false`で表現しており、具体例1〜4で見た「弾く」バリデーションとは違う種類の分岐
+- **「1回のセット保存」の中に複数の宛先・複数の判定が同居する** — `POST /workouts/:id/sets`は1つのHTTPリクエストの中で、セットの保存(具体例1と同じ形)・自己ベスト判定(仲間向け通知＋本人向け応答)・C1/C2判定(同じく仲間向け通知＋本人向け応答)をすべて行う。それぞれが独立した関数(`evaluatePersonalBest`・`evaluateAchievements`)に分かれているため、ハンドラー本体(`workoutsRouter.post('/:id/sets', ...)`)を読むときは「何が起きるか」の一覧としてまず眺め、詳細は個別の関数を読みに行く、という2段階の読み方がしやすくなっている
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
-- `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(自己ベスト更新・通算の節目・久しぶりの復帰)の再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
+- `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(具体例13の自己ベスト更新・通算の節目・久しぶりの復帰)の、取得側での再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
 - `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
 - `backend/src/routes/groups.ts`のGET `/groups/:id/ranking/default-exercise`・GET `/groups/:id/ranking/exercises` — 具体例8では触れなかった、種目別ランキングの種目セレクタまわり。前者は「直近28日で最もセット数が多い公式種目」を`groupBy`で求めて初期選択に使い、後者は「グループの誰かが記録したことのある公式種目」だけに絞った候補一覧を返す。どちらも同じ「表示順→名前順」のタイブレークを使う
 - `backend/src/routes/auth.ts`の`authRouter.post('/password-changes', ...)` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の仕組み。現在のパスワードの照合(`bcrypt.compare`)を先に行う点、成功時に未使用のメールリセット用トークンも失効させる点が、トークンベースの再設定とは違う

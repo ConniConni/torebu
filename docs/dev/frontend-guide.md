@@ -1065,6 +1065,89 @@ await navigateTo('/')
 - **同意チェックの「有効化条件」を専用のcomputedに切り出す** — `canAgreeToTerms`という1つの`computed`に条件を集約することで、テンプレート側は`:disabled="!canAgreeToTerms"`と`v-if="!canAgreeToTerms"`(ヒント文表示)の2箇所から同じ条件を参照するだけで済む。条件をテンプレート内に直接書いていたら、2箇所で書き方がずれる可能性があった
 - **ページ単位のガードはmiddlewareに集約する** — 「ログイン済みなら`/register`に入れない」という制約は、`register.vue`自身にif文を書くのではなく`middleware: 'guest'`という宣言だけで済ませている。同じ`guest`ミドルウェアは`/login`にも使われており(次に読むファイル参照)、「未ログイン専用ページ」という分類をミドルウェア1つで横断的に表現している
 
+## 具体例13：自己ベスト・通算の節目・久しぶりの復帰をその場に表示するとき
+
+[backend-guide.md具体例13](./backend-guide.md)で追った、セット保存API(`POST`/`PATCH /workouts/:id/sets`)が返す`personalBest`・`achievements`を、③記録画面がどう表示するかを見る。対象は[`useWorkoutSession.ts`](../../frontend/app/composables/useWorkoutSession.ts)の`addSet()`・`updateSet()`と、[`workouts/new.vue`](../../frontend/app/pages/workouts/new.vue)の`applyPersonalBest()`・`applyAchievements()`。具体例6(通知)は「バックエンドが返したものをそのまま表示するだけ」だったが、こちらは**保存APIの応答から達成内容を拾い、このページだけのローカル状態に積む**という別の持ち方をしている。
+
+### 1. まず動かして観察する
+
+`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく(具体例1の手順)。
+
+- ③記録画面(`/workouts/new`)である種目に重量を保存する(初めての記録) → 達成の表示は何も出ない
+- 同じ種目で、**前回より重い重量**のセットをもう1つ追加する → セットの一覧の下に、黄色い「🏆 自己ベスト更新！◯◯kg（これまで◯◯kg）」というバッジが出る(実際に試すとそうなる)
+- **バッジが出た方のセットを削除する** → バッジは消える(達成したセット自体が無くなったため)
+- 「← ホームに戻る」でホームに戻り、**同じ日の記録をもう一度開く(SPA内遷移)** → さっき出ていたバッジは(サーバー側では今も自己ベストのままなのに)**出ていない**(実際に試すとそうなる)
+
+3つ目・4つ目の「消え方」が、それぞれコードのどこで起きているかを次で確認する。
+
+### 2. コードを実行順に追う
+
+まず保存側`useWorkoutSession.ts`の`addSet()`(抜粋、具体例4で見たものと同じ関数)。
+
+```ts
+async function addSet(exerciseId: string, reps: number, weightKg?: number) {
+  const workoutId = await ensureWorkout()
+  const { workoutExercise, personalBest, achievements, ...set } = await $fetch<
+    WorkoutSetItem & {
+      workoutExercise: WorkoutExerciseItem
+      personalBest: PersonalBest | null
+      achievements: Achievements
+    }
+  >(`/api/workouts/${workoutId}/sets`, { method: 'POST', body: { exerciseId, reps, weightKg } })
+  session.value.sets = [...session.value.sets, set]
+  // ...(種目カードの反映・前回記録キャッシュの更新は省略)
+  return { set, personalBest, achievements }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `{ ..., personalBest, achievements, ...set } = await $fetch(...)` | レスポンスを分割代入で受け取る時点で、`personalBest`・`achievements`は`set`(セット本体)と切り離される |
+| ② `session.value.sets = [...session.value.sets, set]` | `session`(`useState`で永続化される③のセッション状態、具体例1・4で既出)に積まれるのは**`set`だけ** |
+| ③ `return { set, personalBest, achievements }` | `personalBest`・`achievements`は`session`には一切入らず、呼び出し元への**戻り値**としてだけ渡される |
+
+`session`(サーバーと同じ実体を持つセット一覧)には達成内容が乗らない、という設計がここで決まる。「バッジが消える/消えない」を次に決めるのは、この戻り値を受け取る`new.vue`側。
+
+```ts
+// frontend/app/pages/workouts/new.vue
+const personalBests = reactive(new Map<string, PersonalBest & { setId: string }>())
+
+function applyPersonalBest(set: WorkoutSetItem, personalBest: PersonalBest | null) {
+  if (personalBest) {
+    personalBests.set(set.exerciseId, { ...personalBest, setId: set.id })
+    return
+  }
+  const current = personalBests.get(set.exerciseId)
+  if (current?.setId === set.id && current.weightKg !== set.weightKg) {
+    personalBests.delete(set.exerciseId)
+  }
+}
+
+function personalBestFor(exerciseId: string) {
+  const personalBest = personalBests.get(exerciseId)
+  if (!personalBest || !session.value.sets.some((s) => s.id === personalBest.setId)) return null
+  return personalBest
+}
+```
+
+| ステップ | 何が起きるか | 観察した動きとの対応 |
+|---|---|---|
+| ① `const personalBests = reactive(new Map(...))` | `session`と違い**`useState`を使っていない**、このコンポーネントだけのローカル変数。ページを離れてコンポーネントが破棄されると内容ごと消える | 4つ目(SPA内遷移で戻るとバッジが消える)の正体はここ。`session`はサーバーに保存された実体の写しだが、`personalBests`はどこにも保存されていない「今の画面だけの記憶」 |
+| ② `personalBests.set(exerciseId, { ...personalBest, setId: set.id })` | 保存APIが`personalBest`を返した(=自己ベスト更新があった)ときは、`setId`(どのセットの達成か)も一緒に記録して種目ごとに1件だけ持つ | 2つ目(重い重量を保存するとバッジが出る)はここ |
+| ③ `personalBestFor(exerciseId)`内の`session.value.sets.some((s) => s.id === personalBest.setId)` | 表示する直前に、**達成したセット自体が今も`session.value.sets`に残っているか**を毎回確認し直す | 3つ目(達成したセットを削除するとバッジが消える)の正体はここ。`personalBests`自体からは削除していない(`applyPersonalBest`はセット削除時には呼ばれない)が、表示のたびに存在確認することで結果的に消える |
+
+`achievement`(C1・C2)側も同じ形で、`ref<Achievements | null>(null)`という同じくローカルの状態に`applyAchievements()`で積むだけ。種目単位ではなくworkout単位の達成のため`Map`ではなく単一の`ref`だが、「`useState`を使わない」「保存APIの戻り値をそのまま使う」という設計は共通している。
+
+### 3. 自分で壊して確かめる
+
+- `personalBestFor()`の`!session.value.sets.some((s) => s.id === personalBest.setId)`の部分を外し、`if (!personalBest) return null`だけにして保存する(HMRで反映)。その状態で、①重い重量のセットを保存してバッジを出す→②そのセットを削除する、という手順を踏むと、**セットが無くなったのにバッジ(達成した重量の表示)だけ画面に残り続ける**(実際に試すとそうなる)。「表示する直前に実在確認をする」という1行が無いと、削除したはずのものがいつまでも見えてしまうことが体感できる。**試したら必ず元に戻すこと**
+
+## 具体例13から読み取れる設計上の判断
+
+- **サーバーと同じ実体を持つ状態と、この画面だけの記憶を分けて持つ** — `session`(`useState`。②ホームや別のタブからも見える、サーバー上のセット一覧の写し)と`personalBests`・`achievement`(`reactive`/`ref`。このページのコンポーネントインスタンスだけが持つ)を明確に分けている。具体例6の`unreadCount`(`useState`で複数画面から共有する状態)とは逆に、こちらは「他の画面には要らない、今この瞬間の演出」なので意図的に共有しない設計
+- **「表示してよいか」を保存時ではなく表示時に毎回確認する** — `personalBestFor()`は`personalBests`に値があってもそのまま信用せず、`session.value.sets`(達成したセットが今も存在するか)と突き合わせてから返す。バックエンドの`findVisibleNotifications()`(具体例6)が取得のたびに「表示してよいか」を再確認するのと同じ考え方を、フロント側のローカル状態に対しても適用している
+- **削除時に専用の後始末コードを書かない** — セット削除(`onDeleteSet` → `removeSet()`)は`personalBests`や`achievement`を一切触らない。「削除時にバッジも消す」という処理を個別に書く代わりに、表示側(`personalBestFor()`)の実在確認1つに任せることで、削除の実装を素朴なまま保っている
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
