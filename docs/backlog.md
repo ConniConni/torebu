@@ -88,7 +88,10 @@
 > 具体例1〜10でまだ扱っていない機能を再度棚卸しした。今回のセッションは「カスタム種目の
 > 追加・削除」を選んで進める（他は次回以降）。
 
-- [ ] 新規登録（`POST /auth/register`）
+- [x] 新規登録（`POST /auth/register`）— backend-guide.md／frontend-guide.mdの「具体例12」で対応済み
+      （2026-09-26）。登録APIがセッションを作らない設計、`register()`が内部で`login()`を続けて
+      呼ぶことでログイン済み状態に遷移する仕組み、利用規約・プライバシーポリシーを両方開くまで
+      同意チェックが有効化されない制御まで扱った
 - [ ] `GET /auth/me` / `POST /auth/logout`（セッション確認・破棄）
 - [x] カスタム種目の追加・削除（`POST/DELETE /exercises`。ソフトデリート＋所有者チェック＋
       `lastSet`キャッシュ更新〔Issue #116〕の実例）— backend-guide.md／frontend-guide.mdの

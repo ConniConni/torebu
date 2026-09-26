@@ -1497,6 +1497,97 @@ async function isExerciseVisible(userId: string, exerciseId: string, workoutId?:
 - **同名の関数でも、機能ごとに例外を持たせるかどうかを個別に決める** — `workouts.ts`の`isExerciseVisible`は「削除済みでも、そのworkoutで既に使っていた種目なら追記を許す」という、具体例4の`routines.ts`版には無い例外を持つ。ワークアウト記録は同じ日の記録に後から追記していく使い方が多い(具体例1参照)一方、ルーティンは種目構成をその都度選び直すものという想定の違いが、同じ「削除済みの種目をどう扱うか」という問いへの答えを分けている
 - **所有者チェックと状態チェックを1つのクエリに畳み込むと、区別しなくてよい404が自然に増える** — DELETE `/exercises/:id`の`findFirst`は「他人の種目」「公式種目」「削除済みの種目」「存在しないID」の4パターンを区別せず同じ404にする。具体例3・7のIDOR対策(存在を隠す404)と同じ形を、削除状態のチェックにもそのまま流用している
 
+## 具体例12：新規登録するとき
+
+もう1つの例として、[`backend/src/routes/auth.ts`](../../backend/src/routes/auth.ts)のPOST `/auth/register`を追う。具体例2で読んだログインの「入口」にあたる処理で、「登録できるとログイン状態になる」わけではない、という一見当たり前に見える設計が実際どう実装されているかを見る。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newuser@example.com","password":"password123","displayName":"新規太郎","birthYearMonth":{"year":2000,"month":5},"gender":"male","occupation":"student"}'
+```
+
+```json
+HTTP/1.1 201 Created
+{"id":"...","email":"newuser@example.com","displayName":"新規太郎"}
+```
+
+ここで3つ試してほしい。
+
+- **登録直後に(Cookieを付けずに)`/auth/me`を叩く** → `curl http://localhost:3001/auth/me`は`401 {"error":"unauthenticated"}`。登録リクエスト自体はCookieを発行しないため、ここまでの具体例のような`-c cookie.txt`を付けても意味が無い(`Set-Cookie`が返らない)。「登録できた」と「ログインした」は別の状態であることが、この401からわかる
+- **同じメールアドレスでもう一度登録する** → `409 {"error":"email_already_registered"}`。具体例2のログインでは「メールアドレスが存在しない」と「パスワードが違う」を区別しない列挙対策があったが、登録APIでは逆に「既に使われているか」をはっきり伝えている。この違いがなぜ問題ないかを次で追う
+- **パスワードを7文字(`"short12"`)にして送る** → `400`で、`details.properties.password.errors`に「文字数が足りない」旨のメッセージが入る
+
+### 2. コードを実行順に追う
+
+```ts
+const birthYearMonthSchema = z.union([
+  z.literal('no_answer'),
+  z.object({
+    year: z.number().int().min(1900).max(new Date().getFullYear()),
+    month: z.number().int().min(1).max(12),
+  }),
+])
+
+const registerSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(8).max(72),
+  displayName: z.string().trim().min(1).max(50),
+  birthYearMonth: birthYearMonthSchema,
+  gender: z.enum(['male', 'female', 'other', 'no_answer']),
+  occupation: z.enum([/* ...7種類、'no_answer'を含む... */]),
+})
+
+authRouter.post('/register', async (req, res) => {
+  const parsed = registerSchema.safeParse(req.body)
+  if (!parsed.success) { /* 400 */ }
+  const { email, password, displayName, birthYearMonth, gender, occupation } = parsed.data
+
+  const existingUser = await prisma.user.findUnique({ where: { email } })
+  if (existingUser) {
+    res.status(409).json({ error: 'email_already_registered' })
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  const birthDate =
+    birthYearMonth === 'no_answer'
+      ? null
+      : new Date(Date.UTC(birthYearMonth.year, birthYearMonth.month - 1, 1))
+
+  const user = await prisma.user.create({
+    data: { email, passwordHash, displayName, birthDate, gender, occupation },
+  })
+
+  res.status(201).json({ id: user.id, email: user.email, displayName: user.displayName })
+})
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `registerSchema.safeParse(req.body)` | `birthYearMonth`は`z.union([...])`で「`'no_answer'`というリテラル」か「`{year, month}`のオブジェクト」のどちらかだけを許す。`password`は7文字だとここで弾かれる(curlで見た400の正体) | `parsed.data.birthYearMonth`は`{year:2000, month:5}` |
+| ② `prisma.user.findUnique({ where: { email } })` | 具体例2のログインと同じ`findUnique`だが、ここでは結果をそのまま使う(ダミーハッシュ比較のような時間差対策はしていない) | 2回目の登録では`existingUser`が見つかる |
+| ③ `if (existingUser)` | 見つかれば409。curlで見た「既に登録済み」の正体はここ。なぜここは列挙対策の対象外なのかは、後述の「具体例12から読み取れる設計上の判断」で扱う | (2回目のみ到達) |
+| ④ `bcrypt.hash(password, BCRYPT_SALT_ROUNDS)` | ログイン時の`bcrypt.compare`(具体例2)と対になるハッシュ化。生のパスワードはここから先DBにもレスポンスにも一切現れない | - |
+| ⑤ `birthDate`の変換 | `birthYearMonth`が`'no_answer'`なら`null`、それ以外なら`Date.UTC(year, month - 1, 1)`で「その月の1日」の`Date`に変換して保存する。JavaScriptの`Date`は月を0始まり(1月=0)で扱うため、フォームの「5月」をそのまま渡すと6月になってしまう。`month - 1`はその調整 | `{year:2000, month:5}` → `2000-05-01T00:00:00.000Z` |
+| ⑥ `prisma.user.create(...)` | ここで初めてDBにINSERTが発行される。`req.session`には一切触れていない点に注目 — 具体例2のログインが`req.session.regenerate()`・`req.session.userId = user.id`を呼ぶのに対し、登録処理はセッションを作らない。curlで見た「登録直後の`/auth/me`が401」の正体はここ(何も作っていないので当然ログイン状態にならない) | 新しい`user`行 |
+| ⑦ `res.status(201).json({...})` | `passwordHash`はもちろん、`birthDate`・`gender`・`occupation`も含めずレスポンスを返す。ログイン(具体例2)のレスポンスが`gender`を含むのとは違う点(呼び出し元がフロントの登録フォームの次の画面遷移で必要とする情報が少ないため) | - |
+
+### 3. 自分で壊して確かめる
+
+- `registerSchema`の`displayName: z.string().trim().min(1).max(50)`から一時的に`.trim()`を外して保存する(`tsx watch`が自動再起動)。その状態で表示名に空白だけの文字列(`"   "`)を送ると、本来`400`になるはずが`201`で登録できてしまい、空白だけの表示名を持つユーザーが作れてしまう。**試したら必ず元に戻すこと**
+- `birthDate`の変換式`Date.UTC(birthYearMonth.year, birthYearMonth.month - 1, 1)`から一時的に`- 1`を外して`birthYearMonth.month`だけにして保存する。5月を選んで登録すると、実際には6月の1日として保存されてしまう(レスポンス・`/auth/me`のどちらにも`birthDate`は含まれないため、この違いはAPIの外からは直接見えない。DBの値を直接見るか、`docs/schema.md`のテーブル定義と突き合わせないと気づけないバグになる、という点も含めて体感できる)。**試したら必ず元に戻すこと**
+
+## 具体例12から読み取れる設計上の判断
+
+- **「存在するかどうか」を隠すかどうかは、APIの目的で決める** — 具体例2のログインは列挙対策として「存在しない」と「パスワードが違う」を同じ401にまとめるが、登録APIの409はその対象外で、はっきり「このメールアドレスは既に使われている」と伝える。ユーザーが登録フォームでメールアドレスの入力ミスに気づけないと不便な一方、ログイン画面での列挙対策は既に別途効いているため(具体例2)、登録側まで隠す必要はないという判断(コード中のコメント・`docs/schema.md`「セキュリティ実装の優先度」参照)
+- **「作成できた」と「ログイン状態になった」を分離する** — `POST /auth/register`は`req.session`に一切触れない。ログイン状態への遷移は具体例2の`POST /auth/login`が担う。1つのAPIが2つの意味(アカウント作成とログイン)を持たないようにすることで、それぞれの処理(パスワード再ハッシュ化の有無、レート制限の要否など)を独立に変更しやすくしている。実際にログイン専用の`loginRateLimiter`(具体例2)は登録には付いていない
+- **UIの入力単位とDBの保存単位が違うときは、変換の境界を1箇所に集める** — フォームの「年」「月」の2つの選択欄を`birthYearMonth`という1つのオブジェクトとしてバリデーションし、DBの`birthDate`(日付型・日は1日固定)への変換をハンドラー内の1箇所(`Date.UTC(...)`)に集約している。変換ロジックが散らばっていないため、「月を0始まりで渡す」というJavaScriptの`Date`特有の癖への対応も1箇所直せばよい
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
