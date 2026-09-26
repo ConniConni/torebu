@@ -1148,6 +1148,88 @@ function personalBestFor(exerciseId: string) {
 - **「表示してよいか」を保存時ではなく表示時に毎回確認する** — `personalBestFor()`は`personalBests`に値があってもそのまま信用せず、`session.value.sets`(達成したセットが今も存在するか)と突き合わせてから返す。バックエンドの`findVisibleNotifications()`(具体例6)が取得のたびに「表示してよいか」を再確認するのと同じ考え方を、フロント側のローカル状態に対しても適用している
 - **削除時に専用の後始末コードを書かない** — セット削除(`onDeleteSet` → `removeSet()`)は`personalBests`や`achievement`を一切触らない。「削除時にバッジも消す」という処理を個別に書く代わりに、表示側(`personalBestFor()`)の実在確認1つに任せることで、削除の実装を素朴なまま保っている
 
+## 具体例14：ホーム画面がワークアウト一覧をどう表示に反映するか
+
+[backend-guide.md具体例14](./backend-guide.md)で追った`GET /workouts`のレスポンス(`hasSets`・並び順)を、②ホーム画面(`HomeScreen.vue`)がどう使うかを見る。対象は[`useWorkouts.ts`](../../frontend/app/composables/useWorkouts.ts)と[`HomeScreen.vue`](../../frontend/app/components/HomeScreen.vue)。一覧は`sets`本体を含まないため、**カレンダーの印は一覧のデータだけで作れるが、選択した日の記録カードの中身(種目・セット)は別リクエストで補う**という2段構えになっている。
+
+### 1. まず動かして観察する
+
+`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく(具体例1の手順)。backend-guide.md具体例14と同じ手順で、**同じ日付に2件**(1件目にセット1つ・2件目はメモのみ)作っておく。
+
+- ホーム(`/`)のカレンダーで、その日付を見る → **日付の背景が丸く塗りつぶされ、かつ下に小さい点が付く**(実際に試すとそうなる)。「セットがある記録」と「メモのみの記録」が同じ日に両方あるとき、2つの印が同時に付くことが確認できる
+- その日付を**クリック**する(SPA内遷移ではなく同じページ内の状態変更) → 下の記録カード一覧に、**後から作った方(セット無し)が先、先に作った方(セット有り)が後**の順で2枚並ぶ(backend-guide.md具体例14で見た一覧の並び順そのまま)
+- セットがある方のカードには、**種目名とセットの表(重量・回数)が表示される**。セットが無い方は「＋種目を記録する」という追加導線だけが出る
+
+ブラウザのネットワークタブ(`read_network_requests`)で見ると、この画面を開いた時点で`GET /api/workouts`が1回、その後**選択中の日付の記録それぞれについて**`GET /api/workouts/:id`が呼ばれている(1件目のカードの表が出るのはこの個別リクエストの結果)。
+
+### 2. コードを実行順に追う
+
+まず一覧の取得とカレンダー印(`useWorkouts.ts`・`HomeScreen.vue`抜粋)。
+
+```ts
+// useWorkouts.ts
+async function fetchWorkouts() {
+  workouts.value = await requestFetch<Workout[]>('/api/workouts')
+}
+```
+
+```ts
+// HomeScreen.vue
+await fetchWorkouts()
+
+const recordedDates = computed(
+  () => new Set((workouts.value ?? []).filter((w) => w.hasSets).map((w) => w.performedAt)),
+)
+const memoOnlyDates = computed(
+  () => new Set((workouts.value ?? []).filter((w) => !w.hasSets).map((w) => w.performedAt)),
+)
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `fetchWorkouts()` | `GET /api/workouts`を1回呼び、返ってきた配列を丸ごと`workouts`(`useState`)に入れる。並び順はサーバーのレスポンス順のまま(フロント側で並び替えはしない) | `[{...,memo:"2nd",hasSets:false,...}, {...,memo:"1st",hasSets:true,...}]` |
+| ② `recordedDates` | `hasSets`が`true`の記録の`performedAt`だけを`Set`に集める。**同じ日付が複数あっても`Set`なので1つにまとまる** | `{"2026-09-20"}`(1stの分) |
+| ③ `memoOnlyDates` | ②の逆(`hasSets`が`false`)。**②と③は同じ配列を2回別々にフィルタしているだけなので、同じ日付が両方に入ることがある**(1件はセット有り・別の1件はセット無し、というこの例のケース) | `{"2026-09-20"}`(2ndの分) |
+
+観察した「1つの日付に丸塗り＋小さい点の両方が付く」の正体はここ。テンプレート側(`recordedDates.has(date)`で丸塗り、`memoOnlyDates.has(date)`で小さい点)は独立した2つの`Set`をそれぞれ見ているだけなので、同じ日付が両方の条件を満たせば両方の印が同時に出る。「メモのみの日は丸塗りに含めない」(コード冒頭のコメント、Issue #99)は**日付ごと**の話であって、「その日にセット無しの記録が1件でもあれば点を消す」わけではない。
+
+次に、選択した日の記録カードとその中身(`selectedWorkouts`・`loadSummary`)。
+
+```ts
+const selectedWorkouts = computed(() =>
+  (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
+)
+
+async function loadSummary(workoutId: string) {
+  if (workoutGroups.value[workoutId] || summaryPending.value[workoutId]) return
+  const detail = await requestFetch<{ sets: WorkoutSetSummary[]; exercises: WorkoutExerciseSummary[] }>(
+    `/api/workouts/${workoutId}`,
+  )
+  // ...(sets を exercises の sortOrder 順にグルーピングして workoutGroups に格納。省略)
+}
+
+watch(selectedWorkouts, (list) => { for (const workout of list) loadSummary(workout.id) }, { immediate: true })
+```
+
+| ステップ | 何が起きるか | このときの値(その日付をクリックした直後) |
+|---|---|---|
+| ① `selectedWorkouts` | `workouts`(①で取得済みの一覧、**サーバー側の並び順のまま**)を`performedAt`だけで絞り込む。並び替えはしないので、backend-guide.md具体例14で見た「2nd→1st」の順がそのままカードの表示順になる | `[{...,memo:"2nd",...}, {...,memo:"1st",...}]` |
+| ② `watch(selectedWorkouts, ...)` | 選択中の日の記録それぞれについて、`loadSummary()`を呼ぶ。`{ immediate: true }`なのでページを開いた直後(今日を選択している状態)にも動く | `loadSummary("<workout2Id>")`・`loadSummary("<workout1Id>")`が呼ばれる |
+| ③ `loadSummary()`内の`if (workoutGroups.value[workoutId] \|\| summaryPending.value[workoutId]) return` | 既に取得済み・取得中のworkoutIdはスキップする(同じ日を選び直しても毎回は叩かない) | 初回なのでどちらも通過 |
+| ④ `requestFetch(`/api/workouts/${workoutId}`)` | 一覧には無い`sets`・`exercises`を、**workoutId単位で**個別に取りに行く。これがネットワークタブで見た2回目以降のリクエストの正体 | 2ndの`detail.sets`は`[]`、1stの`detail.sets`は1件(ベンチプレス) |
+
+`workouts`(一覧、`hasSets`だけ持つ)と`workoutGroups`(詳細、`workoutId`をキーにした遅延取得のキャッシュ)は**別の状態**で、後者は選択された日の分だけその都度埋まっていく。「一覧では日付ごとの有無だけ扱い、中身は選択されたときだけ個別に取る」という役割分担が、この2つの変数を追うと見えてくる。
+
+### 3. 自分で壊して確かめる
+
+- `selectedWorkouts`の`.filter((w) => w.performedAt === selectedDate.value)`の前に`.slice().reverse()`を挟んで保存する(HMRで反映)。同じ日に2件ある日付を選び直すと、カードの順番が「1st→2nd」に**逆転する**(実際に試すとそうなる)。カードの表示順が`workouts`配列の並び(=サーバーの`orderBy`)にそのまま従っていることが体感できる。**試したら必ず元に戻すこと**
+- `recordedDates`の`.filter((w) => w.hasSets)`を一時的に`.filter(() => false)`に変える。セットがある日を選んでも、カレンダーの丸塗りが**全部消える**(小さい点だけの表示になる。実際に試すとそうなる)一方、下の記録カード自体・その中のセット表は消えない(`selectedWorkouts`・`loadSummary`は`hasSets`を見ていないため)。カレンダーの印だけを決めている変数がどれかが体感できる。**試したら必ず元に戻すこと**
+
+## 具体例14から読み取れる設計上の判断
+
+- **一覧の並び順をフロントで作り直さない** — `selectedWorkouts`はサーバーが返した`workouts`配列を`filter`するだけで、独自のソートを挟まない。backend-guide.md具体例14で見た「`performedAt`→`createdAt`」のタイブレークが、バックエンドとフロントの2箇所に重複して実装されることなく、サーバー側の1箇所だけで保証されている
+- **「日付ごとの有無」と「記録ごとの中身」を別の粒度・別のタイミングで持つ** — `recordedDates`/`memoOnlyDates`(日付の`Set`、一覧取得時に一度に作る)と`workoutGroups`(`workoutId`ごとの詳細、選択されたときに都度取る)は、更新されるタイミングも参照する情報の粒度も異なる。カレンダー全体を毎回描くための軽い情報と、選ばれた日にしか要らない重い情報を分けることで、一覧取得1回で済むページと個別取得が必要なページの境界がコード上にも表れている
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
@@ -1155,4 +1237,5 @@ function personalBestFor(exerciseId: string) {
 - `frontend/app/composables/useGroups.ts`の`ERROR_MESSAGES` — バックエンドのエラーコードと日本語メッセージの対応関係一覧
 - `frontend/app/pages/workouts/new.vue`の`onApplyRoutine()` — ルーティンをワークアウト作成に適用すると、目安セットが(デフォルト値ではなく)実際の重量・回数で一括登録される。具体例1・4で見た「デフォルト値で即登録」とは異なるもう1つの適用パターン
 - `frontend/app/pages/mypage/password.vue` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の画面。成功後は完了表示に切り替わるだけで画面遷移しない点が、`/password-reset/[token]`(成功後に`/login`へ遷移)との違い
+- `frontend/app/utils/trainingDays.ts` — 具体例14では触れなかった、`workouts`一覧(`hasSets`)からトレ日数(通算・直近7日/28日)を集計する関数群。②ホームの期間別サマリーカードと⑨マイページで共有されている
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧
