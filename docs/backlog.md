@@ -82,6 +82,39 @@
 これでチェックリストの全項目が完了した。次に他の機能へガイドを広げたくなったら、新たに対象機能を
 洗い出すところから始める。
 
+### 2回目の棚卸し（2026-09-26）
+
+> 1回目のチェックリスト（上記）が全項目完了したため、`docs/spec.md`§4のAPI一覧を元に、
+> 具体例1〜10でまだ扱っていない機能を再度棚卸しした。今回のセッションは「カスタム種目の
+> 追加・削除」を選んで進める（他は次回以降）。
+
+- [ ] 新規登録（`POST /auth/register`）
+- [ ] `GET /auth/me` / `POST /auth/logout`（セッション確認・破棄）
+- [x] カスタム種目の追加・削除（`POST/DELETE /exercises`。ソフトデリート＋所有者チェック＋
+      `lastSet`キャッシュ更新〔Issue #116〕の実例）— backend-guide.md／frontend-guide.mdの
+      「具体例11」で対応済み（2026-09-26）。ソフトデリート後も一覧に残り続ける設計・
+      `workouts.ts`と`routines.ts`で同名の`isExerciseVisible()`が「既存カードへの追記だけは許す」
+      例外の有無で分かれている点まで扱った。フロント側は`useExercises`の`createExercise`/
+      `deleteExercise`が一覧を再取得せず配列を直接書き換える実装（Issue #116の再発防止パターン）を
+      curl・ブラウザ操作の両方で検証した
+- [ ] ワークアウト一覧取得（`GET /workouts`。`hasSets`によるカレンダー印・表示振り分け、
+      `performedAt`/`createdAt`の並び順tie-break）
+- [ ] ワークアウト詳細取得（`GET /workouts/:id`。セット・種目カードの並び順ロジック）
+- [ ] ワークアウトのメモ更新・ソフトデリート（`PATCH/DELETE /workouts/:id`。レスポンスの
+      `deleted`フィールドの意味）
+- [ ] セット更新・削除（`PATCH/DELETE /workouts/:id/sets/:setId`）
+- [ ] 種目カード並び替え（`PATCH /workouts/:id/exercises/:workoutExerciseId`）
+- [ ] 自己ベスト・継続日数の達成判定（`personalBest`/`achievements`と達成通知の作成ロジック）
+- [ ] ルーティン本体のCRUD（`POST/GET/PATCH/DELETE /routines`、
+      `DELETE /routines/:id/exercises/:routineExerciseId`）
+- [ ] グループ作成・招待コード発行・参加（`POST /groups`・`POST /groups/:id/invite`・
+      `POST /groups/join`。期限切れ・`member_limit`判定）
+- [ ] グループ退会・削除（`POST /groups/:id/leave`・`DELETE /groups/:id`。唯一のオーナー
+      退会禁止）
+- [ ] グループフィード集約（`GET /groups/:id/workouts`。いいね情報・コメント件数の合成）
+- [ ] 種目別ランキングの初期選択（`GET /groups/:id/ranking/default-exercise`）
+- [ ] 通知の一括既読化（`POST /notifications/read`）
+
 ## UIナビゲーション「王道パターン」監査で見つかった課題（2026-09-25）
 
 > グループ詳細・ランキング画面にタブバーが無い件をユーザーが指摘したのをきっかけに、
