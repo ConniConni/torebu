@@ -465,6 +465,158 @@ const targetSetsSchema = z.array(targetSetSchema).max(20)
 - **「何も変更しないリクエスト」を`.refine()`で弾く** — 空のPATCHをサーバー側で明示的にエラーにすることで、フロント側の実装ミス(更新対象を渡し忘れる等)に気づきやすくしている。具体例1・3のようなIDOR対策の404/403とは違う種類の「壊れたリクエストを弾く」設計判断
 - **バリデーションスキーマを機能をまたいで再利用する** — `weightKgSchema`・`repsSchema`を`workouts.ts`からexportして`routines.ts`がimportする形にすることで、「重量・回数として妥当な値」の基準を1箇所にまとめている。目安セットと実際のワークアウトのセットで基準がズレる心配がない
 
+## 具体例5：統計データを集計するとき
+
+もう1つの例として、[`backend/src/routes/stats.ts`](../../backend/src/routes/stats.ts)のGET `/stats/volume`・GET `/stats/exercises/:exerciseId/history`を追う。ここまでの具体例は「弾く(401/404/403/400)か、通すか」の判定が中心だったが、この機能は全件走査してJavaScript側で集計する処理が中心になる。加えて、「集計対象を意図的に絞り込む」という、IDOR対策やバリデーションとは種類の違う設計判断が2つ入っている。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。アカウントが無ければ具体例1の手順で`test@example.com`を作成しログインしておく(`cookie.txt`を使う)。
+
+まず、ワークアウトを1件作り、公式種目(ベンチプレス)のセットを2つ追加する。`<exerciseId>`は`curl -b cookie.txt http://localhost:3001/exercises`のレスポンスから`"name":"ベンチプレス"`の`id`を控える。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt": "2024-01-15"}'
+# => {"id":"<workoutId>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":60,"reps":8}'
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":65,"reps":5}'
+```
+
+続けて、**自重種目(プッシュアップ)のセット(`weightKg`を指定しない)**と、**自分のカスタム種目**を1つ作ってそのセットも追加する。
+
+```bash
+# プッシュアップ(自重、公式種目)のidを控えてセットを追加
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<pushupId>","reps":20}'
+
+# カスタム種目を作る
+curl -s -X POST http://localhost:3001/exercises \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"検証用カスタム種目","muscleGroup":"chest"}'
+# => {"id":"<customId>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d "{\"exerciseId\":\"<customId>\",\"weightKg\":100,\"reps\":3}"
+```
+
+ここで日別の合計負荷重量を取得する。
+
+```bash
+curl -s -b cookie.txt "http://localhost:3001/stats/volume?range=3m"
+```
+
+```json
+[{"date":"2024-01-15","volumeKg":805}]
+```
+
+`805`は`60kg×8回 + 65kg×5回 = 480 + 325 = 805`。**自重セット(プッシュアップ)もカスタム種目(100kg×3回=300)もこの合計に含まれていない**ことに注目してほしい。実際にこの2つ(合わせて300kg分)を除いた数字がここにあるのが確認できる。
+
+続けて種目別の推移も見る。
+
+```bash
+curl -s -b cookie.txt "http://localhost:3001/stats/exercises/<benchId>/history?range=3m"
+# => [{"date":"2024-01-15","maxWeightKg":65,"volumeKg":805}]
+
+curl -s -b cookie.txt "http://localhost:3001/stats/exercises/<customId>/history?range=3m"
+# => 404 {"error":"not_found"}
+```
+
+ベンチプレスの`maxWeightKg`はそのセットのうち最大の`65`。一方、カスタム種目のidを指定すると、データは実在するのに**404**が返る。この「除外」と「404」がコードのどこで起きているかを、次で追う。
+
+### 2. コードを実行順に追う
+
+```ts
+// 集計対象は公式種目のみ(createdBy IS NULL)。カスタム種目は記録・ルーティンには使えるが
+// 集計の対象外(2026-09-08決定、docs/backlog.md参照)。将来ニーズが出たら再検討する
+const OFFICIAL_EXERCISE_FILTER = { createdBy: null }
+
+statsRouter.get('/volume', requireAuth, async (req, res) => {
+  const parsed = rangeSchema.safeParse(req.query)
+  if (!parsed.success) { /* 400 */ }
+  const userId = req.session.userId
+  const startDate = rangeStartDate(parsed.data.range)
+
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      weightKg: { not: null },
+      workout: { userId, deletedAt: null, ...(startDate ? { performedAt: { gte: startDate } } : {}) },
+      exercise: OFFICIAL_EXERCISE_FILTER,
+    },
+    select: { weightKg: true, reps: true, workout: { select: { performedAt: true } } },
+  })
+
+  const volumeByDate = new Map<string, number>()
+  for (const set of sets) {
+    const weightKg = Number(set.weightKg)
+    const dateKey = toDateKey(set.workout.performedAt)
+    volumeByDate.set(dateKey, (volumeByDate.get(dateKey) ?? 0) + weightKg * set.reps)
+  }
+
+  const result = Array.from(volumeByDate.entries())
+    .map(([date, volumeKg]) => ({ date, volumeKg }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  res.json(result)
+})
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `rangeSchema.safeParse(req.query)` | `range`(`1m`/`3m`/`all`)を検証。デフォルトは`3m` | `range: '3m'` |
+| ② `rangeStartDate(range)` | `3m`なら「今日の0時から90日前」の`Date`を返す。`all`は`undefined`(下限なし) | `startDate`は約90日前 |
+| ③ `prisma.workoutSet.findMany({ where: {...} })` | `weightKg: { not: null }`で自重セットを除外、`exercise: OFFICIAL_EXERCISE_FILTER`でカスタム種目を除外。この2つのwhere条件が、curlで見た「300kg分が含まれない」の正体 | プッシュアップ・カスタム種目のセットは`sets`に入らない |
+| ④ `for (const set of sets)` | `Map<日付, 合計>`に`weightKg * reps`を積み上げていく。同じ日付に複数セットがあれば加算される | `volumeByDate.get('2024-01-15')`が`480`→`805`と2回更新される |
+| ⑤ `Array.from(...).sort(...)` | `Map`を配列に変換し、日付の文字列比較(`localeCompare`。`"2024-01-15" < "2024-01-20"`のようにISO形式なら文字列比較がそのまま時系列順になる)で並べ替える | `[{date:"2024-01-15", volumeKg:805}]` |
+
+`workouts.ts`(具体例1)の「1件のリクエストを検証して1件保存する」形と違い、ここは**「条件に合う行を全部取ってきてJS側でMapに集計する」**という別の形。DB側の`GROUP BY`(Prismaの`groupBy`)を使わずJS側で集計しているのは、日付は`workout.performedAt`(別テーブル)にあり、`weightKg * reps`という掛け算をSQL側でやるよりアプリ側でやる方がシンプルだから。
+
+続いて種目別履歴(`/exercises/:exerciseId/history`)。集計ロジックの構造は`/volume`とほぼ同じだが、先頭に1つ判定が増える。
+
+```ts
+statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) => {
+  const parsed = rangeSchema.safeParse(req.query)
+  if (!parsed.success) { /* 400 */ }
+  const userId = req.session.userId
+  const exerciseId = req.params.exerciseId as string
+  const startDate = rangeStartDate(parsed.data.range)
+
+  // 集計対象は公式種目のみ。カスタム種目・存在しないIDは「存在自体を隠す」方針(§4-1)に合わせ404
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: exerciseId, ...OFFICIAL_EXERCISE_FILTER },
+  })
+  if (!exercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  // ここから先は/volumeと同じ形でsetsを集計する(weightKgの最大値と合計も取る)
+})
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `prisma.exercise.findFirst({ where: { id: exerciseId, ...OFFICIAL_EXERCISE_FILTER } })` | `exerciseId`が公式種目のものであれば`exercise`が見つかる。カスタム種目のidを渡すと、レコード自体は存在するのに`OFFICIAL_EXERCISE_FILTER`(`createdBy: null`)に合わないため`null`になる |
+| ② `if (!exercise)` | ここで404。curlで見たカスタム種目の404はここで発生している。コード中のコメントにある通り、「存在するが集計対象外」と「本当に存在しない(適当なUUID)」を区別せず同じ404にしている点は、具体例1・3で見たIDOR対策の404(「存在を隠す」)と形は同じだが、**理由は別(所属していない他人のデータではなく、そもそも仕様として集計しない種類のデータだから)** |
+
+### 3. 自分で壊して確かめる
+
+- `/volume`の`where`から`exercise: OFFICIAL_EXERCISE_FILTER`を一時的にコメントアウトして保存する(`tsx watch`が自動再起動)。その状態でさっきと同じcurl(`GET /stats/volume?range=3m`)を送ると、`805`だったはずの合計が`1105`(カスタム種目の`100kg×3回=300`が足された値)になる。「公式種目のみ集計する」という1行のwhere条件が、実際に何kg分の差を生んでいるかが数字で確認できる。**試したら必ず元に戻すこと**
+- `/exercises/:exerciseId/history`の`where`から`...OFFICIAL_EXERCISE_FILTER`を一時的に外して`{ id: exerciseId }`だけにして保存する。その状態でカスタム種目のidを指定してcurlを送ると、本来`404`のはずが`200`で`[{"date":"2024-01-15","maxWeightKg":100,"volumeKg":300}]`のようなデータが返ってきてしまう。「集計対象外」という仕様がAPIレベルで漏れると何が起きるかが体感できる。**試したら必ず元に戻すこと**
+
+## 具体例5から読み取れる設計上の判断
+
+- **集計は「範囲を絞ってfindMany→JS側でMapに積み上げる」形で書く** — 具体例1〜4の「1件を検証して1件保存/更新する」形とは違い、複数行を取得してから`Map`でグループ化する。SQL側の`GROUP BY`を使わないのは、日付(別テーブル)をキーにした計算がJS側の方が素直に書けるため
+- **「集計しない」を明示的なwhere条件にする** — 自重セット(`weightKg: null`)・カスタム種目(`createdBy`が`null`でない)という2種類の「対象外」を、`weightKg: { not: null }`・`OFFICIAL_EXERCISE_FILTER`という条件としてコードに残している。これらはバリデーションエラーでもIDOR対策でもなく、「何を数えるかの仕様そのもの」をコードに落とし込んだもの。`docs/backlog.md`に決定の経緯が残っている(2026-09-08決定)
+- **「対象外」と「本当に存在しない」を区別しない404もある** — 具体例3の404(未所属者にグループの存在を隠す)と形は同じでも、こちらの理由は「他人のデータへのアクセス防止」ではなく「そもそも集計仕様の対象外」。同じステータスコードでも、コードごとに404を選んだ理由は違うことがある
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
