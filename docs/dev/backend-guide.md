@@ -616,6 +616,148 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
 - **「集計しない」を明示的なwhere条件にする** — 自重セット(`weightKg: null`)・カスタム種目(`createdBy`が`null`でない)という2種類の「対象外」を、`weightKg: { not: null }`・`OFFICIAL_EXERCISE_FILTER`という条件としてコードに残している。これらはバリデーションエラーでもIDOR対策でもなく、「何を数えるかの仕様そのもの」をコードに落とし込んだもの。`docs/backlog.md`に決定の経緯が残っている(2026-09-08決定)
 - **「対象外」と「本当に存在しない」を区別しない404もある** — 具体例3の404(未所属者にグループの存在を隠す)と形は同じでも、こちらの理由は「他人のデータへのアクセス防止」ではなく「そもそも集計仕様の対象外」。同じステータスコードでも、コードごとに404を選んだ理由は違うことがある
 
+## 具体例6：通知の表示を5分遅らせ、表示時に条件を再確認するとき
+
+最後の例として、[`backend/src/routes/notifications.ts`](../../backend/src/routes/notifications.ts)の`findVisibleNotifications()`を追う。ここまでの具体例は「保存した瞬間の状態で弾くか通すか(401/403/404)を判定する」形だったが、この機能は**保存はその場で行うが、表示するかどうかは後から(しかも2回)判定する**という別の形をしている。題材は新メンバー参加(`member_joined`)通知。対応するのは`backend/src/routes/groups.ts`のPOST `/groups/join`(具体例3で読んだ`shareActiveGroup`と同じファイル)。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。2つのアカウント(オーナーA・ジョイナーB)を具体例1の手順で作り、それぞれの`cookie.txt`を`owner.cookie`・`joiner.cookie`のように分けて保存しておく。
+
+オーナーAがグループを作る。
+
+```bash
+curl -s -b owner.cookie -X POST http://localhost:3001/groups \
+  -H "Content-Type: application/json" -d '{"name":"検証用グループ"}'
+# => {"id":"<groupId>", "inviteCode":"<inviteCode>", ...}
+```
+
+ジョイナーBが招待コードで参加する。
+
+```bash
+curl -s -b joiner.cookie -X POST http://localhost:3001/groups/join \
+  -H "Content-Type: application/json" -d '{"inviteCode":"<inviteCode>"}'
+```
+
+参加した**直後**に、オーナーAが通知一覧を見る。
+
+```bash
+curl -s -b owner.cookie http://localhost:3001/notifications
+# => []
+curl -s -b owner.cookie http://localhost:3001/notifications/unread-count
+# => {"count":0}
+```
+
+`member_joined`通知は実際には保存されているのに、一覧にも未読件数にも**何も出てこない**(実際に検証すると`[]`・`{"count":0}`が返る)。5分待つ(または後述のようにDBの`createdAt`を書き換える)と、同じリクエストで通知が現れる。
+
+```json
+[{"id":"...","type":"member_joined","isRead":false,"createdAt":"...",
+  "actor":{"id":"...","displayName":"ジョイナーB"},
+  "target":{"type":"group","groupId":"<groupId>","groupName":"検証用グループ"}}]
+```
+
+「保存はされているのに、しばらく一覧に出てこない」という、これまでの具体例には無かった時間差がどこで起きているかを、次でコードから確認する。
+
+### 2. コードを実行順に追う
+
+まず保存側(`groups.ts`のPOST `/groups/join`、抜粋)。
+
+```ts
+// 新メンバー参加の通知(Issue #249)。表示は作成から5分後で、その時点で参加者・受信者が
+// 今もメンバーかを確認し直す(notifications.tsのfindVisibleNotifications参照)
+await tx.notification.createMany({
+  data: otherMembers.map((m) => ({
+    recipientId: m.userId,
+    actorId: userId,
+    type: 'member_joined' as const,
+    targetType: 'group' as const,
+    targetId: group.id,
+  })),
+})
+```
+
+参加した瞬間に`notification`行は**即座に**作られる。`createdAt`はDBのデフォルト(現在時刻)のまま、後から遅らせるための特別なフラグなどは持たない。「隠す」処理は保存側ではなく、次の取得側(`notifications.ts`)に集約されている。
+
+```ts
+const IMMEDIATE_TYPES = ['reaction', 'comment', 'comment_reply'] as const
+const DELAYED_TYPES = ['member_joined', 'personal_best', 'milestone', 'comeback'] as const
+const DISPLAY_DELAY_MS = 5 * 60 * 1000
+
+async function findVisibleNotifications(userId: string) {
+  const notifications = await prisma.notification.findMany({
+    where: {
+      recipientId: userId,
+      OR: [
+        { type: { in: [...IMMEDIATE_TYPES] } },
+        {
+          type: { in: [...DELAYED_TYPES] },
+          createdAt: { lte: new Date(Date.now() - DISPLAY_DELAY_MS) },
+        },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: LIST_LIMIT,
+    include: { actor: { select: { id: true, displayName: true } } },
+  })
+  // ここから先、種類ごとに「まだ表示してよいか」を再確認する(下のmember_joinedの分岐を参照)
+}
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `type: { in: [...IMMEDIATE_TYPES] }` | いいね・コメントは無条件でこの`findMany`の対象に入る | - |
+| ② `type: { in: [...DELAYED_TYPES] }, createdAt: { lte: ... }` | `member_joined`等は、**作成から5分経過したもの(`createdAt`が「今から5分前」以前)だけ**がこの`findMany`の対象に入る。参加した直後は`createdAt`が「今」なので、この条件に合わず`notifications`に含まれない | 参加直後は`findMany`の結果に現れない。curlで見た`[]`の正体はここ |
+
+続けて、`member_joined`を対象に絞った後の再確認(表示側の2段目)。
+
+```ts
+// member_joined通知の表示可否と表示内容(グループ名)を引く。表示してよいのは、グループが削除されておらず、
+// 参加者(actor)と受信者がどちらも今もそのグループのアクティブなメンバーである場合のみ
+// (参加後5分以内に退会した・受信者が退会した等の場合は表示しない)
+async function resolveMemberJoinedTargets(recipientId, notifications) {
+  const [groups, memberships] = await Promise.all([
+    prisma.group.findMany({ where: { id: { in: groupIds }, deletedAt: null }, select: { id: true, name: true } }),
+    prisma.groupMember.findMany({ where: { groupId: { in: groupIds }, userId: { in: userIds }, leftAt: null }, select: { groupId: true, userId: true } }),
+  ])
+  const activeMemberKeys = new Set(memberships.map((m) => `${m.groupId}:${m.userId}`))
+  return {
+    groupNameById: new Map(groups.map((g) => [g.id, g.name])),
+    isActiveMember: (groupId, userId) => activeMemberKeys.has(`${groupId}:${userId}`),
+  }
+}
+
+// findVisibleNotifications内、member_joinedの分岐
+const groupName = memberJoined.groupNameById.get(n.targetId)
+if (
+  groupName === undefined ||
+  n.actorId === null ||
+  !memberJoined.isActiveMember(n.targetId, n.actorId) ||
+  !memberJoined.isActiveMember(n.targetId, userId)
+) {
+  continue // 表示しない
+}
+visible.push({ notification: n, target: { type: 'group', groupId: n.targetId, groupName } })
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `groupName === undefined` | グループが削除済み(`deletedAt`あり)なら`groups`に含まれず`groupNameById`から引けない → 表示しない |
+| ② `!isActiveMember(groupId, actorId)` | **参加した本人(行為者)が、5分の間に退会していないか**を今の`groupMember`テーブルで確認し直す |
+| ③ `!isActiveMember(groupId, userId)` | **受信者(オーナーA)自身が、5分の間に退会していないか**も同様に確認する |
+
+①の`findMany`(DBの取得条件)が「5分経過」という**時間の条件**を絞り込み、②③の再確認が「その5分の間に状況が変わっていないか」という**状態の条件**を絞り込む。この2段構えのおかげで、「参加してすぐ退会する」という誤操作があっても、5分経った時点で退会済みなら②で弾かれ、通知は表示されない。
+
+### 3. 自分で壊して確かめる
+
+- 具体例5と同じ要領で、`notification.createdAt`を直接6分前に書き換えて「5分経過後」を再現できる(実際にプロジェクトのテスト`backend/src/routes/notifications.test.ts`も、`prisma.notification.updateMany({ data: { createdAt: new Date(Date.now() - options.minutesAgo * 60 * 1000) } })`という同じ手口を使っている)。書き換えた直後に`GET /notifications`を送ると、さっき`[]`だった一覧に通知が現れることを確認できる
+- `member_joined`の分岐から`!memberJoined.isActiveMember(n.targetId, n.actorId) || !memberJoined.isActiveMember(n.targetId, userId)`を一時的にコメントアウトして保存する(`tsx watch`が自動再起動)。その状態で、①ジョイナーBが参加した直後に退会する→②DBの`createdAt`を6分前に書き換える→③オーナーAが`GET /notifications`を送る、という手順を踏むと、本来は「参加者が退会済みだから表示しない」はずが、**退会後にもかかわらず「ジョイナーBさんがグループに参加しました」という通知が表示されてしまう**(実際に試すとそうなる)。これが「表示時の再確認」を外したときに起きる不具合そのもの。**試したら必ず元に戻すこと**
+
+## 具体例6から読み取れる設計上の判断
+
+- **「隠す」責務を保存側に持たせない** — `POST /groups/join`は通知を即座に(遅延フラグ無しで)作るだけで、いつ見せるかの判断を一切持たない。「いつ見せるか」は`findVisibleNotifications()`(取得側)に一本化されており、一覧・未読件数・一括既読の3つのAPIが同じ関数を通ることで、3つの結果が食い違わないようになっている(コード中のコメント参照)
+- **「時間経過」と「状態の再確認」を別々の条件にする** — `findMany`のwhere(5分経過フィルタ)は取得件数を絞るための条件、`isActiveMember`等の再確認は取得**後**にアプリ側で行う条件、と役割を分けている。5分経過の判定をアプリ側でやらない理由もコメントに明記されている(直近50件の枠を未表示の通知が消費してしまうため)
+- **遅延の目的は「誤操作を通知に出さないこと」** — 5分という時間そのものに意味があるのではなく、「保存直後の状態」と「多少時間が経った状態」が違うことがある(参加してすぐ退会する等)という前提に立ち、表示のタイミングをずらして状態が落ち着くのを待つ、という設計。具体例1〜5で見た「保存前に弾く」バリデーション・IDOR対策とは別の防御線
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
