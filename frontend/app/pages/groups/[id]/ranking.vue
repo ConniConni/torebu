@@ -39,6 +39,7 @@ async function load() {
   // バックエンドは合計挙上重量ランキングを返すため、選択中の種目名と表示がズレてしまう)
   if (metric.value === 'exercise' && !selectedExerciseId.value) {
     ranking.value = []
+    pending.value = false
     return
   }
   pending.value = true
