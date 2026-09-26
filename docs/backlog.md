@@ -107,8 +107,11 @@
       例外の有無で分かれている点まで扱った。フロント側は`useExercises`の`createExercise`/
       `deleteExercise`が一覧を再取得せず配列を直接書き換える実装（Issue #116の再発防止パターン）を
       curl・ブラウザ操作の両方で検証した
-- [ ] ワークアウト一覧取得（`GET /workouts`。`hasSets`によるカレンダー印・表示振り分け、
-      `performedAt`/`createdAt`の並び順tie-break）
+- [x] ワークアウト一覧取得（`GET /workouts`。`hasSets`によるカレンダー印・表示振り分け、
+      `performedAt`/`createdAt`の並び順tie-break）— backend-guide.md／frontend-guide.mdの
+      「具体例14」で対応済み（2026-09-27）。同じ日付に複数件ある場合の`createdAt`タイブレーク、
+      `_count`による`hasSets`判定と並び順が独立した処理であること、フロント側は一覧の`hasSets`で
+      カレンダー印を、選択日の記録は個別に`GET /workouts/:id`を叩いて中身を補う2段構えの設計まで扱った
 - [ ] ワークアウト詳細取得（`GET /workouts/:id`。セット・種目カードの並び順ロジック）
 - [ ] ワークアウトのメモ更新・ソフトデリート（`PATCH/DELETE /workouts/:id`。レスポンスの
       `deleted`フィールドの意味）
