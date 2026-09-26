@@ -1087,10 +1087,13 @@ await navigateTo('/')
 ```ts
 async function addSet(exerciseId: string, reps: number, weightKg?: number) {
   const workoutId = await ensureWorkout()
-  const { workoutExercise, personalBest, achievements, ...set } = await $fetch<...>(
-    `/api/workouts/${workoutId}/sets`,
-    { method: 'POST', body: { exerciseId, reps, weightKg } },
-  )
+  const { workoutExercise, personalBest, achievements, ...set } = await $fetch<
+    WorkoutSetItem & {
+      workoutExercise: WorkoutExerciseItem
+      personalBest: PersonalBest | null
+      achievements: Achievements
+    }
+  >(`/api/workouts/${workoutId}/sets`, { method: 'POST', body: { exerciseId, reps, weightKg } })
   session.value.sets = [...session.value.sets, set]
   // ...(種目カードの反映・前回記録キャッシュの更新は省略)
   return { set, personalBest, achievements }

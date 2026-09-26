@@ -1612,7 +1612,8 @@ curl -s -X POST http://localhost:3001/workouts/<workout1Id>/sets \
 初めて記録する種目なので、`personalBest`は`null`、`achievements`も両方対象外になるはずだ。
 
 ```json
-{"...": "...", "weightKg": 60,
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":60,"reps":8,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
  "personalBest": null,
  "achievements": {"milestoneDays": null, "comeback": false}}
 ```
@@ -1633,7 +1634,8 @@ curl -s -X POST http://localhost:3001/workouts/<workout2Id>/sets \
 今度は`personalBest`が返ってくるはずだ(`previousBestKg`は1件目の`60`)。
 
 ```json
-{"...": "...", "weightKg": 65,
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":65,"reps":5,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
  "personalBest": {"exerciseId": "<benchId>", "weightKg": 65, "previousBestKg": 60},
  "achievements": {"milestoneDays": null, "comeback": false}}
 ```
@@ -1655,7 +1657,8 @@ curl -s -X POST http://localhost:3001/workouts/<workout3Id>/sets \
 `personalBest`は引き続き更新される(`previousBestKg`は今度の直近ベスト`65`)一方、`achievements.comeback`が**`true`**に変わるはずだ(実際に試すとそうなる)。
 
 ```json
-{"...": "...", "weightKg": 70,
+{"id":"...","workoutId":"...","exerciseId":"<benchId>","setOrder":1,"weightKg":70,"reps":3,
+ "workoutExercise":{"id":"...","workoutId":"...","exerciseId":"<benchId>","sortOrder":1},
  "personalBest": {"exerciseId": "<benchId>", "weightKg": 70, "previousBestKg": 65},
  "achievements": {"milestoneDays": null, "comeback": true}}
 ```
