@@ -817,6 +817,77 @@ async function resetPassword(token: string, password: string) {
 - **トークンの事前検証を省略し、「送信して失敗で気付く」設計にしている** — `/mypage/password`のような認証済みの画面と違い、トークンの真偽をこの画面が開いた時点で確認する手段(専用のGET APIなど)を用意していない。実装コストとのトレードオフだが、無効なリンクを踏んだユーザーはフォーム入力を1回終えるまでそれに気付けない
 - **列挙対策と使い切りの設計が、フロントのメッセージ文言にもそのまま表れる** — 「メールが届かない場合は...可能性があります」(存在有無を断定しない)、「期限切れか無効なリンクです」(理由を1つに絞らない)という2つの文言は、バックエンドが意図的に情報を絞っている(backend-guide.md参照)ことの裏返し。フロント側だけを見ても、バックエンドの設計意図がメッセージの曖昧さから読み取れる
 
+## 具体例10：ログイン中にパスワードを変更するとき
+
+[backend-guide.md具体例10](./backend-guide.md)で追ったPOST `/auth/password-changes`を、[`frontend/app/pages/mypage/password.vue`](../../frontend/app/pages/mypage/password.vue)がどう呼んでいるかを見る。具体例9の2画面(`/password-reset`・`/password-reset/[token]`)はどちらも`guest`ミドルウェア(未ログイン専用)だったが、この画面は`auth`ミドルウェア(ログイン必須)。同じ「パスワード」というテーマでも、画面のガードが正反対になる。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動し、ログインした状態でマイページ→「パスワードを変更」から`/mypage/password`へ遷移する(SPA内リンク)。
+
+- 現在のパスワードを間違えて送信すると、画面遷移せずにエラーメッセージだけが表示される(具体例2のログイン画面と同じ、フォームを維持したままのエラー表示)
+- 正しく変更すると完了メッセージに切り替わり、そのままページに留まる(具体例9の`[token].vue`が`/login`へ遷移するのとは対照的に、こちらはどこにも移動しない)。ページを離れずに別タブで`/mypage`を開き直す等でログイン状態を再確認しても、**ログイン状態のまま**であることが確認できる
+
+### 2. コードを実行順に追う
+
+```ts
+// mypage/password.vue
+async function onSubmit() {
+  errorMessage.value = ''
+  if (newPassword.value !== newPasswordConfirmation.value) {
+    errorMessage.value = '新しいパスワードが一致しません'
+    return
+  }
+  isSubmitting.value = true
+  try {
+    await changePassword(currentPassword.value, newPassword.value)
+    isCompleted.value = true
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+```
+
+```ts
+// useAuth.ts
+async function changePassword(currentPassword: string, newPassword: string) {
+  await $fetch('/api/auth/password-changes', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+  })
+}
+```
+
+```ts
+// useAuth.ts
+const ERROR_MESSAGES: Record<string, string> = {
+  // ...
+  invalid_current_password: '現在のパスワードが正しくありません',
+  same_as_current_password: '現在と異なるパスワードを入力してください',
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `newPassword.value !== newPasswordConfirmation.value` | 具体例9の`[token].vue`と同じく、確認入力の一致はフロント側だけでチェックする。`changePassword()`の引数を見ての通り、確認用の値はAPIに送られない |
+| ② `changePassword()` | 戻り値を`user`に代入しない。`user`の中身(表示名等)が変わるわけではないため、そもそも代入する対象が無い |
+| ③ `isCompleted.value = true` | 成功時は`navigateTo`を呼ばず、そのまま同じページに留まる。具体例9の`[token].vue`が`/login`へ送るのは「ログイン状態にない」ため入力し直してもらう必要があるからで、こちらはログイン状態を維持したまま完了を伝えるだけでよい |
+| ④ 失敗時(`invalid_current_password`・`same_as_current_password`) | `authErrorMessage()`がそれぞれ別の日本語メッセージに変換する。バックエンド側([backend-guide.md具体例10](./backend-guide.md))で別のエラーコードとして区別されているものを、フロントも区別したまま伝えている |
+
+`invalid_current_password`と`same_as_current_password`をあえて別メッセージにしている点は、具体例2のログイン失敗(`invalid_credentials`1種類にまとめる)と対照的。ログイン失敗はメールアドレス列挙対策のため原因を隠す必要があるが、こちらはログイン中の本人が相手なので、原因を分けて伝えても列挙対策上の問題が無い。
+
+### 3. 自分で壊して確かめる
+
+- `v-if="isCompleted"`を一時的に`v-if="false && isCompleted"`に変えて保存すると、変更成功後も完了メッセージに切り替わらずフォームが表示され続ける(実際に確認済み)。`currentPassword`・`newPassword`の`ref`はクリアしていないため、値も入力したまま残る。ここで**入力欄に残っているのは新しいパスワードではなく、変更前に入力した古い現在のパスワードの方**である点に注意(`current-password`欄には変更前の値が、`new-password`欄には新しいパスワードがそのまま残る。実際に確認済み)。この状態でもう一度送信すると、`currentPassword`欄の値(既に無効になった古いパスワード)で認証しようとするため、`invalid_current_password`になる(こちらも実際に確認済み)。**試したら必ず元に戻すこと**
+
+## 具体例10から読み取れる設計上の判断
+
+- **画面のガード(`guest`/`auth`)は「ログイン状態を変える操作かどうか」で決まる** — 具体例9の2画面はログイン状態を持たない(`guest`)操作、この画面はログイン状態を前提とする(`auth`)操作。同じ「パスワード」というテーマでも、操作の前提となるログイン状態が違えば使うミドルウェアも変わる
+- **成功後にページを離れるかどうかは、ログイン状態が変わるかどうかで決まる** — 具体例9の`resetPassword()`はログイン状態にしないため`/login`へ送る必要があるが、`changePassword()`はログイン状態を変えないため、どこにも移動せず完了を伝えるだけでよい
+- **列挙対策が要らない場面ではエラーコードを分けたままにする** — ログイン失敗は`invalid_credentials`1種類にまとめる一方、ログイン中のパスワード変更失敗は`invalid_current_password`/`same_as_current_password`の2種類のまま日本語メッセージに変換している。「本人しか呼べない操作かどうか」で、エラーコードを統合するかどうかの方針が変わる
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
