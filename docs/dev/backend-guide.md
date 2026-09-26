@@ -1106,10 +1106,156 @@ const attendanceCounts = await prisma.workout.groupBy({
 - **「順位」と「継続」を別クエリ・別ロジックで独立させる** — `totalVolumeKg`(期間・種目で変わる)と`daysTrained`/`attendanceStamp`(常に直近28日固定)は、同じレスポンスに混ぜて返しつつ、算出方法は完全に独立している。フロント側が「継続」タブを別軸の一覧として扱えるのは、バックエンド側でこの2つが最初から混ざらない設計になっているため
 - **同着の順位計算は「直前のエントリとの比較」1箇所に集約する** — `rank`を`index`から機械的に振るのではなく、`prevVolumeKg`との比較で「同じなら据え置き」を明示的に書く。この1つの`if`が無いと、同点でも別々の順位が付いてしまう
 
+## 具体例9：パスワード再設定のトークンを検証するとき
+
+[`backend/src/routes/auth.ts`](../../backend/src/routes/auth.ts)のPOST `/auth/password-reset-requests`とPOST `/auth/password-resets`を追う。ログイン(具体例2)は「知っているパスワードで認証する」仕組みだったが、こちらは「メールに届いたリンク(トークン)を知っていることを認可の根拠にする」という別の仕組みで、`express-session`のセッションIDとは無関係に動く。加えて、これまでの具体例には無かった「メール送信」という外部サービス連携も初めて扱う。
+
+### 1. まず動かしてみる
+
+具体例1で登録したアカウント(`test@example.com`)を使う。まず、パスワード再設定をリクエストする。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/password-reset-requests \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com"}'
+# => HTTP/1.1 202 {"ok":true}
+```
+
+**存在しないメールアドレスでも、同じ`202`が返る**(メールアドレス列挙対策)。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/password-reset-requests \
+  -H "Content-Type: application/json" \
+  -d '{"email":"no-such-user@example.com"}'
+# => HTTP/1.1 202 {"ok":true} (存在するかどうかでレスポンスを変えない)
+```
+
+送信先の実際のメールは、`SENDGRID_API_KEY`・`MAIL_FROM_ADDRESS`が未設定のローカル開発環境では飛ばず、`npm run dev`のターミナル出力にリセットURLがそのまま出る(この2つの環境変数が設定されている環境では実際にSendGridでメール送信される。検証で無関係なアドレスに送ってしまわないよう注意)。
+
+```
+[mail] SENDGRID_API_KEY/MAIL_FROM_ADDRESS未設定のため送信をスキップしました。
+[mail] パスワード再設定URL: http://localhost:3000/password-reset/<token>
+```
+
+このログの`<token>`を控えて、新しいパスワードを設定する。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/password-resets \
+  -H "Content-Type: application/json" \
+  -d '{"token":"<token>","password":"NewPassw0rd!"}'
+# => HTTP/1.1 200 {"ok":true}
+```
+
+**同じトークンはもう一度使えない(使い切り)**。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/password-resets \
+  -H "Content-Type: application/json" \
+  -d '{"token":"<token>","password":"AnotherPass1!"}'
+# => HTTP/1.1 400 {"error":"invalid_or_expired_token"}
+```
+
+**存在しない・でたらめなトークンも同じエラーになる**(有効期限切れと見分けが付かない)。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/password-resets \
+  -H "Content-Type: application/json" \
+  -d '{"token":"totally-invalid-token","password":"WhateverPass1!"}'
+# => HTTP/1.1 400 {"error":"invalid_or_expired_token"}
+```
+
+新しいパスワードでログインできることも確認しておく。
+
+```bash
+curl -i -X POST http://localhost:3001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"NewPassw0rd!"}'
+# => HTTP/1.1 200 {"id":"...", ...}
+```
+
+### 2. コードを実行順に追う
+
+```ts
+// パスワード再設定トークンの有効期限
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000 // 1時間
+
+// DB漏洩時にトークンをそのまま悪用されないよう、生の値ではなくハッシュを保存する
+function hashPasswordResetToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+authRouter.post('/password-reset-requests', passwordResetRequestRateLimiter, async (req, res) => {
+  const parsed = passwordResetRequestSchema.safeParse(req.body)
+  if (!parsed.success) { /* 400 */ }
+  const { email } = parsed.data
+  const user = await prisma.user.findUnique({ where: { email } })
+  // メールアドレス列挙対策：ユーザーが存在しない場合も同じレスポンスを返す
+  if (user) {
+    const token = randomBytes(32).toString('hex')
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: hashPasswordResetToken(token),
+        passwordResetExpiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+      },
+    })
+    const resetUrl = `${process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000'}/password-reset/${token}`
+    await sendPasswordResetEmail(email, resetUrl)
+  }
+  res.status(202).json({ ok: true })
+})
+
+authRouter.post('/password-resets', async (req, res) => {
+  const parsed = passwordResetSchema.safeParse(req.body)
+  if (!parsed.success) { /* 400 */ }
+  const { token, password } = parsed.data
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: hashPasswordResetToken(token),
+      passwordResetExpiresAt: { gt: new Date() },
+    },
+  })
+  if (!user) {
+    res.status(400).json({ error: 'invalid_or_expired_token' })
+    return
+  }
+  const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, passwordResetToken: null, passwordResetExpiresAt: null },
+  })
+  res.status(200).json({ ok: true })
+})
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `randomBytes(32).toString('hex')` | 32バイトの暗号論的乱数を16進文字列(64文字)にしたものがトークンの生の値。これがメールのURLに載る |
+| ② `hashPasswordResetToken(token)` | DBには生の値ではなくSHA-256ハッシュを保存する(`users.password_reset_token`)。パスワードの`bcrypt`とは違い、`createHash('sha256')`の単純な一方向ハッシュ(パスワードは人間が選ぶため辞書攻撃に強い低速なハッシュが要るが、トークンは32バイトの乱数で総当たりが非現実的なため、同じ強度は求めていないと考えられる) |
+| ③ `if (user) { ... }`の中でしかトークンを発行しない | `findUnique`で見つからなければ、この中身を丸ごとスキップして`202`を返す。**ユーザーの有無で処理時間・レスポンス内容を変えない**ことが列挙対策の本体で、「常に202を返す」という表面のルールだけでなく、分岐そのものがここにある |
+| ④ `passwordResetExpiresAt: { gt: new Date() }` | `/password-resets`側の検索条件。**期限切れかどうかを事前にチェックする専用コードは無く**、検索条件に含めることで「見つからない」=「無効(存在しない/期限切れ/使用済みのどれか)」に自然と合流させている。だからこそ有効期限切れと不正なトークンが同じ`invalid_or_expired_token`になる |
+| ⑤ `passwordResetToken: null, passwordResetExpiresAt: null` | 成功時にこの2つを`null`に戻す。次に同じトークンで検索しても④の条件に一致しなくなるため、これが「使い切り」の実体(専用の「使用済みフラグ」列は無い) |
+
+メール送信本体は[`backend/src/lib/mail.ts`](../../backend/src/lib/mail.ts)の`sendPasswordResetEmail()`。`SENDGRID_API_KEY`・`MAIL_FROM_ADDRESS`のどちらかが未設定なら送信をスキップしてURLを`console.log`するだけ、という分岐がローカル開発でも実際にメールを受け取らずに検証を完結させている理由。
+
+### 3. 自分で壊して確かめる
+
+- `/password-resets`の`where`から`passwordResetExpiresAt: { gt: new Date() }`を一時的に外して保存する。その状態で、`まず動かしてみる`で一度使い切ったトークンをもう一度試すとどうなるか確認する(実際に試すと、`passwordResetToken`は使用後`null`に戻っているため、この条件を外しても`findFirst`は結局ヒットせず`400`のままになる。「使い切り」を支えているのは有効期限の条件ではなく⑤の`null`への書き戻しの方だと分かる)。**試したら必ず元に戻すこと**
+- `hashPasswordResetToken()`の実装を一時的に`return token`(ハッシュ化せずそのまま返す)に変えて保存する。この状態で新しくリクエストしたトークンを使うと、これまでと同じく`200`が返り、挙動は変わらない(実際に試すとそうなる)。DBの中身を見比べない限り「ハッシュ化しているかどうか」はAPIの外からは区別が付かず、`password_reset_token`列に生の値が保存されるようになることが分かる。**試したら必ず元に戻すこと**
+- レート制限(`express-rate-limit`)は`passwordResetRequestRateLimiter`が`/password-reset-requests`にのみ付いている。`/password-resets`側にはレート制限が無い(トークン自体が推測困難な64文字の乱数であることだけが頼り)ことも、コードを読むと確認できる
+
+## 具体例9から読み取れる設計上の判断
+
+- **トークンは「専用の使用済みフラグ」ではなく「値を`null`に戻す」ことで使い切りを表現する** — `passwordResetToken`・`passwordResetExpiresAt`という2つの列だけで、発行前・有効・使用済み/期限切れの3状態を表す。使用済みかどうかを判定する専用のコードは無く、`findFirst`の検索条件に一致しなくなること自体が「無効」の判定になっている
+- **有効期限切れと不正なトークンをレスポンス上区別しない** — どちらも同じ`invalid_or_expired_token`。攻撃者に「トークンの形式は合っているが期限切れなだけ」という情報を与えないための設計(ログイン(具体例2)の`invalid_credentials`が「メールアドレス自体が存在しない」場合と区別しないのと同じ考え方)
+- **ローカル開発とメール送信を両立させる分岐を1箇所に閉じ込める** — `sendPasswordResetEmail()`内の「APIキー未設定ならログ出力に留める」という分岐のおかげで、呼び出し側(`password-reset-requests`のハンドラ)はローカルか本番かを意識せず同じコードで書ける
+- **メール再設定によるパスワード変更は、他端末のセッションを無効化しない**(`docs/backlog.md`「判断保留(再検討のタイミング待ち)」に既知の未対応事項として記載済み)。トークンによる認可の外側で、`express-session`のセッション自体は別ライフサイクルで動いているため、パスワードを変えても既存のログイン状態(Cookie)はそのまま残る
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
 - `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(自己ベスト更新・通算の節目・久しぶりの復帰)の再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
 - `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
 - `backend/src/routes/groups.ts`のGET `/groups/:id/ranking/default-exercise`・GET `/groups/:id/ranking/exercises` — 具体例8では触れなかった、種目別ランキングの種目セレクタまわり。前者は「直近28日で最もセット数が多い公式種目」を`groupBy`で求めて初期選択に使い、後者は「グループの誰かが記録したことのある公式種目」だけに絞った候補一覧を返す。どちらも同じ「表示順→名前順」のタイブレークを使う
+- `backend/src/routes/auth.ts`の`authRouter.post('/password-changes', ...)` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の仕組み。現在のパスワードの照合(`bcrypt.compare`)を先に行う点、成功時に未使用のメールリセット用トークンも失効させる点が、トークンベースの再設定とは違う
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか

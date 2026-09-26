@@ -719,10 +719,109 @@ async function onSelectMetric(next: Metric) {
 - **`ref`にしない状態もある** — `exerciseModeLoaded`はあえて`ref`にせず素の変数にしている。Vueのリアクティブ変数は「画面に反映すべき値」に使うものという前提があり、単なる「取得済みフラグ」まで`ref`にすると、意図しない再描画やwatchの対象になりうる
 - **早期returnのガードは、呼び出し元の状態変更とセットで検証する** — `load()`の冒頭ガードは`ranking.value`だけ気にして書かれており、直前に呼び出し元(`onSelectMetric`)が`pending.value = true`にしていることを見落としていた。関数を分けるほど、「呼び出し元がどんな状態にしてから呼ぶか」を書いた側が意識しないと、今回のような後始末漏れが起きる
 
+## 具体例9：パスワード再設定のトークンを検証するとき
+
+[`backend-guide.md`](./backend-guide.md)で追ったPOST `/auth/password-reset-requests`・POST `/auth/password-resets`を、[`frontend/app/pages/password-reset/index.vue`](../../frontend/app/pages/password-reset/index.vue)(メールアドレス入力)・[`frontend/app/pages/password-reset/[token].vue`](../../frontend/app/pages/password-reset/[token].vue)(新しいパスワード入力)からどう呼んでいるかを見る。これまでの具体例は全てアプリ内のリンク・ボタンだけで遷移が完結していたが、この2画面目だけは**メール本文のリンクを踏むことでしか本来たどり着けない**という毛色の違いがある。
+
+### 1. まず動かして観察する
+
+`/login`の「パスワードをお忘れの方」からSPA内リンクで`/password-reset`に遷移し、登録済みのメールアドレスを入力して送信する。
+
+- **送信ボタンを押した瞬間** → `POST /api/auth/password-reset-requests`が流れ、`202`が返る。この直後、フォームが消えて「入力されたメールアドレス宛に...送信しました」という完了メッセージに置き換わる(別画面へは遷移しない)
+- バックエンドがローカル開発でメール送信をスキップしている場合(backend-guide.md具体例9参照)、`backend`の`npm run dev`のターミナル出力にリセットURL(`http://localhost:3000/password-reset/<token>`)が出る。このURLをブラウザのアドレスバーに直接入力して開く(アプリ内リンクが無いので、ここだけは直接URLを開く=フルリロードでよい)
+
+トークン画面で、まず**新しいパスワードと確認用に別々の値**を入力して送信する。
+
+- **APIへのリクエストは1件も流れない**。`パスワードが一致しません`というメッセージがその場に表示されるだけ(クライアント側だけで完結するチェック)
+
+次に、同じ値を入力し直して送信する。
+
+- `POST /api/auth/password-resets`が流れ、`200`が返る。この直後、画面は`/login`へ遷移する(完了メッセージなどは挟まない)
+- 新しいパスワードでログインできることを確認しておく
+
+最後に、**同じURL(消費済みのトークン)をもう一度開いて**、適当なパスワードを入力して送信してみる。
+
+- フォーム自体は(トークンが有効かどうかの事前チェックが無いため)何の変哲もなく表示される。送信して初めて`POST /api/auth/password-resets`が`400 {"error":"invalid_or_expired_token"}`を返し、「リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください」が表示される
+
+### 2. コードを実行順に追う
+
+```ts
+// password-reset/index.vue
+async function onSubmit() {
+  errorMessage.value = ''
+  isSubmitting.value = true
+  try {
+    await requestPasswordReset(email.value)
+    isCompleted.value = true
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+```
+
+```ts
+// password-reset/[token].vue
+const route = useRoute()
+const token = route.params.token as string
+
+async function onSubmit() {
+  errorMessage.value = ''
+  if (password.value !== passwordConfirmation.value) {
+    errorMessage.value = 'パスワードが一致しません'
+    return
+  }
+  isSubmitting.value = true
+  try {
+    await resetPassword(token, password.value)
+    await navigateTo('/login')
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+```
+
+```ts
+// useAuth.ts
+// 常に同じレスポンスを返すAPI(メールアドレス列挙対策)のため、成否を返さず完了を示すのみ
+async function requestPasswordReset(email: string) {
+  await $fetch('/api/auth/password-reset-requests', { method: 'POST', body: { email } })
+}
+
+async function resetPassword(token: string, password: string) {
+  await $fetch('/api/auth/password-resets', { method: 'POST', body: { token, password } })
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `route.params.token` | URLの`/password-reset/<token>`の`<token>`部分を、Nuxtの動的ルート(`[token].vue`というファイル名がこの角括弧記法に対応する)がそのまま文字列として渡してくれる。バリデーションは無く、でたらめな値でもこの時点ではエラーにならない |
+| ② `if (password.value !== passwordConfirmation.value)` | この一致確認は**フロントだけの責務**。`resetPassword(token, password.value)`の引数を見ての通り、確認用の値(`passwordConfirmation`)はAPIに送られすらしない。一致チェックがここで通らなければ、そもそもAPIを呼ぶ`try`ブロックに入らない |
+| ③ `await requestPasswordReset(email.value)` | 成功・失敗どちらの分岐も持たない(戻り値を見ていない)。バックエンドが常に`202`を返す設計(backend-guide.md参照)に合わせて、フロント側も「送った」という事実だけを`isCompleted`に反映する |
+| ④ `await resetPassword(token, password.value)`→`await navigateTo('/login')` | 成功時は完了画面を挟まず、直接ログイン画面に遷移する。具体例2で見たログイン後の`/`遷移と違い、ここでは`user`state(`useAuth`の`user`)を更新するAPIではないため、遷移先の`/login`側は改めてメールアドレス・パスワードの入力を求める |
+| ⑤ 失敗時(`catch`) | `authErrorMessage(error)`が`invalid_or_expired_token`を「リンクの有効期限が切れているか、無効なリンクです。もう一度お試しください」に変換する(`useAuth.ts`の`ERROR_MESSAGES`)。バックエンドが期限切れと不正なトークンを区別しない(backend-guide.md参照)ため、フロント側のメッセージも両者を区別しない |
+
+`[token].vue`には、トークンが有効かどうかを画面表示前に確認する処理が無い。**期限切れ・使用済み・でたらめなトークンのどれであっても、フォームは同じように表示され、送信して初めてエラーに気付く**設計になっている(具体例2の`guest`/`auth`ミドルウェアのような「開く前に弾く」ガードは、ここには無い)。
+
+### 3. 自分で壊して確かめる
+
+- `[token].vue`の`if (password.value !== passwordConfirmation.value) { ... return }`を一時的に削除して保存する(HMRで反映)。この状態で新しいパスワードと確認用に別々の値を入力して送信すると、**確認用の値は無視され、最初のパスワード入力欄(`password.value`)の値でリセットが成功してしまう**(実際に試すとそうなる。`resetPassword(token, password.value)`の引数を見ての通り、確認用フィールドはそもそも渡されていないため)。「確認用の入力は、一致しているかどうかをフロントが見ているだけ」であることが体感できる。**試したら必ず元に戻すこと**
+- `password-reset/index.vue`の`isCompleted.value = true`を一時的にコメントアウトして保存する。送信は成功する(Networkタブで`202`が確認できる)が、画面はフォームのまま変わらず、送信できたことに気付けなくなる。`isCompleted`という1つの`ref`だけで「送信前のフォーム」と「送信後の完了表示」を出し分けている設計であることが分かる。**試したら必ず元に戻すこと**
+
+## 具体例9から読み取れる設計上の判断
+
+- **確認用パスワードの一致チェックは、UXのためだけにフロントに置く** — バックエンドの`passwordResetSchema`(backend-guide.md参照)はそもそも`password`しか受け取らず、`passwordConfirmation`という概念自体を知らない。入力ミス防止という目的が最初から「フロントだけで完結してよい」性質だと分かっていれば、無駄にAPIの型を増やさずに済む
+- **トークンの事前検証を省略し、「送信して失敗で気付く」設計にしている** — `/mypage/password`のような認証済みの画面と違い、トークンの真偽をこの画面が開いた時点で確認する手段(専用のGET APIなど)を用意していない。実装コストとのトレードオフだが、無効なリンクを踏んだユーザーはフォーム入力を1回終えるまでそれに気付けない
+- **列挙対策と使い切りの設計が、フロントのメッセージ文言にもそのまま表れる** — 「メールが届かない場合は...可能性があります」(存在有無を断定しない)、「期限切れか無効なリンクです」(理由を1つに絞らない)という2つの文言は、バックエンドが意図的に情報を絞っている(backend-guide.md参照)ことの裏返し。フロント側だけを見ても、バックエンドの設計意図がメッセージの曖昧さから読み取れる
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
 - `frontend/app/middleware/` — 未ログイン時のリダイレクトなど、ページ遷移前のガード
 - `frontend/app/composables/useGroups.ts`の`ERROR_MESSAGES` — バックエンドのエラーコードと日本語メッセージの対応関係一覧
 - `frontend/app/pages/workouts/new.vue`の`onApplyRoutine()` — ルーティンをワークアウト作成に適用すると、目安セットが(デフォルト値ではなく)実際の重量・回数で一括登録される。具体例1・4で見た「デフォルト値で即登録」とは異なるもう1つの適用パターン
+- `frontend/app/pages/mypage/password.vue` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の画面。成功後は完了表示に切り替わるだけで画面遷移しない点が、`/password-reset/[token]`(成功後に`/login`へ遷移)との違い
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧
