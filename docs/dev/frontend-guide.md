@@ -625,6 +625,100 @@ async function onPostComment(workout: NonNullable<typeof workouts.value>[number]
 - **トグルの状態はローカルに持たず、直前のAPIレスポンスを都度反映する** — `reactedByMe`を送信前に予測して切り替える(楽観的更新)のではなく、レスポンスが返ってから書き換える。連打は`likePending`というフロント側の簡易ロックで防ぎ、バックエンドの冪等性([backend-guide.md具体例7](./backend-guide.md))は「万一フロントの防止をすり抜けても壊れない」ための保険という位置づけになる
 - **一覧APIに無い値は手動で同期し、ズレの余地を残す** — `commentCount`は一覧APIのレスポンスに含まれる集計値のため、コメント投稿・削除のたびにフロントの手で`+1`/`-1`する必要がある。他のユーザーが同じ記録にコメントしてもこの画面は再取得しないため、リアルタイムに同期されるわけではない(リロードすれば直る一時的なズレ)
 
+## 具体例8：ランキング画面で指標・期間を切り替えるとき
+
+もう1つの例として、[`frontend/app/pages/groups/[id]/ranking.vue`](../../frontend/app/pages/groups/[id]/ranking.vue)を追う。「合計」「種目別」「継続」の3つの指標タブと、「週間」「月間」「通算」の期間タブを組み合わせて[backend-guide.md具体例8](./backend-guide.md)のGET `/groups/:id/ranking`を呼び分ける画面。指標によって「追加のAPIを呼ぶ/呼ばない」「期間タブを出す/出さない」が変わる点が、これまでの具体例には無かった新しいパターン。
+
+### 1. まず動かしてみる
+
+グループにオーナーA・メンバーBの2人がいて、Aが公式種目(ベンチプレス)のセットを、Bが自重種目(プッシュアップ)のセットのみを記録した状態を作る(backend-guide.md具体例8と同じ手順)。ブラウザでグループ詳細→「ランキングを見る」から実際に遷移してAでログインし、Networkタブを開いた状態で操作する。
+
+- **「合計」→「種目別」タブに切り替える** → 初回だけ`GET /api/groups/:id/ranking/exercises`(種目セレクタの候補)と`GET /api/groups/:id/ranking/default-exercise`(初期選択種目)が追加で飛び、続けて`GET /api/groups/:id/ranking?exerciseId=...`が飛ぶ。**もう一度「合計」→「種目別」を往復しても、2回目以降は`exercises`・`default-exercise`は飛ばない**(`ranking?exerciseId=...`だけが飛ぶ)
+- **「種目別」のまま週間→通算のように期間タブを切り替える** → `ranking?period=all&exerciseId=...`のように、選択中の種目を保ったまま期間だけ変えたリクエストが飛ぶ
+- **「継続」タブに切り替える** → **どのAPIも新たに呼ばれない**。直前に取得済みの`ranking`データ(`daysTrained`・`attendanceStamp`)をそのまま並べ替えて表示している
+
+これらの「呼ぶ/呼ばない」の使い分けが、次のコードのどこで起きているかを追う。
+
+### 2. コードを実行順に追う
+
+```ts
+type Metric = 'total' | 'exercise' | 'attendance'
+const metric = ref<Metric>('total')
+const selectedExerciseId = ref<string | null>(null)
+const rankingExercises = ref<GroupRankingExercise[] | null>(null)
+const period = ref<RankingPeriod>('week')
+const ranking = ref<...>(null)
+
+async function load() {
+  if (metric.value === 'exercise' && !selectedExerciseId.value) {
+    ranking.value = []
+    pending.value = false
+    return
+  }
+  pending.value = true
+  loadError.value = false
+  try {
+    const exerciseId = metric.value === 'exercise' ? selectedExerciseId.value : null
+    const result = await fetchGroupRanking(groupId, period.value, exerciseId)
+    ranking.value = result.ranking
+  } catch {
+    loadError.value = true
+  } finally {
+    pending.value = false
+  }
+}
+await load()
+watch(period, load)
+
+let exerciseModeLoaded = false
+async function onSelectMetric(next: Metric) {
+  if (metric.value === next) return
+  metric.value = next
+  if (next === 'attendance') return // 既存のranking.valueをそのまま並べ替えて使うため再取得不要
+  if (next === 'exercise' && !exerciseModeLoaded) {
+    exerciseModeLoaded = true
+    pending.value = true
+    try {
+      const [exercisesResult, defaultExercise] = await Promise.all([
+        fetchGroupRankingExercises(groupId),
+        fetchGroupRankingDefaultExercise(groupId),
+      ])
+      rankingExercises.value = exercisesResult
+      selectedExerciseId.value = defaultExercise.exerciseId ?? exercisesResult[0]?.id ?? null
+    } catch {
+      loadError.value = true
+      pending.value = false
+      return
+    }
+  }
+  await load()
+}
+```
+
+| ステップ | 何が起きるか | 「合計」→「種目別」1回目 | 2回目以降 | 「継続」に切り替え |
+|---|---|---|---|---|
+| ① `if (metric.value === next) return` | 同じタブを2回押しても何もしない(無駄な再取得防止) | 通過(`total`→`exercise`) | 通過 | 通過 |
+| ② `if (next === 'attendance') return` | 継続タブは`ranking.value`を書き換えず即終了。表示側(`attendanceSorted`)が既存データを名前順に並べ替えるだけなので、新しいAPI呼び出しが要らない | 該当なし | 該当なし | **ここで終了**。Networkタブに何も流れない理由 |
+| ③ `if (next === 'exercise' && !exerciseModeLoaded)` | `exerciseModeLoaded`という関数外の変数(モジュールスコープの閉じたフラグ、`ref`ではない)で「種目一覧を取得済みか」を覚えておく。`ref`ではなく素の変数にしているのは、この値自体を画面に表示する必要が無く、再レンダリングのトリガーにもしたくないため | `true`になり中に入る | **`false`になっており中に入らない**。`exercises`・`default-exercise`が飛ばない理由 | 該当なし |
+| ④ `Promise.all([fetchGroupRankingExercises, fetchGroupRankingDefaultExercise])` | 種目セレクタの候補と初期選択種目を並行取得。`Promise.all`でまとめているのは、どちらもお互いの結果に依存しない独立したリクエストのため | 実行される | 実行されない | 該当なし |
+| ⑤ `selectedExerciseId.value = defaultExercise.exerciseId ?? exercisesResult[0]?.id ?? null` | バックエンドの「直近28日で最も使われている種目」が無ければ、一覧の先頭(使用回数が多い順)にフォールバックする。それも無ければ`null`(次の⑥で空表示になる) | `<benchId>`が入る | (既存の値を維持) | 該当なし |
+| ⑥ `await load()` | ここでようやく`ranking`を取りに行く。`exerciseId`は`metric.value === 'exercise' ? selectedExerciseId.value : null`で決まる | `ranking?exerciseId=<benchId>`が飛ぶ | `ranking?exerciseId=<benchId>`が飛ぶ(セレクタ取得はスキップしても集計は毎回取り直す) | 該当なし |
+
+`watch(period, load)`は`metric`を見ていないため、`metric`が何であっても期間を変えれば`load()`が呼ばれる。`load()`内の`exerciseId`の決め方(上表⑥)により、「種目別」中に期間を変えれば選択中の種目を保ったまま、「合計」中に期間を変えれば`exerciseId: null`で、それぞれ正しく呼び分けられる。
+
+### 3. 自分で壊して確かめる
+
+このガイドを書く過程で、実際に**壊さなくても再現できる既存のバグ**を1つ見つけた。グループの誰も公式種目を記録したことが無い(=`rankingExercises`が空になる)状態で「種目別」タブに切り替えると、`selectedExerciseId.value`が`exercisesResult[0]?.id ?? null`により`null`のままになる。続く`await load()`は上のコードの①のガード(`if (metric.value === 'exercise' && !selectedExerciseId.value)`)に引っかかって`ranking.value = []`で早期returnするが、**このガードには`pending.value = false`が無かった**。`onSelectMetric`側で`pending.value = true`にした後の後始末をこのガードが引き継がないまま関数を抜けるため、`pending`が`true`のまま戻らず、画面が「読み込み中...」から永久に変わらなくなる(実際に検証用の空グループで再現した)。この`docs/dev/`拡張作業と同じPRで、ガードに`pending.value = false`を足して修正した([`ranking.vue`](../../frontend/app/pages/groups/[id]/ranking.vue)参照)。
+
+- 直した`pending.value = false`を一時的に外して保存する(HMRで反映)。公式種目の記録が誰も無いグループ(または新規グループ)で「種目別」タブを開くと、上で説明した「読み込み中...」から戻らない状態が再現できる。**試したら必ず元に戻すこと**
+- `exerciseModeLoaded = true`の代入を一時的にコメントアウトして保存する。「合計」↔「種目別」を何度も往復すると、往復のたびにNetworkタブに`ranking/exercises`・`ranking/default-exercise`が飛び続ける(無駄なAPI呼び出しが増える。ユーザー体験としては気づきにくいが、種目数が多いグループほどレスポンスが重くなる)。**試したら必ず元に戻すこと**
+
+## 具体例8から読み取れる設計上の判断
+
+- **「呼ばなくてよいAPI」を明示的に分岐で止める** — 継続タブへの切り替え(`if (next === 'attendance') return`)、種目一覧の再取得スキップ(`exerciseModeLoaded`)は、どちらも「前に取ったデータで足りるなら取り直さない」という同じ考え方。バックエンド側(具体例8)が`totalVolumeKg`と`daysTrained`を1回のレスポンスにまとめているからこそ、フロント側は継続タブで再取得が不要になる
+- **`ref`にしない状態もある** — `exerciseModeLoaded`はあえて`ref`にせず素の変数にしている。Vueのリアクティブ変数は「画面に反映すべき値」に使うものという前提があり、単なる「取得済みフラグ」まで`ref`にすると、意図しない再描画やwatchの対象になりうる
+- **早期returnのガードは、呼び出し元の状態変更とセットで検証する** — `load()`の冒頭ガードは`ranking.value`だけ気にして書かれており、直前に呼び出し元(`onSelectMetric`)が`pending.value = true`にしていることを見落としていた。関数を分けるほど、「呼び出し元がどんな状態にしてから呼ぶか」を書いた側が意識しないと、今回のような後始末漏れが起きる
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
