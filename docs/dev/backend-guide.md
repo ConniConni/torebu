@@ -715,6 +715,8 @@ async function findVisibleNotifications(userId: string) {
 // 参加者(actor)と受信者がどちらも今もそのグループのアクティブなメンバーである場合のみ
 // (参加後5分以内に退会した・受信者が退会した等の場合は表示しない)
 async function resolveMemberJoinedTargets(recipientId, notifications) {
+  const groupIds = [...new Set(notifications.map((n) => n.targetId))]
+  const userIds = [...new Set([recipientId, ...notifications.map((n) => n.actorId).filter((id) => id !== null)])]
   const [groups, memberships] = await Promise.all([
     prisma.group.findMany({ where: { id: { in: groupIds }, deletedAt: null }, select: { id: true, name: true } }),
     prisma.groupMember.findMany({ where: { groupId: { in: groupIds }, userId: { in: userIds }, leftAt: null }, select: { groupId: true, userId: true } }),
@@ -761,5 +763,5 @@ visible.push({ notification: n, target: { type: 'group', groupId: n.targetId, gr
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
-- `backend/src/routes/groups.ts`の`POST /groups/join`(招待コードで参加する処理) — 定員超過・招待コード期限切れ・退会後の再参加といった分岐
+- `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(自己ベスト更新・通算の節目・久しぶりの復帰)の再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
