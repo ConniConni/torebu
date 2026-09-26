@@ -1343,6 +1343,160 @@ authRouter.post('/password-changes', requireAuth, passwordChangeRateLimiter, asy
 - **「ログイン中の変更」と「ログアウト中の再設定」を別々のAPI・別々のレート制限単位にする** — `password-changes`はログイン必須でユーザーID単位のレート制限、具体例9の2エンドポイントは未ログインでIP単位のレート制限。想定する攻撃者の状態(セッションを乗っ取れているか、そもそもログインできていないか)が違うため、レート制限の数え方もそれに合わせて変えている
 - **パスワードの変更経路が複数あるときは、お互いを無効化し合う** — ログイン中の変更は、未使用のメールリセットトークンも一緒に失効させる。「今から有効なパスワード変更手段」を常に1つに保つことで、過去に発行したまま忘れていたリンクが後から悪用される余地を無くしている。具体例9の「読み取れる設計上の判断」にある「メール再設定によるパスワード変更は、他端末のセッションを無効化しない」とは逆方向の設計で、こちらは「ログイン中の変更が、未使用のメールリセット手段を無効化する」。パスワードの変更経路が複数ある設計では、どちらの方向で無効化するかを個別に決めている
 
+## 具体例11：カスタム種目を追加・削除するとき
+
+具体例4では、ルーティンに種目を追加するときの`isExerciseVisible()`(公式種目 or 自分の未削除カスタム種目かどうかの判定)に軽く触れた。今回はその判定の元になる[`backend/src/routes/exercises.ts`](../../backend/src/routes/exercises.ts)のPOST `/exercises`・DELETE `/exercises/:id`自体を追い、「カスタム種目を消しても過去の記録は壊れない」ためにどんな設計をしているかを見る。加えて、`workouts.ts`が持つ同名の`isExerciseVisible()`(具体例4で見たものとは別実装)には、routines側には無い例外が1つあることも確認する。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。具体例1の`cookie.txt`(ログイン済み)を使う。
+
+まずカスタム種目を1件作る。
+
+```bash
+curl -s -X POST http://localhost:3001/exercises \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"検証用カスタム種目","muscleGroup":"chest"}'
+```
+
+```json
+HTTP/1.1 201 Created
+{"id":"<exerciseId>","name":"検証用カスタム種目","muscleGroup":"chest","muscleDetail":null,"equipment":null,"createdBy":"<AのユーザーID>","mainMuscle":null,"relatedMuscles":[],"mainZone":null,"deletedAt":null,"lastSet":null}
+```
+
+`GET /exercises`の一覧にもこの種目が並ぶ(`useCount: 0`)ことを確認しておく。削除する(ソフトデリート)。
+
+```bash
+curl -i -X DELETE http://localhost:3001/exercises/<exerciseId> -b cookie.txt
+# => HTTP/1.1 204 No Content
+```
+
+一覧から消えるのではなく、**`deletedAt`が入った状態でそのまま残っている**ことが`GET /exercises`で確認できる。同じIDにもう一度DELETEを送ると`404 {"error":"not_found"}`(削除済みは「もう存在しない」扱い)。
+
+具体例2・3で作ったBのアカウント(`cookieB.txt`)で、**他人の種目を消せるか**も試しておく。まだ削除していない別のカスタム種目を先に1つ作り、Bのクッキーで消そうとする。
+
+```bash
+curl -i -X DELETE http://localhost:3001/exercises/<別のexerciseId> -b cookieB.txt
+# => HTTP/1.1 404 {"error":"not_found"}
+```
+
+公式種目(具体例1で使った「ベンチプレス」の`<exerciseId>`)を自分のクッキーで消そうとしても同じ404になる。「他人の種目」「公式種目」「もう無い種目」を区別せず、全部404にしている。
+
+最後に、削除したカスタム種目が記録作成とどう絡むかを見る。新しいカスタム種目を作り、workoutを1件作ってそのセットを1件追加した**あとで**、その種目を削除する。
+
+```bash
+# 種目を作る(以降<ex2Id>とする)
+curl -s -X POST http://localhost:3001/exercises -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"検証用カスタム種目2","muscleGroup":"back"}'
+
+# workoutを作る(以降<workoutId>とする)
+curl -s -X POST http://localhost:3001/workouts -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt":"2026-09-26"}'
+
+# セットを1件追加(削除前)
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<ex2Id>","weightKg":40,"reps":10}'
+
+# 種目を削除
+curl -i -X DELETE http://localhost:3001/exercises/<ex2Id> -b cookie.txt
+# => 204
+```
+
+削除したあとで、**同じworkoutに同じ種目のセットをもう1件追加する**と、
+
+```bash
+curl -i -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<ex2Id>","weightKg":45,"reps":8}'
+# => HTTP/1.1 201 Created (成功する)
+```
+
+意外にも**成功する**。ところが、**別の新しいworkoutで**同じ種目を使おうとすると、
+
+```bash
+curl -s -X POST http://localhost:3001/workouts -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt":"2026-09-27"}'
+# => 新しいworkoutId
+
+curl -i -X POST http://localhost:3001/workouts/<新しいworkoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<ex2Id>","weightKg":45,"reps":8}'
+# => HTTP/1.1 400 {"error":"invalid_exercise"}
+```
+
+今度は弾かれる。同じ「削除済みのカスタム種目」を指定しているのに、workoutが違うだけで結果が変わる。次でこの理由を追う。
+
+### 2. コードを実行順に追う
+
+まずPOST `/exercises`とDELETE `/exercises/:id`。
+
+```ts
+exercisesRouter.post('/', requireAuth, async (req, res) => {
+  const { name, muscleGroup, muscleDetail, equipment } = parsed.data
+  const exercise = await prisma.exercise.create({
+    data: { name, muscleGroup, muscleDetail, equipment, createdBy: userId },
+  })
+  res.status(201).json({ /* ...レスポンス整形... */ })
+})
+
+exercisesRouter.delete('/:id', requireAuth, async (req, res) => {
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: req.params.id as string, createdBy: userId, deletedAt: null },
+  })
+  if (!exercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  await prisma.exercise.update({ where: { id: exercise.id }, data: { deletedAt: new Date() } })
+  res.status(204).end()
+})
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `prisma.exercise.create({ data: { ..., createdBy: userId } })` | `createdBy`に必ず自分のIDが入る。公式種目(`createdBy: null`)は誰も`POST`からは作れない(seedで投入されたものだけ) |
+| ② DELETE側の`findFirst`条件`{ id, createdBy: userId, deletedAt: null }` | **所有者チェックと未削除チェックを1つのクエリに畳み込んでいる**。他人の種目・公式種目(`createdBy`が自分のIDと不一致)・削除済みの種目(`deletedAt`が`null`でない)は、理由に関わらず同じ`exercise === null`になり同じ404を返す。具体例3・7で見たIDOR対策の404(「存在を隠す」)と、「もう一度は削除できない」という状態の404が、同じ条件式の中で自然に合流している |
+| ③ `deletedAt: new Date()` | 物理削除ではないので、`workout_sets`・`routine_exercises`が持つ`exerciseId`はそのまま有効な外部キーであり続ける。過去の記録の種目名解決が壊れない(コード先頭のコメント参照) |
+
+`GET /exercises`が削除済みの種目も一覧に残す理由もここにある。もし`WHERE`に`deletedAt: null`を加えて除外すると、削除した種目を含む過去の記録を開いたときに種目名を解決できなくなる(フロント側は`deletedAt`を見て選択肢からだけ除外する。frontend-guide.md参照)。
+
+次に、削除済みの種目でworkoutごとに結果が変わった理由。`workouts.ts`の`isExerciseVisible`は、具体例4の`routines.ts`版と同じ名前だが実装が違う。
+
+```ts
+async function isExerciseVisible(userId: string, exerciseId: string, workoutId?: string) {
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: exerciseId, OR: [{ createdBy: null }, { createdBy: userId }] },
+  })
+  if (!exercise) return false
+  if (exercise.deletedAt === null) return true
+  if (!workoutId) return false
+
+  const existingSet = await prisma.workoutSet.findFirst({ where: { workoutId, exerciseId } })
+  return existingSet !== null
+}
+```
+
+| ステップ | 何が起きるか | 既存workoutでの2回目のPOST | 新しいworkoutでのPOST |
+|---|---|---|---|
+| ① `exercise`が公式 or 自分のカスタム種目か | ここは具体例4と同じ | 通過 | 通過 |
+| ② `if (exercise.deletedAt === null) return true` | 削除されていなければここで即`true`。削除済みなら次へ | (削除済みなので通過せず次へ) | (同左) |
+| ③ `if (!workoutId) return false` | `workoutId`が渡っていなければ(routines.tsの呼び出しなど)ここで`false`確定 | `workoutId`はPOST `/workouts/:id/sets`から必ず渡るので通過 | 通過 |
+| ④ `existingSet !== null` | **そのworkoutの中に、この種目のセットが既に1件でもあるか**を見る。「削除済みの種目を新しく使い始める」のは禁止だが、「削除する前からこのworkoutで使っていた種目カードに追記する」のは許す、という例外 | 削除前に1件追加済みなので`existingSet`が見つかる → `true` | このworkoutでは1件も使っていないので`existingSet`は`null` → `false` → `400 invalid_exercise` |
+
+`routines.ts`側の`isExerciseVisible(userId, exerciseId)`には③④が無い(`workoutId`という概念自体が無い)。そのため、**削除したカスタム種目は、既存のルーティンに種目カードが無ければルーティンには二度と追加できない**(workoutsのような「追記だけは許す」抜け道が無い)。同じ「削除済みのカスタム種目をどう扱うか」という問いに、機能ごとに違う答えを出している。
+
+### 3. 自分で壊して確かめる
+
+- DELETE側の`findFirst`の`where`から`deletedAt: null`を一時的に外して保存する(`tsx watch`が自動再起動)。その状態で、既に削除済みの種目に対してもう一度同じDELETEを送ると、本来`404`になるはずが`204`で「成功」してしまう(`deletedAt`を今の時刻でもう一度上書きするだけなので実害は薄いが、「削除は初回しか意味を持たない」という前提が崩れていることが分かる)。**試したら必ず元に戻すこと**
+- `isExerciseVisible`(workouts.ts版)の`if (!workoutId) return false`を一時的に`if (!workoutId) return true`に変えて保存する。その状態で、**新しいworkoutに削除済みのカスタム種目のセットを追加する**curlを送ると、本来`400 invalid_exercise`になるはずが`201`で通ってしまう。「削除済みの種目を新規に使い始められない」という制約がこの1行だけで支えられていることが体感できる。**試したら必ず元に戻すこと**
+
+## 具体例11から読み取れる設計上の判断
+
+- **ソフトデリートは「もう選べない」であって「消えた」ではない** — `deletedAt`はDELETEの`WHERE`(所有者・未削除の2条件)には使うが、`GET /exercises`の`WHERE`には使わない。一覧に残し続けることで、過去の記録・ルーティンからの参照(`exerciseId`という外部キー)が壊れないようにしている。「新規に選べるかどうか」はフロント側が`deletedAt`を見て絞り込み、バックエンドは「存在するかどうか」だけを保証する、という役割分担になっている
+- **同名の関数でも、機能ごとに例外を持たせるかどうかを個別に決める** — `workouts.ts`の`isExerciseVisible`は「削除済みでも、そのworkoutで既に使っていた種目なら追記を許す」という、具体例4の`routines.ts`版には無い例外を持つ。ワークアウト記録は同じ日の記録に後から追記していく使い方が多い(具体例1参照)一方、ルーティンは種目構成をその都度選び直すものという想定の違いが、同じ「削除済みの種目をどう扱うか」という問いへの答えを分けている
+- **所有者チェックと状態チェックを1つのクエリに畳み込むと、区別しなくてよい404が自然に増える** — DELETE `/exercises/:id`の`findFirst`は「他人の種目」「公式種目」「削除済みの種目」「存在しないID」の4パターンを区別せず同じ404にする。具体例3・7のIDOR対策(存在を隠す404)と同じ形を、削除状態のチェックにもそのまま流用している
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ

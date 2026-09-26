@@ -888,6 +888,78 @@ const ERROR_MESSAGES: Record<string, string> = {
 - **成功後にページを離れるかどうかは、ログイン状態が変わるかどうかで決まる** — 具体例9の`resetPassword()`はログイン状態にしないため`/login`へ送る必要があるが、`changePassword()`はログイン状態を変えないため、どこにも移動せず完了を伝えるだけでよい
 - **列挙対策が要らない場面ではエラーコードを分けたままにする** — ログイン失敗は`invalid_credentials`1種類にまとめる一方、ログイン中のパスワード変更失敗は`invalid_current_password`/`same_as_current_password`の2種類のまま日本語メッセージに変換している。「本人しか呼べない操作かどうか」で、エラーコードを統合するかどうかの方針が変わる
 
+## 具体例11：カスタム種目を追加・削除するとき
+
+[backend-guide.md具体例11](./backend-guide.md)で追ったPOST/DELETE `/exercises`を、フロント側の[`frontend/app/composables/useExercises.ts`](../../frontend/app/composables/useExercises.ts)がどう扱っているかを見る。この一覧(`exercises`)は`useState`で③記録作成・④種目選択・⑦種目追加のあいだセッション中ずっとキャッシュされ続ける(Issue #116の再発防止パターンについてはCLAUDE.mdのセルフチェック項目も参照)。追加・削除のたびに一覧を取り直すのではなく、その場で配列を書き換えて反映する実装になっている。
+
+### 1. まず動かして観察する
+
+`/workouts/new`(③記録作成)から「＋種目を追加」→「④種目選択」→「＋種目を追加」(⑦種目追加)と進み、名前・部位を入力して追加する。
+
+- 追加すると、④の画面には戻らず、追加した種目が選択済みの状態で直接③に戻る(**Networkタブでは`POST /api/exercises`の後に`GET /api/exercises`は流れない**)
+- ③の種目カードに追加した種目名がすぐ表示される
+
+続けて④種目選択画面に戻り、追加した種目の削除アイコン(ゴミ箱)を押す。「削除しますか?(元に戻せません)今後この種目は選べなくなりますが、これまでの記録・ルーティンはそのまま残ります」という確認が出る。「削除する」を押すと、
+
+- **一覧からその種目が即座に消える**(こちらも`DELETE`の後に`GET /api/exercises`は流れない)
+- そのまま③に戻ると、**削除したはずの種目名が(不明な種目にならず)そのままカードに表示され続けている**
+- ③のカードの「+セット追加」を押すと、削除済みの種目にもかかわらず**セットが追加できてしまう**(backend-guide.md具体例11で見た「既存のworkoutExerciseへの追記は許す」例外がここで効いている)
+
+一覧の再取得なしに画面が正しく更新される点と、削除済みでも既存カードには追記できてしまう点、両方をNetworkタブとカードの表示で確認しておく。
+
+### 2. コードを実行順に追う
+
+```ts
+// composables/useExercises.ts
+async function createExercise(payload: CreateExercisePayload) {
+  const exercise = await $fetch<Exercise>('/api/exercises', { method: 'POST', body: payload })
+  // 一覧に追加した種目をその場で反映する(再取得すると使用回数の集計まで走り直すため、追記で済ませる)
+  exercises.value = [...(exercises.value ?? []), exercise]
+  return exercise
+}
+
+async function deleteExercise(id: string) {
+  await $fetch(`/api/exercises/${id}`, { method: 'DELETE' })
+  exercises.value = (exercises.value ?? []).map((e) =>
+    e.id === id ? { ...e, deletedAt: new Date().toISOString() } : e,
+  )
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `createExercise`が`exercises.value`に`POST`のレスポンスをそのまま追記する | `fetchExercises()`(`GET /api/exercises`丸ごと再取得)を呼び直さない。使用回数(`useCount`)の集計・表示順の並べ替えまでバックエンドが毎回やり直す処理を、種目を1件追加するだけのために走らせないための省略 |
+| ② `deleteExercise`が該当要素だけ`deletedAt`を差し替えた**新しい配列**を作って`exercises.value`に代入する | 該当要素を配列から取り除く(`filter`)のではなく、`deletedAt`だけを立てた新しいオブジェクトに置き換えている。バックエンドの`GET /exercises`が削除済みの種目も返し続けるのと同じ理由で、フロントのキャッシュからも消してしまうと、③の既存カードが種目名を解決できなくなる(`exercises`配列から該当種目自体が無くなるため) |
+
+この`deletedAt`を実際に「選べなくする」側で見ているのが、④種目選択画面([`pages/workouts/exercises.vue`](../../frontend/app/pages/workouts/exercises.vue))の絞り込み。
+
+```ts
+const sections = computed(() =>
+  MUSCLE_GROUPS.map((group) => ({
+    group,
+    label: muscleGroupLabel(group),
+    exercises: (exercises.value ?? []).filter(
+      (e) => e.muscleGroup === group && !e.deletedAt && matchesEquipmentFilter(e),
+    ),
+  })),
+)
+```
+
+`sections`は`computed`なので、`exercises.value`(useExercisesが持つ配列そのもの)が変わるたびに自動で再評価される。①・②で見た「配列を書き換える」実装だけで、④の一覧・⑦の重複候補(`exercises-new.vue`の`similarExercises`も同じく`!exercise.deletedAt`で絞り込む)の両方が、画面遷移や再取得なしに正しく更新される理由がここにある。
+
+「削除済みでも既存カードには追記できる」の方は、フロント側には特別な分岐が無い。③のセット追加ボタンは`workout.exercises`(その日のworkoutに紐づく種目カード一覧。`useExercises`とは別の状態)を見て並んでいるだけで、その種目が削除済みかどうかを一切気にしていない。「削除済みの種目は新規の記録には**選べない**」という制約は④・⑦の`!deletedAt`フィルタだけで作られており、③のカードは一覧に出た時点で(削除状態に関わらず)普通にセット追加できる。backend-guide.md具体例11で見た`isExerciseVisible`の`existingSet`チェックが最終防衛になっている。
+
+### 3. 自分で壊して確かめる
+
+- `deleteExercise`の`exercises.value = (exercises.value ?? []).map(...)`を一時的にコメントアウトして保存する(HMRで反映)。その状態で種目を削除すると、`DELETE`自体は`204`で成功する(Networkタブで確認できる)のに、**④の一覧からその種目が消えない**(削除ボタンを押しても見た目が変わらない)。画面を再読み込みすれば`GET /exercises`で最新の`deletedAt`ごと取り直されるため一覧から消えるが、リロードするまでは「削除できていないように見える」ままになる。CLAUDE.mdのセルフチェック項目にある「保存操作のたびに変わりうる値のキャッシュ更新漏れ」(Issue #116)と同じ形の不具合を、削除でも起こせることが確認できる。**試したら必ず元に戻すこと**
+- `pages/workouts/exercises.vue`の`sections`の`filter`から`!e.deletedAt`を一時的に外して保存する。削除した種目が④の一覧に(取り消し線も無くただの種目として)復活し、選択すると③のカードに追加できてしまう。「新規には選べない」という制約が、バックエンドの`isExerciseVisible`ではなくこの1行だけで支えられている(バックエンドは`workoutId`の有無で判定するため、新規カードに対する`invalid_exercise`はバックエンド側でも最終的に弾かれるが、フロント側はエラー表示のための特別な分岐を持たないため、押した瞬間は何も起きたように見えない)。**試したら必ず元に戻すこと**
+
+## 具体例11から読み取れる設計上の判断
+
+- **一覧の再取得ではなく、変化した分だけ配列を書き換える** — `createExercise`は追記、`deleteExercise`は該当要素の置き換え。どちらも`fetchExercises()`を呼び直さない。具体例7の`commentCount`手動同期(値の一部を書き換える)や、同じ`useExercises.ts`内の`patchLastSet`(1種目分の`lastSet`だけを書き換える)と同じ「一覧APIを叩き直さずキャッシュを手で最新化する」パターンだが、こちらは値の一部ではなく配列の要素の追加・置き換えという構成レベルの書き換えである点が違う
+- **「消す」ではなく「印を付ける」形でキャッシュを書き換える** — `deleteExercise`は配列から要素を取り除かず、`deletedAt`を立てた新しいオブジェクトに置き換える。バックエンドの`GET /exercises`が削除済みの種目を返し続けるのと対になる実装で、これにより③の既存カードは削除後も種目名を解決し続けられる
+- **「選べなくする」制約は一覧側の表示フィルタだけが担い、既存カードには及ばない** — `!deletedAt`によるフィルタは④の選択候補・⑦の重複候補にしか掛かっておらず、③の既存カードのセット追加ボタンには掛かっていない。「新規に選べない」と「継続して使える」という2つの異なる制約を、画面側で分けて実装するのではなく、片方(新規に選べない)だけをフロントが担当し、もう片方の最終防衛はバックエンドの`isExerciseVisible`に委ねている
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
