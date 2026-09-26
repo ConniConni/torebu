@@ -528,6 +528,103 @@ await fetchUnreadCount()
 - **「取得してから既読化する」の順序をコードのコメントで明示する** — 順序を間違えると画面の見た目(どれが新着か)が壊れるが、型チェックやテストでは検知しにくい類のバグのため、コメントで明示的に残している
 - **`useState`を「サーバーの値の写し」ではなく「画面間で共有する状態」として使う** — `markAllAsRead()`が`unreadCount`を`0`に直接書き換えているのは、サーバーから取り直すのではなく、複数の画面(ホーム・通知一覧)にまたがる1つの状態を直接更新する使い方。`docs/spec.md` §3-3(画面をまたぐ状態の持ち方)に載っているキャッシュ更新漏れの注意点と合わせて読むと理解が深まる
 
+## 具体例7：いいね・コメントをフロントでどう扱うか
+
+[backend-guide.md具体例7](./backend-guide.md)で追ったPOST/DELETE `/workouts/:id/reactions`・GET/POST/DELETE `/workouts/:id/comments`を、フロント側がどう呼んでいるかを見る。対象は[`frontend/app/pages/groups/[id]/workouts.vue`](../../frontend/app/pages/groups/[id]/workouts.vue)(グループの記録フィード)。「自分の記録のいいねボタンは押せない代わりに、いいねした人の一覧を開く専用ボタンになる」というUI固有の分岐と、コメントを開いたときの遅延取得、件数バッジを手動で同期する実装を扱う。
+
+### 1. まず動かして観察する
+
+具体例3までで作ったA(オーナー、記録の持ち主)・B(同じグループのメンバー)で、Aの記録がある状態のグループ記録フィード(`/groups/<groupId>/workouts`)をブラウザで開く。
+
+- **Aでログインして自分のカードのハート(いいね)ボタンを押す** → 何も起きない(トグルしない)。押すと下に「いいねしてくれた人」の一覧が開閉する
+- **ログアウトしてBでログインし直し、同じカードのハートボタンを押す** → 即座にハートが塗りつぶされ、件数が1増える。もう一度押すと取り消され、件数が1減る(画面を再読み込みしなくても反映される)
+- **「コメント」ボタンを押す** → 初回だけ「読み込み中」の表示が一瞬出てから一覧が表示される。コメントを入力して送信すると、一覧に即座に追加され、ボタンの件数バッジも増える
+- **投稿した自分のコメントの隣のゴミ箱アイコンを押す** → 「このコメントを削除しますか?(元に戻せません)」という確認が表示され、「削除する」を押すと消える。他人のコメントにはゴミ箱アイコン自体が表示されない
+
+「自分の記録かどうか」でハートボタンの役割が変わる点、コメントの一覧取得が初回だけ走る点が次のポイント。
+
+### 2. コードを実行順に追う
+
+```ts
+// pages/groups/[id]/workouts.vue
+function isOwnWorkout(workout: { userId: string }) {
+  return workout.userId === user.value?.id
+}
+```
+```html
+<!-- 自分の記録: トグルではなく「いいねした人一覧」の開閉ボタンになる -->
+<button v-if="isOwnWorkout(workout)" @click="toggleReactorsPanel(workout.id)">
+  <HeartIcon :filled="workout.reactionCount > 0" />{{ workout.reactionCount }}
+</button>
+<!-- 他人の記録: いいねのトグルボタン -->
+<button v-else :disabled="likePending.has(workout.id)" @click="toggleLike(workout)">
+  <HeartIcon :filled="workout.reactedByMe" />...
+</button>
+```
+
+```ts
+async function toggleLike(workout: NonNullable<typeof workouts.value>[number]) {
+  if (likePending.value.has(workout.id)) return
+  likePending.value = new Set(likePending.value).add(workout.id)
+  try {
+    const result = workout.reactedByMe
+      ? await unlikeWorkout(workout.id)
+      : await likeWorkout(workout.id)
+    workout.reactionCount = result.reactionCount
+    workout.reactedByMe = result.reactedByMe
+  } catch {
+    // 通信失敗時は表示をそのまま
+  } finally {
+    const next = new Set(likePending.value)
+    next.delete(workout.id)
+    likePending.value = next
+  }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `isOwnWorkout(workout)` | バックエンドの`shareActiveGroup()`の「自分の記録は常に見える」という前提と対になる形で、フロントも「自分の記録かどうか」を`v-if`の起点にしている。バックエンドの`cannot_react_to_own_workout`(具体例7参照)をエラーとして受けて表示するのではなく、そもそも押しても何も起きないボタンにすり替えている |
+| ② `toggleLike(workout)`(他人の記録のみ到達) | `likePending`(通信中セット)に自分のworkoutIdが無ければ処理を進める。連打防止用の`disabled`と二重になっている(バックエンドはどのみち冪等だが、フロントは無駄なリクエストそのものを減らす) |
+| ③ `workout.reactedByMe ? unlikeWorkout : likeWorkout` | **今の`reactedByMe`を見てPOSTかDELETEかを選ぶ**。トグルの状態はフロントが持たず、常に直前のAPIレスポンスの値を見る |
+| ④ `workout.reactionCount = result.reactionCount` | サーバーのレスポンスで`workouts`配列内のオブジェクトを直接書き換える。楽観的更新(先に見た目を変えてから送信)ではなく、**レスポンスが返ってから**反映する。連打しても②の`likePending`で弾かれるため、表示と実際の状態がずれる隙間は無い |
+
+コメントは遅延取得(展開した瞬間に初めて`GET /comments`を呼ぶ)と、件数の手動同期という2点が特徴。
+
+```ts
+async function toggleComments(workoutId: string) {
+  // ...(開閉の状態管理)
+  if (commentsByWorkoutId.value.has(workoutId)) return // 2回目以降は再取得しない
+  const comments = await fetchComments(workoutId)
+  const map = new Map(commentsByWorkoutId.value)
+  map.set(workoutId, comments)
+  commentsByWorkoutId.value = map
+}
+
+async function onPostComment(workout: NonNullable<typeof workouts.value>[number]) {
+  // ...
+  const comment = await postComment(workout.id, body)
+  const map = new Map(commentsByWorkoutId.value)
+  map.set(workout.id, [...(map.get(workout.id) ?? []), comment])
+  commentsByWorkoutId.value = map
+  workout.commentCount += 1 // 一覧APIには件数(commentCount)しか無いため、投稿のたびに手動で+1する
+  // ...
+}
+```
+
+`commentsByWorkoutId`は「一度開いたら閉じても内容を覚えている」キャッシュになっている(`toggleComments`の`if (commentsByWorkoutId.value.has(workoutId)) return`)。そのため、`workout.commentCount`(カードに出ている件数バッジ)は`GET /workouts/:id/comments`を呼び直さずに**手動で+1/-1**している。一覧APIのレスポンス自体には`commentCount`しか含まれておらず、コメント本文の配列を都度数え直すことはできないための設計。`CLAUDE.md`のセルフチェック項目にある「保存操作のたびに変わりうる値のキャッシュ更新漏れ」(Issue #116)と同じ形の注意点がここにもある。
+
+### 3. 自分で壊して確かめる
+
+- `onPostComment`の`workout.commentCount += 1`を一時的にコメントアウトして保存する(HMRで反映)。他人の記録のコメント欄を開いてコメントを投稿すると、**一覧には投稿した内容がすぐ反映されるのに、「コメント」ボタンの件数バッジだけ0のまま変わらない**(実際に試すとそうなる)。ページを再読み込みすれば正しい件数に直るため、「一覧取得のたびに直る一時的な不整合」に見えてしまい気づきにくい。**試したら必ず元に戻すこと**
+- `v-if="isOwnWorkout(workout)"`側の分岐を一時的に消して`v-else`のボタンだけにしてみる(自分の記録にも他人向けのトグルボタンが出るようになる)。その状態で自分の記録のハートを押すと、`likeWorkout`が呼ばれ`POST /workouts/:id/reactions`がバックエンドの`400 cannot_react_to_own_workout`で弾かれる(具体例7参照)。`catch`は空実装のため、画面上は何も起きたように見えず、Networkタブを見て初めて400が返っていることに気づける。**フロントの分岐を外しても、最終的にはバックエンドが弾く**ことが確認できる。試したら元に戻すこと
+
+## 具体例7から読み取れる設計上の判断
+
+- **「操作できない」をエラー表示ではなくUIの出し分けで防ぐ** — バックエンドの`cannot_react_to_own_workout`(400)を`catch`して専用メッセージを出す作りにはせず、そもそも自分の記録には別のボタン(いいね一覧を開く)を出すことで、エラーになる操作自体をUIから無くしている。具体例3の「オーナー限定操作のボタンを隠す」と同じ考え方
+- **トグルの状態はローカルに持たず、直前のAPIレスポンスを都度反映する** — `reactedByMe`を送信前に予測して切り替える(楽観的更新)のではなく、レスポンスが返ってから書き換える。連打は`likePending`というフロント側の簡易ロックで防ぎ、バックエンドの冪等性([backend-guide.md具体例7](./backend-guide.md))は「万一フロントの防止をすり抜けても壊れない」ための保険という位置づけになる
+- **一覧APIに無い値は手動で同期し、ズレの余地を残す** — `commentCount`は一覧APIのレスポンスに含まれる集計値のため、コメント投稿・削除のたびにフロントの手で`+1`/`-1`する必要がある。他のユーザーが同じ記録にコメントしてもこの画面は再取得しないため、リアルタイムに同期されるわけではない(リロードすれば直る一時的なズレ)
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
