@@ -933,9 +933,183 @@ workoutsRouter.delete('/:id/comments/:commentId', requireAuth, async (req, res) 
 - **冪等性は「DBの状態」と「副作用(通知)」で別々に保証する** — UNIQUE制約違反は`upsert`が吸収する一方、通知を作るかどうかは`upsert`より前に取得した`alreadyReacted`の値で判定する。1つの`if`に両方をまとめず、責務を分けている
 - **「所有者かどうか」の404は、対象ごとに判定を重ねる** — コメント削除は「記録が見えるか」(`findAccessibleWorkout`)と「そのコメントが自分のものか」(`where: { ..., userId }`)を両方満たさないと`comment`が見つからず404になる。記録の持ち主であっても他人のコメントは消せない、という制約がこの2段階に表れている
 
+## 具体例8：グループのランキングを集計するとき
+
+もう1つの例として、[`backend/src/routes/groups.ts`](../../backend/src/routes/groups.ts)のGET `/groups/:id/ranking`を追う。具体例5(統計)は「自分1人分」の集計だったが、こちらは「グループの全メンバー分」を横に並べて順位を付ける集計になる。加えて、統計にはなかった「同着の扱い」「合計挙上重量とは別軸の指標(継続日数)を同じレスポンスに混ぜる」という2つの新しい設計判断が入っている。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。2つのアカウント(オーナーA・メンバーB)を具体例1の手順で作り、Aでグループを作ってBを招待コードで参加させておく(具体例3・6と同じ手順。`groupId`を控える)。
+
+Aで公式種目(ベンチプレス)のセットを2つ記録する。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d "{\"performedAt\": \"$(date +%F)\"}"
+# => {"id":"<workoutId>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":60,"reps":8}'
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"exerciseId":"<benchId>","weightKg":65,"reps":5}'
+```
+
+Bは**自重種目(プッシュアップ)のセットのみ**を記録する(`weightKg`を指定しない)。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d "{\"performedAt\": \"$(date +%F)\"}"
+# => {"id":"<workoutIdB>", ...}
+
+curl -s -X POST http://localhost:3001/workouts/<workoutIdB>/sets \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d '{"exerciseId":"<pushupId>","reps":20}'
+```
+
+ここでAの週間ランキングを取得する。
+
+```bash
+curl -s -b cookie.txt "http://localhost:3001/groups/<groupId>/ranking?period=week"
+```
+
+```json
+{"period":"week","exerciseId":null,"ranking":[
+  {"userId":"<Aのid>","displayName":"...","totalVolumeKg":805,"daysTrained":1,"attendanceStamp":"bronze","rank":1},
+  {"userId":"<Bのid>","displayName":"...","totalVolumeKg":0,"daysTrained":1,"attendanceStamp":"bronze","rank":2}
+]}
+```
+
+ここで2つ注目してほしい。
+
+- **Bの`totalVolumeKg`は`0`だが、一覧から消えていない**。具体例5(統計)の`GET /stats/volume`では自重セットは合計そのものから除外され、記録が無い日は結果に現れなかった。しかしランキングは「記録した/していない」を可視化する意味合いが強いため、自重種目でも0kgとして一覧に含める設計になっている(統計とランキングで自重セットの扱いが違う)
+- **Bの`daysTrained`は`1`(=自重セットでもトレした日としてカウントされている)**。`totalVolumeKg`が0でも、直近28日にトレした日数を見る`daysTrained`・`attendanceStamp`は別の集計なので、こちらには影響しない。「挙上重量では0kgだが、継続の実績としては数えられている」という2つの指標のズレが実際に見える
+
+続けて、種目別ランキング(`exerciseId`クエリ)も試してほしい。
+
+```bash
+curl -s -b cookie.txt "http://localhost:3001/groups/<groupId>/ranking?period=week&exerciseId=<pushupId>"
+```
+
+```json
+{"period":"week","exerciseId":"<pushupId>","ranking":[
+  {"userId":"<Aのid>", "totalVolumeKg":0, ..., "rank":1},
+  {"userId":"<Bのid>", "totalVolumeKg":0, ..., "rank":1}
+]}
+```
+
+プッシュアップを指定すると、AもBも記録が無い(またはあっても自重で0kg)ため、**2人とも`totalVolumeKg`が同じ`0`になり、`rank`も両方`1`になる**(同着)。この「同着の扱い」が次の「コードを実行順に追う」で見るポイント。
+
+### 2. コードを実行順に追う
+
+```ts
+// 参加・継続の可視化(非順位)用のスタンプ段階
+type AttendanceStamp = 'none' | 'bronze' | 'silver' | 'gold'
+function attendanceStamp(daysTrained: number): AttendanceStamp {
+  if (daysTrained >= 18) return 'gold'
+  if (daysTrained >= 7) return 'silver'
+  if (daysTrained >= 1) return 'bronze'
+  return 'none'
+}
+
+groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) { /* 404 */ }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    include: { user: { select: { displayName: true } } },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      workout: { userId: { in: memberIds }, deletedAt: null, ...(startDate ? { performedAt: { gte: startDate } } : {}) },
+      exercise: RANKING_OFFICIAL_EXERCISE_FILTER,
+      ...(exerciseId ? { exerciseId } : {}),
+    },
+    select: { weightKg: true, reps: true, workout: { select: { userId: true } } },
+  })
+
+  const volumeByUserId = new Map<string, number>(memberIds.map((id) => [id, 0]))
+  for (const set of sets) {
+    const weightKg = set.weightKg === null ? 0 : Number(set.weightKg)
+    const uid = set.workout.userId
+    volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * set.reps)
+  }
+  // ...(daysTrainedByUserIdの集計は別クエリ。後述)
+
+  const sorted = members
+    .map((m) => ({
+      userId: m.userId,
+      displayName: m.user.displayName,
+      totalVolumeKg: volumeByUserId.get(m.userId) ?? 0,
+      daysTrained: daysTrainedByUserId.get(m.userId) ?? 0,
+      attendanceStamp: attendanceStamp(daysTrainedByUserId.get(m.userId) ?? 0),
+    }))
+    .sort((a, b) => b.totalVolumeKg - a.totalVolumeKg || a.displayName.localeCompare(b.displayName))
+
+  // 同着は同順位、次の順位は人数分スキップする方式(例: 1,2,2,4)
+  let rank = 0
+  let prevVolumeKg: number | null = null
+  const ranking = sorted.map((entry, index) => {
+    if (entry.totalVolumeKg !== prevVolumeKg) {
+      rank = index + 1
+      prevVolumeKg = entry.totalVolumeKg
+    }
+    return { ...entry, rank }
+  })
+
+  res.status(200).json({ period: parsed.data.period, exerciseId: exerciseId ?? null, ranking })
+})
+```
+
+| ステップ | 何が起きるか | Bの自重セットへの影響 |
+|---|---|---|
+| ① `prisma.workoutSet.findMany({ where: {...} })` | 具体例5の`/stats/volume`と似た`where`だが、**`weightKg: { not: null }`が無い**。自重セット(`weightKg`が`null`)も`sets`に含まれる | Bのプッシュアップのセットが`sets`に入る |
+| ② `weightKg = set.weightKg === null ? 0 : Number(set.weightKg)` | `null`を除外するのではなく`0`として計算に使う。掛け算(`weightKg * reps`)の結果も`0`になるので、合計への寄与は無いが、「1件のトレとして数えられている」という次のポイントに繋がる | `0 * 20 = 0`が加算される(実質変化なし) |
+| ③ `volumeByUserId = new Map(memberIds.map((id) => [id, 0]))` | 全メンバーを先に`0`で初期化してから積み上げる。ただし後述のとおり、④の`?? 0`で結局同じ結果になるため、実質的には冗長な初期化になっている(「自分で壊して確かめる」参照) | - |
+| ④ `totalVolumeKg: volumeByUserId.get(m.userId) ?? 0` | `sorted`は`members`(グループの全メンバー)を元に組み立てるため、`sets`に1件もヒットしなかったメンバーも`?? 0`で必ず一覧に入る。統計(`/stats/volume`)が「該当日のみ返す」のとは対照的に、ランキングは「メンバー全員を常に返す」設計 | Bも一覧から漏れない |
+| ⑤ `.sort((a, b) => b.totalVolumeKg - a.totalVolumeKg \|\| a.displayName.localeCompare(b.displayName))` | 合計挙上重量の降順。同点の場合は表示名の昇順(`localeCompare`)で安定させる。ソート自体は「同じ値でもどちらかを先に置く」処理で、同着かどうかの判定(⑥)とは別 | - |
+| ⑥ `if (entry.totalVolumeKg !== prevVolumeKg) { rank = index + 1 }` | 直前のエントリと`totalVolumeKg`が同じなら`rank`を更新せず、直前と同じ順位を使う。プッシュアップ指定で両者とも`0`になったとき、2人目で`entry.totalVolumeKg !== prevVolumeKg`が`false`になり、Aと同じ`rank: 1`になる。もしこの分岐が無いと`sort`後の`index`をそのまま`rank`にすることになり、同着でも1,2と別の順位が振られてしまう | プッシュアップ指定時、AもBも`rank: 1`になる |
+
+`daysTrained`・`attendanceStamp`側の集計はもう1つの独立したクエリ。
+
+```ts
+const attendanceCounts = await prisma.workout.groupBy({
+  by: ['userId'],
+  where: {
+    userId: { in: memberIds },
+    deletedAt: null,
+    performedAt: { gte: recentWindowStart(new Date()) }, // 直近28日
+    sets: { some: {} }, // セットが1件以上ある日のみ(自重・カスタム種目でもよい)
+  },
+  _count: { _all: true },
+})
+```
+
+このクエリには`exercise: RANKING_OFFICIAL_EXERCISE_FILTER`のような種目の絞り込みが無い。「トレした日数」は挙上重量の対象種目とは無関係に数えるという設計であり、`period`(週間/月間/通算)や`exerciseId`(種目別)を切り替えても、`daysTrained`・`attendanceStamp`の値は**常に直近28日固定**で変わらない(フロント側で「継続」タブが期間タブを持たない理由もここに繋がる)。
+
+### 3. 自分で壊して確かめる
+
+- `const volumeByUserId = new Map<string, number>(memberIds.map((id) => [id, 0]))`を一時的に`new Map<string, number>()`に変えて保存する(`tsx watch`が自動再起動)。その状態で同じcurlを送っても、**結果は変わらない**(実際に試すと`totalVolumeKg`は変わらずBも一覧に残る)。理由は上の④で見た`volumeByUserId.get(m.userId) ?? 0`が、`sorted`を`members`から組み立てる際に同じ「無ければ0」を保証しているため。コード中のコメント(「記録が無いメンバーも0kgで一覧に含めるため、先に全メンバーを0で初期化しておく」)は意図の説明として書かれているが、実際にその役割を担っているのは④の`?? 0`の方であることが、壊してみて初めてわかる。**試したら必ず元に戻すこと**
+- `sorted.map((entry, index) => { rank = index + 1; return { ...entry, rank } })`のように、同着判定の`if`を外して常に`index + 1`を使う形に一時的に変えて保存する。その状態でプッシュアップ指定(`exerciseId=<pushupId>`)のランキングを取得すると、AとBが両方`0kg`なのに`rank`が`1`と`2`に分かれてしまう(実際に試すとそうなる)。「同点なら同じ順位」という表示上の前提が、この1つの`if`だけで支えられていることが体感できる。**試したら必ず元に戻すこと**
+- `exercise: RANKING_OFFICIAL_EXERCISE_FILTER`を`sets`の`where`から一時的に外して保存する。Aが公式種目とは別にカスタム種目(例:`weightKg:100, reps:3`)を記録していると、外した状態では合計にその300kg分が上乗せされてしまう(具体例5の`/stats/volume`と同じ壊し方)。**試したら必ず元に戻すこと**
+
+## 具体例8から読み取れる設計上の判断
+
+- **「常に全員を返す」設計にする** — 統計(`/stats/volume`)は該当日のみを返すが、ランキングは所属メンバー全員を常に返す。順位を見せる以上、記録が無い人を除外すると「誰が何位か」が分からなくなるため
+- **自重セットの扱いを機能ごとに変える** — 統計は自重セットを合計から除外するが、ランキングは「0kgとして扱い一覧には含める」。同じ`weightKg: null`というデータでも、「集計から見えなくする」か「0として参加させる」かは機能の目的次第で変えている(`schema.md`「Phase4の検討結果」参照)
+- **「順位」と「継続」を別クエリ・別ロジックで独立させる** — `totalVolumeKg`(期間・種目で変わる)と`daysTrained`/`attendanceStamp`(常に直近28日固定)は、同じレスポンスに混ぜて返しつつ、算出方法は完全に独立している。フロント側が「継続」タブを別軸の一覧として扱えるのは、バックエンド側でこの2つが最初から混ざらない設計になっているため
+- **同着の順位計算は「直前のエントリとの比較」1箇所に集約する** — `rank`を`index`から機械的に振るのではなく、`prevVolumeKg`との比較で「同じなら据え置き」を明示的に書く。この1つの`if`が無いと、同点でも別々の順位が付いてしまう
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
 - `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(自己ベスト更新・通算の節目・久しぶりの復帰)の再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
 - `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
+- `backend/src/routes/groups.ts`のGET `/groups/:id/ranking/default-exercise`・GET `/groups/:id/ranking/exercises` — 具体例8では触れなかった、種目別ランキングの種目セレクタまわり。前者は「直近28日で最もセット数が多い公式種目」を`groupBy`で求めて初期選択に使い、後者は「グループの誰かが記録したことのある公式種目」だけに絞った候補一覧を返す。どちらも同じ「表示順→名前順」のタイブレークを使う
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
