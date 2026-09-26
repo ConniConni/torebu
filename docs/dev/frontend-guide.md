@@ -960,6 +960,111 @@ const sections = computed(() =>
 - **「消す」ではなく「印を付ける」形でキャッシュを書き換える** — `deleteExercise`は配列から要素を取り除かず、`deletedAt`を立てた新しいオブジェクトに置き換える。バックエンドの`GET /exercises`が削除済みの種目を返し続けるのと対になる実装で、これにより③の既存カードは削除後も種目名を解決し続けられる
 - **「選べなくする」制約は一覧側の表示フィルタだけが担い、既存カードには及ばない** — `!deletedAt`によるフィルタは④の選択候補・⑦の重複候補にしか掛かっておらず、③の既存カードのセット追加ボタンには掛かっていない。「新規に選べない」と「継続して使える」という2つの異なる制約を、画面側で分けて実装するのではなく、片方(新規に選べない)だけをフロントが担当し、もう片方の最終防衛はバックエンドの`isExerciseVisible`に委ねている
 
+## 具体例12：新規登録するとき
+
+もう1つの例として、[`pages/register.vue`](../../frontend/app/pages/register.vue)と[`composables/useAuth.ts`](../../frontend/app/composables/useAuth.ts)の`register()`を追う。backend-guide.md具体例12で見たとおり、バックエンドの`POST /auth/register`は「アカウントを作るだけでログイン状態にはしない」設計になっている。この差をフロント側がどう埋めているかがここでの主題。
+
+### 1. まず動かしてみる
+
+`frontend`を`npm run dev`で起動した状態で、実際にブラウザ(`http://localhost:3000/`)を操作する。直接`/register`のURLを開くのではなく、トップページの「新規登録」リンクをクリックしてSPA内遷移で移動する。
+
+表示名・メールアドレス・パスワード(確認含む)・生年月(または「回答しない」)・性別・職業を入力し、**利用規約・プライバシーポリシーの両方を一度開いてから**同意チェックを入れて「登録する」を押す。ここで2つ試してほしい。
+
+- **利用規約・プライバシーポリシーを開かずに同意チェックを入れようとする** → チェックボックスが`disabled`になっていて反応しない。片方だけ開いた状態でもまだ反応しない。両方開いて初めてチェックできるようになる
+- **登録が成功した直後の画面** → `/`へ遷移し、**ログイン済みの状態でホーム画面が表示される**(登録専用の完了画面や、ログインを促す画面は挟まない)。バックエンドのレスポンス単体では起きないはずのこの遷移が、フロント側の何によって実現されているかを次で追う
+
+続けてもう1つ、既にログイン済みの状態で`/register`をブラウザのURLバーから直接開くとどうなるか試してみる。フォームは表示されず、即座に`/`へ戻される。
+
+### 2. コードを実行順に追う
+
+まず、ログイン済みなら`/register`に入れない仕組み。
+
+```ts
+// middleware/guest.ts
+export default defineNuxtRouteMiddleware(async () => {
+  const { user, fetchMe } = useAuth()
+  if (!user.value) {
+    await fetchMe()
+  }
+  if (user.value) {
+    return navigateTo('/')
+  }
+})
+```
+
+```ts
+// register.vue
+definePageMeta({ middleware: 'guest' })
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `definePageMeta({ middleware: 'guest' })` | このページに入る前に`guest`ミドルウェアが必ず実行される |
+| ② `if (!user.value) { await fetchMe() }` | `useState`で共有される`user`がまだ無ければ、`GET /auth/me`でログイン状態を問い合わせて確定させる(具体例2参照) |
+| ③ `if (user.value) { return navigateTo('/') }` | 確定した結果、ログイン済みなら`/`へリダイレクト。直接URLを開いたときに弾かれたのはここ |
+
+次に、利用規約・プライバシーポリシーを開くまで同意チェックが押せない仕組み。
+
+```ts
+const hasViewedTerms = ref(false)
+const hasViewedPrivacy = ref(false)
+const canAgreeToTerms = computed(() => hasViewedTerms.value && hasViewedPrivacy.value)
+
+const openTermsModal = ref<'terms' | 'privacy' | null>(null)
+function showTermsModal(type: 'terms' | 'privacy') {
+  openTermsModal.value = type
+  if (type === 'terms') hasViewedTerms.value = true
+  else hasViewedPrivacy.value = true
+}
+```
+
+```html
+<input v-model="agreedToTerms" type="checkbox" required :disabled="!canAgreeToTerms" />
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `showTermsModal('terms')` | 「利用規約」ボタンを押すとモーダルを開くと同時に`hasViewedTerms`を`true`にする。**モーダルを閉じたタイミングではなく、開いた瞬間**にフラグが立つ点に注意(実際に最後まで読んだかまでは確認できない、というゆるい担保) |
+| ② `canAgreeToTerms`(computed) | `hasViewedTerms`・`hasViewedPrivacy`の両方が`true`になって初めて`true`になる。片方だけ開いた段階でチェックボックスがまだ反応しなかったのはこの条件のため |
+| ③ `:disabled="!canAgreeToTerms"` | `canAgreeToTerms`が`false`の間はチェックボックス自体が`disabled`属性を持ち、クリックしても状態が変わらない |
+
+最後に、登録成功後にログイン済み状態で`/`へ遷移する仕組み(今回の主題)。
+
+```ts
+// useAuth.ts
+// 登録APIはユーザー作成のみでログイン状態にはならないため、登録後に続けてログインする
+async function register(payload: RegisterPayload) {
+  await $fetch('/api/auth/register', { method: 'POST', body: payload })
+  return login({ email: payload.email, password: payload.password })
+}
+```
+
+```ts
+// register.vue
+await register({ email: email.value, password: password.value, /* ... */ })
+await navigateTo('/')
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `$fetch('/api/auth/register', ...)` | backend-guide.md具体例12の`POST /auth/register`を呼ぶ。成功しても`user`(`useState`で共有されるログイン中ユーザー)はまだ`null`のまま |
+| ② `return login({ email, password })` | `register()`の中で、今しがた登録した`email`・`password`を使い、具体例2で読んだ`login()`(`POST /auth/login`)を**続けて呼ぶ**。ここで初めて`user.value`にログイン中ユーザーの情報が入る | 
+| ③ `register.vue`側の`await register(...)` | `register()`の完了を待つ時点で、内部の`login()`まで完了している。呼び出し側(`register.vue`)は「ログインも一緒にやっている」ことを意識しなくてよい |
+| ④ `await navigateTo('/')` | `user.value`が既にセット済みの状態で`/`へ遷移するため、ホーム画面はログイン済み表示になる。**別のAPI呼び出しをもう1段挟んでいるわけではなく、`register()`という1つの関数呼び出しの中に2回のAPIコールが隠れている** |
+
+重複メールアドレスで登録しようとしたときのエラー表示(「このメールアドレスは既に登録されています」)は、具体例2の`authErrorMessage()`・`ERROR_MESSAGES`がそのまま使われている。`ERROR_MESSAGES`に`email_already_registered: 'このメールアドレスは既に登録されています'`が登録済みで、`register.vue`の`catch`節が`authErrorMessage(error)`を呼ぶだけで済んでいる。
+
+### 3. 自分で壊して確かめる
+
+- `useAuth.ts`の`register()`から`return login(...)`を一時的にコメントアウトして保存する(HMRで反映)。その状態で新規登録フォームを送信すると、`POST /auth/register`自体は`201`で成功する(Networkタブで確認できる)のに、`/`へ遷移した後の画面が**ログイン前のWelcomeScreen(「ログイン」「新規登録」ボタンが並ぶ画面)のまま**になる。登録は成功しているのにログインした感触が得られない、という体験の悪さが「続けて`login()`を呼ぶ」1行だけで支えられていることが分かる。**試したら必ず元に戻すこと**
+- `canAgreeToTerms`の`computed`を一時的に`computed(() => true)`に変えて保存する。利用規約・プライバシーポリシーを一度も開かなくても同意チェックが押せるようになり、Issue #163が防ごうとした「リンクを開かずに同意できてしまう」状態を再現できる。**試したら必ず元に戻すこと**
+
+## 具体例12から読み取れる設計上の判断
+
+- **「バックエンドの2段階」をフロントの1回の関数呼び出しに畳み込む** — `POST /auth/register`(作成)と`POST /auth/login`(ログイン)という2つのAPI呼び出しを、`useAuth.ts`の`register()`という1つの関数の中に隠している。呼び出し側の`register.vue`は「登録すればログイン状態になる」という体験だけを意識すればよく、バックエンドがそれを2つのAPIに分けている理由(具体例2・backend-guide.md具体例12参照)を知らなくても書ける
+- **同意チェックの「有効化条件」を専用のcomputedに切り出す** — `canAgreeToTerms`という1つの`computed`に条件を集約することで、テンプレート側は`:disabled="!canAgreeToTerms"`と`v-if="!canAgreeToTerms"`(ヒント文表示)の2箇所から同じ条件を参照するだけで済む。条件をテンプレート内に直接書いていたら、2箇所で書き方がずれる可能性があった
+- **ページ単位のガードはmiddlewareに集約する** — 「ログイン済みなら`/register`に入れない」という制約は、`register.vue`自身にif文を書くのではなく`middleware: 'guest'`という宣言だけで済ませている。同じ`guest`ミドルウェアは`/login`にも使われており(次に読むファイル参照)、「未ログイン専用ページ」という分類をミドルウェア1つで横断的に表現している
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
