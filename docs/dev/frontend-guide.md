@@ -719,6 +719,127 @@ async function onSelectMetric(next: Metric) {
 - **`ref`にしない状態もある** — `exerciseModeLoaded`はあえて`ref`にせず素の変数にしている。Vueのリアクティブ変数は「画面に反映すべき値」に使うものという前提があり、単なる「取得済みフラグ」まで`ref`にすると、意図しない再描画やwatchの対象になりうる
 - **早期returnのガードは、呼び出し元の状態変更とセットで検証する** — `load()`の冒頭ガードは`ranking.value`だけ気にして書かれており、直前に呼び出し元(`onSelectMetric`)が`pending.value = true`にしていることを見落としていた。関数を分けるほど、「呼び出し元がどんな状態にしてから呼ぶか」を書いた側が意識しないと、今回のような後始末漏れが起きる
 
+## 具体例9：パスワードを再設定・変更するとき
+
+[`backend-guide.md`](./backend-guide.md)で追った3つのエンドポイントを、フロント側の3つの画面([`frontend/app/pages/password-reset/index.vue`](../../frontend/app/pages/password-reset/index.vue)・[`[token].vue`](../../frontend/app/pages/password-reset/%5Btoken%5D.vue)・[`frontend/app/pages/mypage/password.vue`](../../frontend/app/pages/mypage/password.vue))がどう呼んでいるかを見る。具体例2の`guest`/`auth`ミドルウェアが、ログイン関連以外の画面でも同じ形で使われていることが確認できる。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動する。ログアウトした状態で`/login`を開き、「パスワードをお忘れの方」リンク(アプリ内リンク。フルリロードではない)から`/password-reset`へ遷移する。
+
+- メールアドレスを入力して送信すると、フォームが完了メッセージに切り替わる(`isCompleted`)。**入力したメールアドレスが実際に登録されているかどうかに関わらず同じメッセージになる**([backend-guide.md具体例9](./backend-guide.md)のメール列挙対策がそのままフロントの見た目にも表れている)
+- ログイン中に`/password-reset`を直接URLバーに入力して開く(フルリロード) → **`/`へ自動的に戻される**。`guest`ミドルウェア(具体例2参照)が効いているため、ログイン中はこの画面自体を開けない
+- バックエンドのターミナルログ(またはメール本文)のリンクを実際に開くと`/password-reset/<token>`に着地し、新しいパスワードを2回入力して送信すると**`/login`へ遷移する**(ログイン状態にはならない。`resetPassword()`は`user`を更新しない)
+- ログイン中に「マイページ」→「パスワードを変更」から`/mypage/password`へ遷移し、現在のパスワードを間違えて送信すると、画面遷移せずにエラーメッセージだけが表示される。正しく変更すると完了メッセージに切り替わり、ページを離れずに`GET /api/auth/me`等で再確認しても**ログイン状態のまま**であることが確認できる
+
+### 2. コードを実行順に追う
+
+3画面とも構造は同じで、[`useAuth()`](../../frontend/app/composables/useAuth.ts)の対応する関数を呼ぶだけ。
+
+```ts
+// useAuth.ts
+async function requestPasswordReset(email: string) {
+  await $fetch('/api/auth/password-reset-requests', { method: 'POST', body: { email } })
+}
+
+async function resetPassword(token: string, password: string) {
+  await $fetch('/api/auth/password-resets', { method: 'POST', body: { token, password } })
+}
+
+async function changePassword(currentPassword: string, newPassword: string) {
+  await $fetch('/api/auth/password-changes', { method: 'POST', body: { currentPassword, newPassword } })
+}
+```
+
+3つとも`login()`(具体例2)と違って**戻り値を`user`に代入しない**。`requestPasswordReset()`は常に同じレスポンス(`{ok:true}`)しか返らないため代入する意味が無く、`resetPassword()`はログイン状態にしない設計、`changePassword()`は`user`の中身(表示名等)が変わるわけではないため、そもそも代入する対象が無い。
+
+```ts
+// password-reset/index.vue
+async function onSubmit() {
+  errorMessage.value = ''
+  isSubmitting.value = true
+  try {
+    await requestPasswordReset(email.value)
+    isCompleted.value = true
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `requestPasswordReset(email.value)` | 常に`202`が返るため、`catch`に落ちるのはネットワークエラー等よほどの場合だけ。「メールアドレスが存在しない」という結果分岐がそもそも存在しない |
+| ② `isCompleted.value = true` | ①が例外を投げない限り必ず実行される。フォームを完了メッセージに切り替えるこの1行が、「入力内容に関わらず同じ見た目になる」という observed 動作の実体 |
+
+`[token].vue`はルートパラメータからトークンを受け取る点が新しい。
+
+```ts
+// password-reset/[token].vue
+const route = useRoute()
+const token = route.params.token as string
+
+async function onSubmit() {
+  errorMessage.value = ''
+  if (password.value !== passwordConfirmation.value) {
+    errorMessage.value = 'パスワードが一致しません'
+    return
+  }
+  isSubmitting.value = true
+  try {
+    await resetPassword(token, password.value)
+    await navigateTo('/login')
+  } catch (error) {
+    errorMessage.value = authErrorMessage(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `password.value !== passwordConfirmation.value` | `resetPassword()`を呼ぶ前に、確認入力の一致をフロント側だけでチェックする(バックエンドにはこのチェックは無い。`password`は1つしか送っていない) |
+| ② `resetPassword(token, password.value)` | `token`はURLの動的セグメント(`route.params.token`)からそのまま取り出す。フォーム自体にはトークンの入力欄が無い |
+| ③ `await navigateTo('/login')` | 成功時は`user`を何も更新せず`/login`へ送るだけ。ログイン画面のフォームに新しいパスワードを入力し直す必要がある(具体例2の`login()`とは独立した経路) |
+| ④ 失敗時(`invalid_or_expired_token`) | `authErrorMessage()`が[`useAuth.ts`](../../frontend/app/composables/useAuth.ts)の`ERROR_MESSAGES`でメッセージに変換する。同じトークンで2回目を送るとここに落ちる([backend-guide.md具体例9](./backend-guide.md)の使い切りの結果) |
+
+`mypage/password.vue`はログイン必須(`middleware: 'auth'`)で、`changePassword()`の失敗時のエラーコードが2種類に分かれる。
+
+```ts
+// mypage/password.vue
+try {
+  await changePassword(currentPassword.value, newPassword.value)
+  isCompleted.value = true
+} catch (error) {
+  errorMessage.value = authErrorMessage(error)
+}
+```
+
+```ts
+// useAuth.ts
+const ERROR_MESSAGES: Record<string, string> = {
+  // ...
+  invalid_current_password: '現在のパスワードが正しくありません',
+  same_as_current_password: '現在と異なるパスワードを入力してください',
+}
+```
+
+`invalid_current_password`(現在のパスワードが違う)と`same_as_current_password`(現在と同じパスワードを新しいパスワードに指定した)は、どちらも`400`だがバックエンド側([backend-guide.md具体例9](./backend-guide.md))で別のエラーコードとして区別されており、フロント側もそれぞれ別の日本語メッセージに変換している。ログイン(具体例2)の`invalid_credentials`が2つの原因をあえて1つにまとめていたのとは対照的に、こちらはログイン中の本人が相手なので、原因を分けて伝えても列挙対策上の問題が無い。
+
+### 3. 自分で壊して確かめる
+
+- `password-reset/index.vue`の`isCompleted.value = true`を`try`ブロックの外(`requestPasswordReset`の前)に移動して保存する(HMRで反映)。入力欄を空にして送信すると、`required`属性がブラウザの標準バリデーションで止めてくれるためこのままでは気づきにくいが、開発者ツールで`required`を外してから空欄で送信すると、`400 invalid_request`が返っているにも関わらず画面は完了メッセージになってしまう。**試したら必ず元に戻すこと**
+- `mypage/password.vue`の`v-if="isCompleted"`の分岐を一時的に外して常にフォームを表示させたままにすると、変更成功後も同じフォームが表示され続ける。`currentPassword`・`newPassword`の`ref`はクリアしていないため、値も残ったまま(送信し直すと、今度は新しいパスワードが「現在のパスワード」欄に入ったままの状態で送ることになり、`invalid_current_password`になる)。**試したら必ず元に戻すこと**
+
+## 具体例9から読み取れる設計上の判断
+
+- **APIのレスポンスが常に同じなら、フロント側の分岐も無くなる** — `requestPasswordReset()`はバックエンドが常に同じ結果を返す前提のため、成功時の分岐が「常に完了メッセージを出す」の1パターンしかない。バックエンド側の列挙対策(具体例9)が、フロント側のコードをシンプルにする効果も持っている
+- **ログイン状態を更新するAPI呼び出しと、更新しないAPI呼び出しを混在させない** — `login()`(具体例2)は`user.value`を更新するが、`requestPasswordReset()`・`resetPassword()`・`changePassword()`はどれも更新しない。「ログイン状態が変わりうる操作かどうか」が関数の戻り値の使い方(代入する/しない)にそのまま表れている
+- **列挙対策が要らない場面ではエラーコードを分けたままにする** — ログイン失敗は`invalid_credentials`1種類にまとめる一方、ログイン中のパスワード変更失敗は`invalid_current_password`/`same_as_current_password`の2種類のまま日本語メッセージに変換している。「本人しか呼べない操作かどうか」で、エラーコードを統合するかどうかの方針が変わる
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
