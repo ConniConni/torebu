@@ -1831,6 +1831,102 @@ workoutsRouter.get('/', requireAuth, async (req, res) => {
 - **「同じ日に複数件」を禁止せず、順序の保証で対応する** — `performedAt`の重複を防ぐDB制約・バリデーションはどこにも無い(フロントの通常操作では③「今日の記録を始める」が既存のworkoutを再利用するため起きにくいだけ)。その代わり一覧取得側が`createdAt`をタイブレークに使うことで、「同じ日が複数件あっても表示順は常に決まっている」という一貫性だけを保証する設計になっている
 - **一覧は「有無」だけ、詳細は別リクエスト** — 一覧(`GET /workouts`)は`_count`で件数の有無しか返さず、セットの中身(`weightKg`・`reps`等)は返さない。中身が要る場面(②ホームの選択日の内訳)は[frontend-guide.md具体例14](./frontend-guide.md)で見るように`GET /workouts/:id`を都度呼ぶ設計になっており、一覧のペイロードを軽く保っている
 
+## 具体例15：ワークアウト記録の詳細を取得するとき
+
+対応するエンドポイントは[`backend/src/routes/workouts.ts`](../../backend/src/routes/workouts.ts)のGET `/workouts/:id`。具体例14(一覧取得)の`hasSets`だけでは分からない「セットの中身」と「種目カードの並び」を返す。一覧には無い2つの並び順ロジックを持つ点が違い：①`sets`は`setOrder`(種目ごとに1からリセットされる連番)でまず並ぶが、異なる種目間では頻繁に同値になるため`createdAt`をtie-breakに使う(Issue #226)、②種目カード自体の並び(`exercises`)は`sets`とは別のテーブル(`WorkoutExercise`)の`sortOrder`で決まる(Issue #228)。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動し、具体例1の手順でログインしておく(`cookie.txt`)。今日の日付でworkoutを1件作り、`GET /exercises`から控えた2種類の種目ID(`<squatId>`・`<benchId>`)を使って、**先にスクワット、次にベンチプレス**の順でセットを1つずつ追加する。
+
+```bash
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -d '{"performedAt":"2026-09-27"}'
+# => {"id":"<workoutId>",...}
+
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -d '{"exerciseId":"<squatId>","weightKg":60,"reps":8}'
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workoutId>/sets \
+  -H "Content-Type: application/json" -d '{"exerciseId":"<benchId>","weightKg":40,"reps":10}'
+```
+
+続けて詳細を取得する。
+
+```bash
+curl -s -b cookie.txt http://localhost:3001/workouts/<workoutId>
+# => {"id":"<workoutId>",...,"sets":[
+#      {"exerciseId":"<squatId>","setOrder":1,"weightKg":60,"reps":8},
+#      {"exerciseId":"<benchId>","setOrder":1,"weightKg":40,"reps":10}],
+#    "exercises":[
+#      {"exerciseId":"<squatId>","sortOrder":1},
+#      {"exerciseId":"<benchId>","sortOrder":2}]}
+```
+
+**2つとも`setOrder`が`1`**(実際に試すとそうなる)。種目ごとに1からリセットされる連番だからで、これがコード冒頭のコメントの「異なる種目間では頻繁に同値になる」の実例になる。それでも`sets`配列の並び自体は「スクワット→ベンチプレス」(=先に作った方が先)で安定している。これが`createdAt`のtie-breakの効果。
+
+次に、`PATCH /workouts/:id/exercises/:workoutExerciseId`で種目カードの並びだけを入れ替える(`<workoutExerciseId>`は上のレスポンスの`exercises[1].id`、ベンチプレス側)。
+
+```bash
+curl -s -b cookie.txt -X PATCH http://localhost:3001/workouts/<workoutId>/exercises/<benchWorkoutExerciseId> \
+  -H "Content-Type: application/json" -d '{"sortOrder":1}'
+
+curl -s -b cookie.txt http://localhost:3001/workouts/<workoutId>
+# => "exercises"は[{"exerciseId":"<benchId>","sortOrder":1}, {"exerciseId":"<squatId>","sortOrder":2}]に変わる
+#    "sets"は変わらず「スクワット→ベンチプレス」のまま(実際に試すとそうなる)
+```
+
+`exercises`(カードの並び)が入れ替わっても、**`sets`(フラットな配列自体の並び)は一切影響を受けない**。この2つが完全に独立したクエリ・独立した並び順であることが、ここで初めて体感できる(一覧取得の`hasSets`と並び順が独立していた具体例14と同じ構造)。
+
+### 2. コードを実行順に追う
+
+```ts
+workoutsRouter.get('/:id', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const workout = await findOwnWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const [sets, exercises] = await Promise.all([
+    prisma.workoutSet.findMany({
+      where: { workoutId: workout.id },
+      orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }],
+    }),
+    prisma.workoutExercise.findMany({
+      where: { workoutId: workout.id },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ])
+
+  res.status(200).json({
+    ...serializeWorkout(workout, sets.length > 0),
+    sets: sets.map(serializeSet),
+    exercises: exercises.map(serializeWorkoutExercise),
+  })
+})
+```
+
+| ステップ | 何が起きるか | このときの値(上のcurlを一通り実行した後) |
+|---|---|---|
+| ① `findOwnWorkout(userId, ...)` | 具体例1と同じ、自分の・ソフトデリートされていないworkoutだけを`findFirst`で取る(他人・削除済みは404、IDOR対策) | 見つかる |
+| ② `prisma.workoutSet.findMany({ orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }] })` | `WorkoutSet`をすべて取得。まず`setOrder`昇順、**同値のときだけ`createdAt`昇順**で決着させる | スクワット(`setOrder:1`、先に作成)→ベンチプレス(`setOrder:1`、後に作成)の順 |
+| ③ `prisma.workoutExercise.findMany({ orderBy: { sortOrder: 'asc' } })` | ②とは別のテーブル(`WorkoutExercise`)を、`sortOrder`昇順で取得。②の`sets`とは無関係な独立したクエリ | ベンチプレス(`sortOrder:1`、PATCH後)→スクワット(`sortOrder:2`) |
+| ④ `Promise.all([...])` | ②③を並行実行するだけで、互いの結果を参照し合わない(`sets`の並びは`exercises`を、`exercises`の並びは`sets`を一切見ない) | - |
+| ⑤ レスポンス組み立て | `sets`(②の結果)と`exercises`(③の結果)をそのまま別々のキーで返す。フロント側でこの2つを`exerciseId`で突き合わせてグルーピングする(frontend-guide.md具体例15参照) | `sets`はスクワット→ベンチプレスの順のまま、`exercises`はベンチプレス→スクワットの順 |
+
+②で見た「`setOrder`が同値でも順序が安定する」がIssue #226、③の`sortOrder`が種目カードの並びの正であり②とは無関係であることがIssue #228。curlで観察した「PATCHで`exercises`だけ入れ替わり`sets`は変わらない」の正体は、②③が同じ`Promise.all`の中にいながら完全に独立したクエリであることに尽きる。
+
+### 3. 自分で壊して確かめる
+
+- `prisma.workoutExercise.findMany`の`orderBy: { sortOrder: 'asc' }`を`{ sortOrder: 'desc' }`に変えて保存する(`tsx watch`が自動再起動)。その状態でGET `/workouts/:id`を取ると、**`exercises`の並びだけが逆転し(ベンチプレス→スクワットがスクワット→ベンチプレスに)、`sets`の並びは一切変わらない**(実際に試すとそうなる)。②③が本当に独立していることが、この1行の変更だけで体感できる。**試したら必ず元に戻すこと**
+- `orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }]`から`{ createdAt: 'asc' }`を消し`{ setOrder: 'asc' }`だけにして保存する。**この変更だけでは挙動が変わって見えないことがある**(実際に試すとそうなる)。`setOrder`が同値の行同士については、`ORDER BY`が追加で指定されていない以上Postgresは順序を保証せず、その場合はテーブルスキャンの物理的な並び(このケースでは行の作成順とほぼ一致する)をそのまま返すことが多いため、たまたま`createdAt`昇順と同じ結果になりやすい。tie-breakの必要性は「順序を保証しないと**将来のPostgresのバージョンやクエリプランの変化(インデックスが張られる、行が物理的に移動する等)で**壊れうる」という契約の話であり、手元で毎回目に見える形で再現するとは限らない。[frontend-guide.md具体例15](./frontend-guide.md)で見るように、フロント側は結局`setOrder`で再ソートするため、この不確実性の影響を実質的に吸収している。**試したら必ず元に戻すこと**
+
+## 具体例15から読み取れる設計上の判断
+
+- **「セットの中身」と「種目カードの並び」を別テーブル・別クエリに分ける** — `sets`(`WorkoutSet.setOrder`)と`exercises`(`WorkoutExercise.sortOrder`)は`Promise.all`で並行取得されるだけの、互いに無関係な2つのクエリ。種目カードの並び替え(Issue #228、`PATCH /workouts/:id/exercises/:workoutExerciseId`)はセットの記録順(`setOrder`)を一切変更しないため、「カードの表示順を変える」操作と「セットの記録順を変える」操作が構造的に分離されている
+- **同値になり得る並び順には、たとえ手元で再現しづらくても機械的にtie-breakを足す** — `setOrder`は種目ごとに1からリセットされる連番であるため、複数の種目を記録している限り必ず同値が発生する。Postgresは`ORDER BY`で指定されなかった列については順序を保証しないため、`createdAt`のtie-break(Issue #226)は「今のクエリプランでは崩れて見えない」こととは無関係に、契約として必要になる
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
@@ -1838,5 +1934,5 @@ workoutsRouter.get('/', requireAuth, async (req, res) => {
 - `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
 - `backend/src/routes/groups.ts`のGET `/groups/:id/ranking/default-exercise`・GET `/groups/:id/ranking/exercises` — 具体例8では触れなかった、種目別ランキングの種目セレクタまわり。前者は「直近28日で最もセット数が多い公式種目」を`groupBy`で求めて初期選択に使い、後者は「グループの誰かが記録したことのある公式種目」だけに絞った候補一覧を返す。どちらも同じ「表示順→名前順」のタイブレークを使う
 - `backend/src/routes/auth.ts`の`authRouter.post('/password-changes', ...)` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の仕組み。現在のパスワードの照合(`bcrypt.compare`)を先に行う点、成功時に未使用のメールリセット用トークンも失効させる点が、トークンベースの再設定とは違う
-- `backend/src/routes/workouts.ts`のGET `/workouts/:id` — 具体例14では触れなかった、1件分の詳細取得。`sets`のtie-break(`setOrder`→`createdAt`、Issue #226)と、種目カードの並び(`exercises`の`sortOrder`、Issue #228)が一覧には無いレスポンスとして加わる
+- `backend/src/routes/workouts.ts`のPOST `/workouts/:id/sets`内の`nextSetOrder()`・`ensureWorkoutExercise()` — 具体例15では触れなかった、`setOrder`・`sortOrder`が実際にどう採番されるか(削除で欠番が出ても採番はズレない設計、末尾への自動追加)
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか

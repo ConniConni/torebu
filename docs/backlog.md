@@ -112,7 +112,12 @@
       「具体例14」で対応済み（2026-09-27）。同じ日付に複数件ある場合の`createdAt`タイブレーク、
       `_count`による`hasSets`判定と並び順が独立した処理であること、フロント側は一覧の`hasSets`で
       カレンダー印を、選択日の記録は個別に`GET /workouts/:id`を叩いて中身を補う2段構えの設計まで扱った
-- [ ] ワークアウト詳細取得（`GET /workouts/:id`。セット・種目カードの並び順ロジック）
+- [x] ワークアウト詳細取得（`GET /workouts/:id`。セット・種目カードの並び順ロジック）—
+      backend-guide.md／frontend-guide.mdの「具体例15」で対応済み（2026-09-27）。`sets`の
+      tie-break（`setOrder`→`createdAt`、Issue #226）と種目カードの並び（`exercises`の
+      `sortOrder`、Issue #228）が完全に独立した2クエリであること、フロント側はカードの表示順を
+      `groupedSets`ではなく`<draggable v-model="session.exercises">`が直接持っている（`groupedSets`は
+      exerciseIdをキーにした中身の辞書でしかない）という、当初想定と異なる実装を検証して発見した点まで扱った
 - [ ] ワークアウトのメモ更新・ソフトデリート（`PATCH/DELETE /workouts/:id`。レスポンスの
       `deleted`フィールドの意味）
 - [ ] セット更新・削除（`PATCH/DELETE /workouts/:id/sets/:setId`）

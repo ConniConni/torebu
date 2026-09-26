@@ -1230,6 +1230,93 @@ watch(selectedWorkouts, (list) => { for (const workout of list) loadSummary(work
 - **一覧の並び順をフロントで作り直さない** — `selectedWorkouts`はサーバーが返した`workouts`配列を`filter`するだけで、独自のソートを挟まない。backend-guide.md具体例14で見た「`performedAt`→`createdAt`」のタイブレークが、バックエンドとフロントの2箇所に重複して実装されることなく、サーバー側の1箇所だけで保証されている
 - **「日付ごとの有無」と「記録ごとの中身」を別の粒度・別のタイミングで持つ** — `recordedDates`/`memoOnlyDates`(日付の`Set`、一覧取得時に一度に作る)と`workoutGroups`(`workoutId`ごとの詳細、選択されたときに都度取る)は、更新されるタイミングも参照する情報の粒度も異なる。カレンダー全体を毎回描くための軽い情報と、選ばれた日にしか要らない重い情報を分けることで、一覧取得1回で済むページと個別取得が必要なページの境界がコード上にも表れている
 
+## 具体例15：③記録作成画面が、種目カードとセットの並びをどう組み立てるか
+
+[backend-guide.md具体例15](./backend-guide.md)で追ったGET `/workouts/:id`(`sets`・`exercises`が別々の並び順を持つ)を、③記録作成画面(`workouts/new.vue`)がどう使うかを見る。対象は[`useWorkoutSession.ts`](../../frontend/app/composables/useWorkoutSession.ts)の`fetchSets`と、[`workouts/new.vue`](../../frontend/app/pages/workouts/new.vue)の`groupedSets`。②ホーム(`HomeScreen.vue`の`loadSummary`、具体例14)と同じ形のグルーピングをもう一度行っている画面だが、③はその場でセットを追加・削除・種目カードの並び替えを行う本体画面である分、`sets`と`exercises`が食い違う場面(削除・並び替え直後)がより起きやすい。
+
+### 1. まず動かして観察する
+
+`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく。ホーム(`/`)の「＋この日の記録を始める」から③(`/workouts/new`)へ**SPA内遷移**で入り、「＋種目を追加」で**スクワットを先に、ベンチプレスを後に**選ぶ(backend-guide.md具体例15と同じ順番)。
+
+- 2枚の種目カードが**スクワット→ベンチプレス**(選んだ順)で並ぶ
+- スクワットのカードの「⠿」(ドラッグハンドル)をつかんでベンチプレスの上にドラッグする → カードの並びが**ベンチプレス→スクワット**に入れ替わる(実際に試すとそうなる)
+- 入れ替えた直後に各カードの「＋セット追加」でセットを1つずつ増やしても、**カードの並び(ベンチプレスが上)は崩れない**。カードの並び替えとセットの追加が無関係な操作であることが体感できる
+
+ネットワークタブ(`read_network_requests`)で見ると、ドラッグ操作の直後に`PATCH /api/workouts/:id/exercises/:workoutExerciseId`が(入れ替えで位置が変わった枚数分)呼ばれている。ページを開き直す(ホームへ戻ってから改めてこの日を開く、**SPA内遷移で**)と、並び替え後の順番のままカードが復元される — サーバー側の`sortOrder`を毎回正として描画し直しているため。
+
+### 2. コードを実行順に追う
+
+まず、既存workoutを開いたときの取得(`useWorkoutSession.ts`)。
+
+```ts
+async function fetchSets() {
+  if (!session.value.workoutId) return
+  const workout = await requestFetch<{
+    sets: WorkoutSetItem[]
+    exercises: WorkoutExerciseItem[]
+    memo: string | null
+  }>(`/api/workouts/${session.value.workoutId}`)
+  session.value.sets = workout.sets
+  session.value.exercises = workout.exercises
+  session.value.memo = workout.memo
+}
+```
+
+| ステップ | 何が起きるか | このときの値(スクワット→ベンチプレスの順に追加した直後) |
+|---|---|---|
+| ① `startWorkout(performedAt)`が既存workoutを見つけると`fetchSets()`を呼ぶ | GET `/api/workouts/:id`を1回叩き、返ってきた`sets`・`exercises`・`memo`を**そのまま**`session`(`useState`)に入れる。並び替え・フィルタは一切しない | `session.sets`はサーバーの並びそのまま、`session.exercises`も同様 |
+
+次に、カードとその中のセット表を組み立てる(`workouts/new.vue`の`groupedSets`とテンプレート抜粋)。
+
+```ts
+const groupedSets = computed(() => {
+  const byExercise = new Map<string, typeof session.value.sets>()
+  for (const set of session.value.sets) {
+    byExercise.set(set.exerciseId, [...(byExercise.get(set.exerciseId) ?? []), set])
+  }
+  return session.value.exercises
+    .filter((e) => byExercise.has(e.exerciseId))
+    .map((e) => ({
+      exerciseId: e.exerciseId,
+      name: exerciseName(e.exerciseId),
+      sets: [...byExercise.get(e.exerciseId)!].sort((a, b) => a.setOrder - b.setOrder),
+    }))
+})
+
+function groupFor(exerciseId: string) {
+  return groupedSets.value.find((g) => g.exerciseId === exerciseId)
+}
+```
+
+```html
+<!-- テンプレート抜粋 -->
+<draggable v-model="session.exercises" item-key="id" handle=".drag-handle" @end="onExerciseDragEnd">
+  <template #item="{ element }">
+    <section v-if="groupFor(element.exerciseId)">
+      <!-- ... groupFor(element.exerciseId)!.name・.sets を表示 ... -->
+    </section>
+  </template>
+</draggable>
+```
+
+| ステップ | 何が起きるか | このときの値(ドラッグでベンチプレスを先頭に入れ替えた後) |
+|---|---|---|
+| ① `<draggable v-model="session.exercises">` | **カードの表示順そのものは、`groupedSets`ではなく`session.exercises`を直接`v-for`(vuedraggableの内部実装)している**。ドラッグ操作はvuedraggableが`v-model`経由で`session.exercises`配列そのものを並び替える(Issue #228のカード並び替えの実体) | `session.exercises`がベンチプレス→スクワットの順に書き換わる |
+| ② `groupFor(element.exerciseId)` | `element`(①で並んでいる`session.exercises`の各要素)の`exerciseId`をキーに、`groupedSets`から**`.find()`で1件だけ**引く。`groupedSets`配列自体の並び順はここでは一切参照されない | ベンチプレスの`element`に対して`groupFor`はベンチプレスのグループを返す |
+| ③ `v-if="groupFor(element.exerciseId)"` | 該当エントリが無ければ(=`byExercise`にそのexerciseIdのセットが無い、全セット削除済みなど)カード自体を描画しない。**カードの「有無」を`groupedSets`が、カードの「順序」を`session.exercises`が別々に決めている** | 2種目ともセットがあるので両方描画される |
+
+`groupedSets`(`computed`)自体が返す配列の**並び**は、`.find()`でしか使われないためテンプレート上は意味を持たない。①で見た通り、カードの表示順を実際に決めているのは`<draggable v-model="session.exercises">`であり、`groupedSets`は「このexerciseIdは表示すべきか」「表示するなら中身(名前・セット一覧)は何か」を引くための**内容の辞書**でしかない。この役割分担(順序は`session.exercises`、中身は`groupedSets`)を取り違えると、次の「壊して確かめる」の1つ目のような誤解をしやすい。
+
+### 3. 自分で壊して確かめる
+
+- `groupedSets`の`return session.value.exercises.filter(...)`を`return [...session.value.exercises].reverse().filter(...)`に変えて保存する(HMRで反映)。**カードの見た目の並びは何も変わらない**(実際に試すとそうなる)。「`groupedSets`がカードの並びを決めている」という直感は誤りで、正しくは②で見た`<draggable v-model="session.exercises">`が`session.exercises`を直接見ているため、`groupedSets`という計算結果の並びを反転させても表示には影響しない。**試したら必ず元に戻すこと**
+- 代わりに`useWorkoutSession.ts`の`fetchSets()`内、`session.value.exercises = workout.exercises`を`session.value.exercises = [...workout.exercises].reverse()`に変えて保存する(ファイルが`composables/`のためHMRではなくページの再読み込みで反映されることがある)。**今度はカードの並びが実際に逆転する**(実際に試すとそうなる)。カードの並びを決めているのは`groupedSets`の計算ロジックではなく、`session.exercises`という状態そのものであることがこの対比で確認できる。**試したら必ず元に戻すこと**
+
+## 具体例15から読み取れる設計上の判断
+
+- **「表示順」を持つ状態と「表示するかどうか・中身」を計算する`computed`を分ける** — vuedraggableの`v-model`はドラッグ操作のたびに束縛先の配列そのものを書き換える。`groupedSets`はgetterしか持たない`computed`(セッターを定義しない導出値)であるため、そもそも`v-model`の束縛先にはできない(書き込もうとしても失敗する)。だからこそカードの並び順は書き込み可能な生の状態`session.exercises`が持ち、`groupedSets`は`exerciseId`をキーにした中身の辞書(読み取り専用でよい)として、順序を持たない形に設計されている。状態(書き込み可能で順序が意味を持つ`ref`)と算出値(参照専用の中身)の責務を分けることで、vuedraggableのように状態を直接書き換えるライブラリと自然に噛み合っている
+- **バックエンドのtie-break(`createdAt`)をフロントで意識しなくてよい設計になっている** — `groupedSets`はカード内のセットを`setOrder`だけで再ソートするため、`sets`配列自体がどんな順で届いても(同値のときの`createdAt`順が何であっても)最終的な表示には影響しない。バックエンドの並び順の契約(Issue #226)とフロントの再ソートが二重に効いているのではなく、フロントの再ソートがバックエンドの並び順のゆらぎを吸収する形になっている
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
@@ -1238,4 +1325,5 @@ watch(selectedWorkouts, (list) => { for (const workout of list) loadSummary(work
 - `frontend/app/pages/workouts/new.vue`の`onApplyRoutine()` — ルーティンをワークアウト作成に適用すると、目安セットが(デフォルト値ではなく)実際の重量・回数で一括登録される。具体例1・4で見た「デフォルト値で即登録」とは異なるもう1つの適用パターン
 - `frontend/app/pages/mypage/password.vue` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の画面。成功後は完了表示に切り替わるだけで画面遷移しない点が、`/password-reset/[token]`(成功後に`/login`へ遷移)との違い
 - `frontend/app/utils/trainingDays.ts` — 具体例14では触れなかった、`workouts`一覧(`hasSets`)からトレ日数(通算・直近7日/28日)を集計する関数群。②ホームの期間別サマリーカードと⑨マイページで共有されている
+- `frontend/app/pages/workouts/new.vue`の`onExerciseDragEnd()` — 具体例15では触れなかった、ドラッグ操作の結果から「実際に位置が変わった行だけ」を検出して`PATCH`する差分検出のロジック(ルーティン画面の並び替えと同じ方針)
 - `docs/spec.md` §3-3 — 画面をまたぐ状態の持ち方の一覧
