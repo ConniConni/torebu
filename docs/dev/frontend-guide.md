@@ -436,6 +436,98 @@ export function useStats() {
 - **バックエンドの絞り込み方針をフロントの選択肢にも反映する** — `officialExercises`が`createdBy === null`でフィルタしているのは、[backend-guide.md](./backend-guide.md)の`OFFICIAL_EXERCISE_FILTER`と同じ方針をフロント側でも守っている形。選べない種目を選択肢から最初から外すことで、後段の404エラー表示に頼らずに済んでいる(具体例3の「操作できないボタンは隠す」と同じ考え方)
 - **画面ごとに使い分けるcomposableのキャッシュ方針** — `useWorkouts()`・`useExercises()`のような一覧は`useState`でセッション中キャッシュするが、`useStats()`はキャッシュしない。両者の違いは「同じデータを複数画面で使い回すか」「パラメータ(range・選択種目)によって毎回内容が変わるものか」で、後者にキャッシュを持たせると`range`ごとに古いデータが残るバグの温床になりやすい
 
+## 具体例6：通知の未読バッジと一覧を表示するとき
+
+[`backend-guide.md`](./backend-guide.md)具体例6で追った「5分遅延・表示時再確認」を、フロント側からどう扱っているかを見る。対象は[`frontend/app/composables/useNotifications.ts`](../../frontend/app/composables/useNotifications.ts)と[`frontend/app/pages/notifications.vue`](../../frontend/app/pages/notifications.vue)。この機能は**バックエンドが「表示してよい通知」だけを返す**設計になっているため、フロント側には5分遅延や再確認のロジックは一切無い。その代わり、「一覧を開いたら自動で全件既読にする」という、これまでの具体例には無かった副作用がある。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動する。誰かに自分のグループへ参加してもらい([backend-guide.md具体例6](./backend-guide.md)の手順、または直接DBの`createdAt`を6分前に書き換える方法)、通知が表示される状態にしておく。
+
+- **ホーム画面を開く** → 右上のベルアイコンに未読件数のバッジ(例:「1」)が付いている
+- **ベルアイコンをタップして`/notifications`へ移動する** → 一覧に「〇〇さんがグループに参加しました」が**未読の見た目(薄いオレンジの背景・右上の丸ドット)のまま**表示される
+- **そのまま「← ホームに戻る」でホームに戻る** → 今度はベルアイコンの**バッジが消えている**
+
+「一覧を開いた瞬間の見た目はまだ未読なのに、ホームに戻るとバッジは消えている」というタイミングのずれが、次でコードから確認できる。
+
+### 2. コードを実行順に追う
+
+```ts
+// frontend/app/pages/notifications.vue
+async function load() {
+  pending.value = true
+  loadError.value = false
+  try {
+    // 既読化より先に一覧を取得することで、開いた瞬間の未読/既読の見た目（ハイライト）を
+    // 取得時点のisReadで表示できる（既読化後に取得すると全件既読の見た目になってしまう）
+    notifications.value = await fetchNotifications()
+    await markAllAsRead()
+  } catch {
+    loadError.value = true
+  } finally {
+    pending.value = false
+  }
+}
+await load()
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `notifications.value = await fetchNotifications()` | `GET /notifications`を叩き、その時点の`isRead`を含めた一覧を`notifications`に入れる。画面はこの時点の`isRead`で描画される | `isRead: false`のまま(既読化はまだ) |
+| ② `await markAllAsRead()` | ①の**後**に`POST /notifications/read`を呼ぶ。画面の再描画は①で確定した`notifications`(ローカルの配列)を参照するため、②が完了してサーバー側で既読化されても、今見えている一覧の見た目(背景色・ドット)は変わらない | サーバー側の`isRead`は`true`になるが、画面上の`notifications`配列は更新しない |
+
+コメントにある通り、①→②の順序が重要。仮に②を先に呼ぶと、①で取得する一覧が最初から「全部既読」の見た目になってしまい、「どれが新着か」が画面から分からなくなる。
+
+`markAllAsRead()`本体は[`useNotifications()`](../../frontend/app/composables/useNotifications.ts)にある。
+
+```ts
+export function useNotifications() {
+  const unreadCount = useState<number>('notificationsUnreadCount', () => 0)
+  const requestFetch = useRequestFetch()
+
+  async function fetchUnreadCount() {
+    try {
+      const res = await requestFetch<{ count: number }>('/api/notifications/unread-count')
+      unreadCount.value = res.count
+    } catch {
+      // バッジ表示のための取得なので、失敗しても画面を止めない（表示は0のまま）
+    }
+  }
+
+  async function markAllAsRead() {
+    await $fetch('/api/notifications/read', { method: 'POST' })
+    unreadCount.value = 0
+  }
+
+  return { unreadCount, fetchUnreadCount, fetchNotifications, markAllAsRead }
+}
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `unreadCount = useState(...)` | `useState`でセッション中キャッシュする(具体例1の`useWorkouts()`と同じ仕組み)。ホーム画面(`HomeScreen.vue`)と通知一覧ページの両方が同じキャッシュを参照するため、**どちらか一方が値を更新すれば、もう一方の表示にも反映される** |
+| ② `markAllAsRead()`内の`unreadCount.value = 0` | `POST /notifications/read`が成功した直後、フロント側で**即座に**`unreadCount`を`0`に書き換える。バックエンドから新しい件数を取り直す(`fetchUnreadCount()`を呼び直す)わけではなく、「全件既読にしたのだから0のはず」という前提でローカルの値を直接書き換えている |
+
+観察した「ホームに戻るとバッジが消えている」のはこの②が原因。`HomeScreen.vue`側は`fetchUnreadCount()`を再度呼んでいるわけではなく、`/notifications`ページで書き換えられた同じ`useState`の値をそのまま表示している。
+
+```ts
+// frontend/app/components/HomeScreen.vue
+const { unreadCount, fetchUnreadCount } = useNotifications()
+await fetchUnreadCount()
+```
+
+`HomeScreen.vue`自身も起動時に`fetchUnreadCount()`を呼んではいるが、これは「通知一覧を経由せずホームだけを開いたとき」に正しい件数を出すためのもの(具体例5の`useStats()`とは逆に、こちらは`useState`によるキャッシュを積極的に使う設計)。
+
+### 3. 自分で壊して確かめる
+
+- `notifications.vue`の`load()`から`await markAllAsRead()`を一時的にコメントアウトして保存する(HMRで反映)。その状態で①未読の通知がある状態でベルアイコンから一覧を開く→②「← ホームに戻る」でホームに戻る、という手順を踏むと、**ホームに戻ってもバッジの数字が消えずに残ったまま**になる(実際に試すとそうなる)。一覧は開いたのに未読件数だけがずっと古いままという、ユーザーからは分かりにくい壊れ方になる点も体感できる。**試したら必ず元に戻すこと**
+
+## 具体例6から読み取れる設計上の判断
+
+- **バックエンドの「表示してよい通知か」の判定をフロントは信用する** — [backend-guide.md具体例6](./backend-guide.md)で見た5分遅延・再確認のロジックは`GET /notifications`のレスポンスに全て織り込まれているため、フロント側は「返ってきたものをそのまま表示する」だけでよい。具体例5の「バックエンドの絞り込み方針をフロントの選択肢にも反映する」(集計対象外の種目を選ばせない)とは逆に、こちらはフロント側で何も判定し直さない設計
+- **「取得してから既読化する」の順序をコードのコメントで明示する** — 順序を間違えると画面の見た目(どれが新着か)が壊れるが、型チェックやテストでは検知しにくい類のバグのため、コメントで明示的に残している
+- **`useState`を「サーバーの値の写し」ではなく「画面間で共有する状態」として使う** — `markAllAsRead()`が`unreadCount`を`0`に直接書き換えているのは、サーバーから取り直すのではなく、複数の画面(ホーム・通知一覧)にまたがる1つの状態を直接更新する使い方。`docs/spec.md` §3-3(画面をまたぐ状態の持ち方)に載っているキャッシュ更新漏れの注意点と合わせて読むと理解が深まる
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
