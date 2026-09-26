@@ -1750,6 +1750,87 @@ async function evaluateAchievements(userId, workout, isFirstSetOfWorkout) {
 - **「初めての記録」「比べる相手が無い」は達成の条件そのものに埋め込む** — 自重種目(`weightKg === null`)・初めて記録した種目(`bestExceptThisSet === null`)・初めての記録(`totalDays`が節目に該当しない限り`milestoneDays`は`null`のまま)・初回記録(コード上`totalDays > 1`のガードで`comeback`は判定にすら入らない)は、どれも「エラーではないが対象外」を`null`/`false`で表現しており、具体例1〜4で見た「弾く」バリデーションとは違う種類の分岐
 - **「1回のセット保存」の中に複数の宛先・複数の判定が同居する** — `POST /workouts/:id/sets`は1つのHTTPリクエストの中で、セットの保存(具体例1と同じ形)・自己ベスト判定(仲間向け通知＋本人向け応答)・C1/C2判定(同じく仲間向け通知＋本人向け応答)をすべて行う。それぞれが独立した関数(`evaluatePersonalBest`・`evaluateAchievements`)に分かれているため、ハンドラー本体(`workoutsRouter.post('/:id/sets', ...)`)を読むときは「何が起きるか」の一覧としてまず眺め、詳細は個別の関数を読みに行く、という2段階の読み方がしやすくなっている
 
+## 具体例14：ワークアウト記録の一覧を取得するとき
+
+対応するエンドポイントは[`backend/src/routes/workouts.ts`](../../backend/src/routes/workouts.ts)のGET `/workouts`。具体例1(1件作成)と対になる一覧取得だが、①一覧では`sets`本体を返さず「セットが1件以上あるか」(`hasSets`)だけを添える、②`performedAt`が日付のみ(時刻を持たない)なので同じ日に複数件あるときの並び順を別の列で保証する、という2つの独自ロジックを持つ。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動し、具体例1の手順でログインしておく(`cookie.txt`)。
+
+```bash
+curl -s -b cookie.txt http://localhost:3001/workouts
+# => []  （まだ1件も無ければ空配列）
+```
+
+ここが具体例1と違う最初のポイント：**同じ日付で2件**作ってみる。POST `/workouts`自体には「同じ日付なら弾く」というバリデーションが無いため、直接curlで送ればこれができる(フロントは通常この状況を作らない。後述)。
+
+```bash
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -d '{"performedAt":"2026-09-20","memo":"1st"}'
+# => {"id":"<workout1Id>","performedAt":"2026-09-20","memo":"1st","hasSets":false,"createdAt":"...T15:51:08.350Z",...}
+
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -d '{"performedAt":"2026-09-20","memo":"2nd"}'
+# => {"id":"<workout2Id>","performedAt":"2026-09-20","memo":"2nd","hasSets":false,"createdAt":"...T15:51:09.414Z",...}
+```
+
+続けて一覧を取ると、**後から作った「2nd」が先頭**に来る。
+
+```bash
+curl -s -b cookie.txt http://localhost:3001/workouts
+# => [{"id":"<workout2Id>",...,"memo":"2nd",...}, {"id":"<workout1Id>",...,"memo":"1st",...}]
+```
+
+最後に、`<workout1Id>`(1st)にセットを1件追加してから一覧を取り直す。`<benchId>`は具体例5と同じく`GET /exercises`のレスポンスから控える。
+
+```bash
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workout1Id>/sets \
+  -H "Content-Type: application/json" -d '{"exerciseId":"<benchId>","weightKg":60,"reps":10}'
+
+curl -s -b cookie.txt http://localhost:3001/workouts
+# => [{"id":"<workout2Id>",...,"hasSets":false,...}, {"id":"<workout1Id>",...,"hasSets":true,...}]
+```
+
+`hasSets`が「1st」だけ`true`に変わる一方、**並び順(2nd→1st)は変わらない**。「セットの有無」と「並び順」が別の基準で決まっていることが、この2つを見比べるとわかる。
+
+### 2. コードを実行順に追う
+
+```ts
+workoutsRouter.get('/', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+
+  const workouts = await prisma.workout.findMany({
+    where: { userId, deletedAt: null },
+    orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }],
+    include: { _count: { select: { sets: true } } },
+  })
+
+  res.status(200).json(workouts.map((w) => serializeWorkout(w, w._count.sets > 0)))
+})
+```
+
+| ステップ | 何が起きるか | このときの値(3回目のcurl実行後) |
+|---|---|---|
+| ① `where: { userId, deletedAt: null }` | 自分の、ソフトデリートされていない記録だけに絞る。具体例1の`findOwnWorkout`と同じ考え方だが、一覧なので`findFirst`ではなく`findMany` | 2件(1st・2nd) |
+| ② `orderBy: [{ performedAt: 'desc' }, { createdAt: 'desc' }]` | まず記録日の新しい順。**同じ`performedAt`の行同士は、次に`createdAt`の新しい順**で並べる(配列の2番目の要素が「1番目で同値だったときの決め手」になる、Prismaのタイブレーク指定の書き方) | どちらも`performedAt`は`2026-09-20`で同値 → `createdAt`(2nd:`15:51:09.414`＞1st:`15:51:08.350`)で2nd→1stの順 |
+| ③ `include: { _count: { select: { sets: true } } }` | 各`workout`に、紐づく`WorkoutSet`の件数だけを`_count.sets`として添える。セット本体(`weightKg`・`reps`等)は取得しない | 1st:`_count.sets === 1`、2nd:`_count.sets === 0` |
+| ④ `workouts.map((w) => serializeWorkout(w, w._count.sets > 0))` | ③の件数を`boolean`に変換して`hasSets`に渡す。具体例1で見た`serializeWorkout`の第2引数がここで使われている | 1st:`hasSets: true`、2nd:`hasSets: false` |
+
+②と③④が独立した処理であることが、curlで見た「並び順は変わらないのに`hasSets`だけ変わった」の正体。②は`orderBy`(SQLの`ORDER BY performed_at DESC, created_at DESC`に相当)、③④は`_count`という別のクエリオプションで、互いに影響し合わない。
+
+コード冒頭のコメント(`// performedAtは日付のみ...`)が、②の理由をそのまま説明している：`performedAt`は`@db.Date`(時刻を持たない、`docs/schema.md`参照)なので、同じ日に複数件あると`performedAt`だけでは順序が定まらない。`createdAt`(作成日時、ミリ秒まで持つ)をタイブレークに使うことで「同じ日の記録は新しく作った方が先」という順序を保証している。
+
+### 3. 自分で壊して確かめる
+
+- `orderBy`の2番目を`{ createdAt: 'desc' }`から`{ createdAt: 'asc' }`に変えて保存する(`tsx watch`が自動再起動)。その状態で(新しい日付で)同じ日に2件作ってから一覧を取ると、**さっきと逆に「先に作った方」が先頭に来る**(実際に試すとそうなる)。並び順を決めているのがこの1箇所だけであることが体感できる。**試したら必ず元に戻すこと**
+- `include: { _count: { select: { sets: true } } }`ごと削除し、`serializeWorkout(w, false)`に固定して保存する。セットがある記録で一覧を取ると、`hasSets`が常に`false`になる(実際に試すとそうなる)。[frontend-guide.md具体例14](./frontend-guide.md)で見るように、これは②ホームのカレンダー印(セットがある日の塗りつぶし表示)が全部消えることに直結する。**試したら必ず元に戻すこと**
+
+## 具体例14から読み取れる設計上の判断
+
+- **「同じ日に複数件」を禁止せず、順序の保証で対応する** — `performedAt`の重複を防ぐDB制約・バリデーションはどこにも無い(フロントの通常操作では③「今日の記録を始める」が既存のworkoutを再利用するため起きにくいだけ)。その代わり一覧取得側が`createdAt`をタイブレークに使うことで、「同じ日が複数件あっても表示順は常に決まっている」という一貫性だけを保証する設計になっている
+- **一覧は「有無」だけ、詳細は別リクエスト** — 一覧(`GET /workouts`)は`_count`で件数の有無しか返さず、セットの中身(`weightKg`・`reps`等)は返さない。中身が要る場面(②ホームの選択日の内訳)は[frontend-guide.md具体例14](./frontend-guide.md)で見るように`GET /workouts/:id`を都度呼ぶ設計になっており、一覧のペイロードを軽く保っている
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
@@ -1757,4 +1838,5 @@ async function evaluateAchievements(userId, workout, isFirstSetOfWorkout) {
 - `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
 - `backend/src/routes/groups.ts`のGET `/groups/:id/ranking/default-exercise`・GET `/groups/:id/ranking/exercises` — 具体例8では触れなかった、種目別ランキングの種目セレクタまわり。前者は「直近28日で最もセット数が多い公式種目」を`groupBy`で求めて初期選択に使い、後者は「グループの誰かが記録したことのある公式種目」だけに絞った候補一覧を返す。どちらも同じ「表示順→名前順」のタイブレークを使う
 - `backend/src/routes/auth.ts`の`authRouter.post('/password-changes', ...)` — 具体例9では扱わなかった、ログイン中にその場でパスワードを変える方の仕組み。現在のパスワードの照合(`bcrypt.compare`)を先に行う点、成功時に未使用のメールリセット用トークンも失効させる点が、トークンベースの再設定とは違う
+- `backend/src/routes/workouts.ts`のGET `/workouts/:id` — 具体例14では触れなかった、1件分の詳細取得。`sets`のtie-break(`setOrder`→`createdAt`、Issue #226)と、種目カードの並び(`exercises`の`sortOrder`、Issue #228)が一覧には無いレスポンスとして加わる
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
