@@ -48,6 +48,12 @@
       `findVisibleNotifications()`の2段構え（DBの取得条件による時間の絞り込み→`isActiveMember`等の
       状態の再確認）と、フロント側の`useState`共有（`markAllAsRead()`が一覧と未読バッジの両方の値を
       直接書き換える仕組み）まで扱った
+- [x] いいね・コメント機能（`POST/DELETE /workouts/:id/reactions`・`GET/POST/DELETE /workouts/:id/comments`）
+      — backend-guide.md／frontend-guide.mdの「具体例7」で対応済み（2026-09-26）。当初のチェックリスト
+      完了後、アプリの核である交流機能そのものを新たに対象として選び直した。`shareActiveGroup()`による
+      グループ横断の同席判定（具体例3の`findActiveMembership()`との対比）、自分の記録には反応不可という
+      制約、いいねの冪等なupsert設計（DBの状態の冪等性と通知を作るかどうかの判定が別実装であること）、
+      フロント側のコメント件数バッジの手動同期（更新漏れを実際に再現）まで扱った
 
 これでチェックリストの全項目が完了した。次に他の機能へガイドを広げたくなったら、新たに対象機能を
 洗い出すところから始める。

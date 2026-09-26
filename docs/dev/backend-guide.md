@@ -618,7 +618,7 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
 
 ## 具体例6：通知の表示を5分遅らせ、表示時に条件を再確認するとき
 
-最後の例として、[`backend/src/routes/notifications.ts`](../../backend/src/routes/notifications.ts)の`findVisibleNotifications()`を追う。ここまでの具体例は「保存した瞬間の状態で弾くか通すか(401/403/404)を判定する」形だったが、この機能は**保存はその場で行うが、表示するかどうかは後から(しかも2回)判定する**という別の形をしている。題材は新メンバー参加(`member_joined`)通知。対応するのは`backend/src/routes/groups.ts`のPOST `/groups/join`(具体例3で読んだ`shareActiveGroup`と同じファイル)。
+もう1つの例として、[`backend/src/routes/notifications.ts`](../../backend/src/routes/notifications.ts)の`findVisibleNotifications()`を追う。ここまでの具体例は「保存した瞬間の状態で弾くか通すか(401/403/404)を判定する」形だったが、この機能は**保存はその場で行うが、表示するかどうかは後から(しかも2回)判定する**という別の形をしている。題材は新メンバー参加(`member_joined`)通知。対応するのは`backend/src/routes/groups.ts`のPOST `/groups/join`(具体例3で読んだ`shareActiveGroup`と同じファイル)。
 
 ### 1. まず動かしてみる
 
@@ -760,8 +760,182 @@ visible.push({ notification: n, target: { type: 'group', groupId: n.targetId, gr
 - **「時間経過」と「状態の再確認」を別々の条件にする** — `findMany`のwhere(5分経過フィルタ)は取得件数を絞るための条件、`isActiveMember`等の再確認は取得**後**にアプリ側で行う条件、と役割を分けている。5分経過の判定をアプリ側でやらない理由もコメントに明記されている(直近50件の枠を未表示の通知が消費してしまうため)
 - **遅延の目的は「誤操作を通知に出さないこと」** — 5分という時間そのものに意味があるのではなく、「保存直後の状態」と「多少時間が経った状態」が違うことがある(参加してすぐ退会する等)という前提に立ち、表示のタイミングをずらして状態が落ち着くのを待つ、という設計。具体例1〜5で見た「保存前に弾く」バリデーション・IDOR対策とは別の防御線
 
+## 具体例7：いいね・コメントの認可と冪等性を判定するとき
+
+最後の例として、[`backend/src/routes/workouts.ts`](../../backend/src/routes/workouts.ts)のPOST/DELETE `/workouts/:id/reactions`・GET/POST/DELETE `/workouts/:id/comments`を追う。トレ部の「交流」機能そのもの。具体例3の`findActiveMembership()`が「このグループに所属しているか」を1グループ単位で見るのに対し、こちらの`shareActiveGroup()`は「いずれかのグループで同席しているか」をグループを横断して見る点が違う。加えて、「いいねボタンを連打しても壊れない」ための冪等性と、「自分の記録には反応できない」という他の具体例には無い制約も扱う。
+
+### 1. まず動かしてみる
+
+具体例2・3で作った3アカウント(オーナー兼記録者A=`cookie.txt`、同じグループのB=`cookieB.txt`、どちらのグループにも属さないC=`cookieC.txt`)を使う。具体例3でAが最後にグループを削除しているので、この検証用に新しいグループを作り直し、Bだけ招待する。
+
+```bash
+# Aが新しいグループを作り、Bだけを招待する
+curl -s -X POST http://localhost:3001/groups \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"いいねコメント検証"}'
+# => {"id":"<groupId>","inviteCode":"<code>", ...}
+
+curl -X POST http://localhost:3001/groups/join \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d '{"inviteCode":"<code>"}'
+```
+
+Aが記録を1件作る(具体例1と同じ手順。`<workoutId>`を控える)。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"performedAt":"2026-09-26"}'
+```
+
+ここから本題。**Aは自分の記録にいいねできない**。
+
+```bash
+curl -i -X POST http://localhost:3001/workouts/<workoutId>/reactions -b cookie.txt
+# => HTTP/1.1 400 {"error":"cannot_react_to_own_workout"}
+```
+
+**Bは同じグループなのでいいねできる。しかも連打しても壊れない(冪等)**。
+
+```bash
+curl -X POST http://localhost:3001/workouts/<workoutId>/reactions -b cookieB.txt
+# => {"reactionCount":1,"reactedByMe":true}
+curl -X POST http://localhost:3001/workouts/<workoutId>/reactions -b cookieB.txt
+# => {"reactionCount":1,"reactedByMe":true} (2回目も200。件数は増えない)
+curl -X DELETE http://localhost:3001/workouts/<workoutId>/reactions -b cookieB.txt
+# => {"reactionCount":0,"reactedByMe":false}
+curl -X DELETE http://localhost:3001/workouts/<workoutId>/reactions -b cookieB.txt
+# => {"reactionCount":0,"reactedByMe":false} (いいねしていない状態でのDELETEも200)
+```
+
+**Cはどちらのグループにも属さないので、存在自体が見えない(404)**。
+
+```bash
+curl -i -X POST http://localhost:3001/workouts/<workoutId>/reactions -b cookieC.txt
+# => HTTP/1.1 404 {"error":"not_found"}
+```
+
+コメントも認可はいいねと同じ。Bが投稿し(`<commentId>`を控える)、Cは一覧すら見えず、**Aは記録の持ち主でも他人(B)のコメントは削除できない**。
+
+```bash
+curl -s -X POST http://localhost:3001/workouts/<workoutId>/comments \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d '{"body":"ナイスベンチ!"}'
+# => {"id":"<commentId>", "userId":"<BのユーザーID>", "displayName":"けんしょうB", "body":"ナイスベンチ!", ...}
+
+curl -i http://localhost:3001/workouts/<workoutId>/comments -b cookieC.txt
+# => HTTP/1.1 404 {"error":"not_found"}
+
+curl -i -X DELETE http://localhost:3001/workouts/<workoutId>/comments/<commentId> -b cookie.txt
+# => HTTP/1.1 404 {"error":"not_found"}(Aは記録の持ち主だが、このコメントの投稿者ではない)
+
+curl -i -X DELETE http://localhost:3001/workouts/<workoutId>/comments/<commentId> -b cookieB.txt
+# => HTTP/1.1 204(投稿者本人なら削除できる)
+```
+
+「見せるかどうか(グループで同席しているか)」と「操作していいか(自分のものか)」が別の判定になっている点が、具体例3の「所属チェック→ロールチェック」の2段構成と似ているようで少し違う。次はコードで確認する。
+
+### 2. コードを実行順に追う
+
+```ts
+// viewerIdとownerIdが、いずれかのグループでアクティブなメンバーとして同席しているか(自分自身も含む)
+async function shareActiveGroup(viewerId: string, ownerId: string) {
+  if (viewerId === ownerId) return true
+  const viewerGroupIds = (await prisma.groupMember.findMany({
+    where: { userId: viewerId, leftAt: null, group: { deletedAt: null } },
+    select: { groupId: true },
+  })).map((m) => m.groupId)
+  if (viewerGroupIds.length === 0) return false
+
+  const shared = await prisma.groupMember.findFirst({
+    where: { userId: ownerId, leftAt: null, groupId: { in: viewerGroupIds } },
+  })
+  return shared !== null
+}
+
+async function findAccessibleWorkout(viewerId: string, workoutId: string) {
+  const workout = await prisma.workout.findFirst({ where: { id: workoutId, deletedAt: null } })
+  if (!workout) return null
+  const accessible = await shareActiveGroup(viewerId, workout.userId)
+  return accessible ? workout : null
+}
+
+workoutsRouter.post('/:id/reactions', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  if (workout.userId === userId) {
+    res.status(400).json({ error: 'cannot_react_to_own_workout' })
+    return
+  }
+
+  const alreadyReacted = await prisma.reaction.findUnique({
+    where: { targetType_targetId_userId: { targetType: 'workout', targetId: workout.id, userId } },
+  })
+  await prisma.reaction.upsert({
+    where: { targetType_targetId_userId: { targetType: 'workout', targetId: workout.id, userId } },
+    create: { targetType: 'workout', targetId: workout.id, userId },
+    update: {},
+  })
+  if (!alreadyReacted) {
+    await notifyWorkoutOwner('reaction', workout.userId, userId, workout.id)
+  }
+  res.status(200).json({ reactionCount: await countReactions(workout.id), reactedByMe: true })
+})
+```
+
+| ステップ | 何が起きるか | Aで試したとき | Bで試したとき | Cで試したとき |
+|---|---|---|---|---|
+| ① `shareActiveGroup(viewerId, ownerId)` | `viewerId === ownerId`(自分の記録)なら判定を省略して即`true`。それ以外は「viewerの所属グループID一覧」と「ownerがそのいずれかに(アクティブに)所属しているか」を2クエリで見る | `viewerId === ownerId`で即`true` | 共通のグループがあるので`true` | 所属グループが無いので`viewerGroupIds`が空 → `false` |
+| ② `findAccessibleWorkout` | ①が`false`なら`null`を返し、呼び出し元は404にする。「存在しない」と「見えない」を区別しない(具体例3と同じIDOR対策の考え方) | `workout`を返す(自分の記録なので見える) | `workout`を返す | `null` → 404で打ち切り |
+| ③ `if (workout.userId === userId)` | ②を通過した後、**自分の記録かどうか**を別途チェックする。①で「自分の記録は常にaccessible」としているのは「見えること」を保証するためで、「操作できること」までは保証しない。だからここで改めて400にする | ここで打ち切り(400) | 通過(他人の記録なので) | (到達しない) |
+| ④ `alreadyReacted`を先に見てから`upsert` | UNIQUE制約(`targetType`・`targetId`・`userId`)違反を`upsert`で吸収して常に200を返す一方、「今回新しくいいねしたか」は`upsert`の前に取っておいた`alreadyReacted`で判定する | (到達しない) | 1回目は`alreadyReacted`が`null` → 通知作成。2回目は既に行があるので通知はスキップ | (到達しない) |
+
+DELETE側にはこの③(自分の記録チェック)が無い。`shareActiveGroup`の`viewerId === ownerId`ショートカットにより、実は**Aは自分の記録に対して`DELETE /reactions`を呼べる**(何も無い状態から呼んでも冪等に200が返るだけで実害は無いが、「対称にDELETEにも同じ400を付けるべきでは」と考えて壊す前に一度実装を疑ってみるとよい練習になる)。
+
+コメントの認可(`GET`/`POST /workouts/:id/comments`)は`findAccessibleWorkout`をそのまま使うので、いいねと全く同じ404の基準になる。一方、`DELETE /comments/:commentId`だけは判定が1段階増える。
+
+```ts
+workoutsRouter.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const workout = await findAccessibleWorkout(userId, req.params.id as string)
+  if (!workout) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const comment = await prisma.comment.findFirst({
+    where: { id: req.params.commentId as string, targetType: 'workout', targetId: workout.id, userId },
+  })
+  if (!comment) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  await prisma.comment.delete({ where: { id: comment.id } })
+  res.status(204).send()
+})
+```
+
+`comment`を探す`where`に`userId`(リクエストしてきた本人のID)が入っている。記録の持ち主Aであっても、`findFirst`の条件に一致しなければ`comment`は`null`になり404になる。「その記録が見えるか」(`findAccessibleWorkout`)と「そのコメントが自分のものか」(`where: { ..., userId }`)という、対象が違う2つの404を重ねている。
+
+### 3. 自分で壊して確かめる
+
+- `if (workout.userId === userId)`のブロックを一時的に`if (false && workout.userId === userId)`に変えて保存する(`tsx watch`が自動再起動)。その状態でAの`cookie.txt`で自分の記録にいいねするcurlを送ると、本来400になるはずが`200 {"reactedByMe":true}`で通ってしまう(実際に試すとそうなる)。**試したら必ず元に戻すこと**
+- `if (!alreadyReacted) { await notifyWorkoutOwner(...) }`を一時的に`if (true || !alreadyReacted) { ... }`に変えて保存する。その状態でBが既にいいね済みの記録にもう一度・もう一度…と`POST /reactions`を3回送ると、`reactionCount`は1のまま変わらないのに、Aの`GET /notifications`で確認できる`reaction`通知が3件増える(実際に試すとそうなる)。**「DBの状態は冪等」と「通知が増えない」は別の実装で保証されている**ことが、壊すとよく分かる。**試したら必ず元に戻すこと**
+
+## 具体例7から読み取れる設計上の判断
+
+- **「対象範囲」の判定単位を機能ごとに使い分ける** — 具体例3の`findActiveMembership()`は「このグループの操作ができるか」を1グループ単位で見るのに対し、`shareActiveGroup()`は「いずれかのグループで同席しているか」をグループを横断して見る。いいね・コメントの対象範囲は「グループの記録フィードで見える記録」(`docs/schema.md`参照)と一致させる必要があるため、後者の形になっている
+- **「見えること」と「操作できること」は別の判定にする** — `shareActiveGroup`は自分の記録を常に`accessible`として扱う(「見える」)が、いいね・コメントできるかは別途チェックする。「見えるが操作できない」状態を意図的に作れる設計になっている
+- **冪等性は「DBの状態」と「副作用(通知)」で別々に保証する** — UNIQUE制約違反は`upsert`が吸収する一方、通知を作るかどうかは`upsert`より前に取得した`alreadyReacted`の値で判定する。1つの`if`に両方をまとめず、責務を分けている
+- **「所有者かどうか」の404は、対象ごとに判定を重ねる** — コメント削除は「記録が見えるか」(`findAccessibleWorkout`)と「そのコメントが自分のものか」(`where: { ..., userId }`)を両方満たさないと`comment`が見つからず404になる。記録の持ち主であっても他人のコメントは消せない、という制約がこの2段階に表れている
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
 - `backend/src/routes/notifications.ts`の`resolvePersonalBestTargets()`・`resolveAchievementTargets()` — 具体例6で扱った`member_joined`以外の遅延通知(自己ベスト更新・通算の節目・久しぶりの復帰)の再確認ロジック。`payload`(作成時点の値)と取得時点の値を突き合わせる分、`member_joined`より確認する項目が多い
+- `backend/src/routes/workouts.ts`の`notifyCommentParticipants()` — 具体例7では触れなかった、コメントの投稿者本人だけでなく過去のコメント投稿者にも`comment_reply`として通知するスレッド参加者の集め方(Issue #149)
 - `docs/schema.md` — テーブル設計の背景・なぜセッション方式を選んだか
