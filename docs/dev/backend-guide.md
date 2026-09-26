@@ -1881,7 +1881,7 @@ curl -s -b cookie.txt http://localhost:3001/workouts/<workoutId>
 
 ```ts
 workoutsRouter.get('/:id', requireAuth, async (req, res) => {
-  const userId = req.session.userId!
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const workout = await findOwnWorkout(userId, req.params.id as string)
   if (!workout) {
     res.status(404).json({ error: 'not_found' })
@@ -1920,7 +1920,7 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
 ### 3. 自分で壊して確かめる
 
 - `prisma.workoutExercise.findMany`の`orderBy: { sortOrder: 'asc' }`を`{ sortOrder: 'desc' }`に変えて保存する(`tsx watch`が自動再起動)。その状態でGET `/workouts/:id`を取ると、**`exercises`の並びだけが逆転し(ベンチプレス→スクワットがスクワット→ベンチプレスに)、`sets`の並びは一切変わらない**(実際に試すとそうなる)。②③が本当に独立していることが、この1行の変更だけで体感できる。**試したら必ず元に戻すこと**
-- `orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }]`から`{ createdAt: 'asc' }`を消し`{ setOrder: 'asc' }`だけにして保存する。**この変更だけでは挙動が変わって見えないことがある**(Postgresは`ORDER BY`で完全に順序が決まらない行について、`ORDER BY`を書かなくてもテーブルスキャンの物理的な並びをそのまま返すことが多く、小さいテーブルではたまたま`createdAt`と同じ順になりがちなため)。tie-breakの必要性は「順序を保証しないと**将来のPostgresのバージョンやクエリプランの変化で**壊れうる」という契約の話であり、手元で毎回目に見える形で再現するとは限らない。[frontend-guide.md具体例15](./frontend-guide.md)で見るように、フロント側は結局`setOrder`で再ソートするため、この不確実性の影響を実質的に吸収している。**試したら必ず元に戻すこと**
+- `orderBy: [{ setOrder: 'asc' }, { createdAt: 'asc' }]`から`{ createdAt: 'asc' }`を消し`{ setOrder: 'asc' }`だけにして保存する。**この変更だけでは挙動が変わって見えないことがある**(実際に試すとそうなる)。`setOrder`が同値の行同士については、`ORDER BY`が追加で指定されていない以上Postgresは順序を保証せず、その場合はテーブルスキャンの物理的な並び(このケースでは行の作成順とほぼ一致する)をそのまま返すことが多いため、たまたま`createdAt`昇順と同じ結果になりやすい。tie-breakの必要性は「順序を保証しないと**将来のPostgresのバージョンやクエリプランの変化(インデックスが張られる、行が物理的に移動する等)で**壊れうる」という契約の話であり、手元で毎回目に見える形で再現するとは限らない。[frontend-guide.md具体例15](./frontend-guide.md)で見るように、フロント側は結局`setOrder`で再ソートするため、この不確実性の影響を実質的に吸収している。**試したら必ず元に戻すこと**
 
 ## 具体例15から読み取れる設計上の判断
 
