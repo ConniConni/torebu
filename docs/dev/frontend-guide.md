@@ -402,7 +402,7 @@ await loadVolume()
 | ステップ | 何が起きるか |
 |---|---|
 | ① `officialExercises` | `useExercises()`が持つ全種目(公式＋自分のカスタム)から、`createdBy === null`(公式種目のみ)・`deletedAt`無しのものだけに絞る。[backend-guide.md具体例5](./backend-guide.md)で見た`OFFICIAL_EXERCISE_FILTER`と同じ「集計対象は公式種目のみ」という方針を、フロント側は選択肢自体を絞ることで表現している |
-| ② `watchEffect(...)` | `selectedExerciseId`が空で`officialExercises`が1件以上あれば、先頭の1件を自動選択する。curlで観察した「開いた瞬間から何かの種目が選ばれている」のはここ。`officialExercises`の並び順は`useExercises()`(`GET /exercises`)がそのまま返す順(使用回数の多い順など)なので、**「一番よく使っている公式種目」が自動的に選ばれる**ことになる |
+| ② `watchEffect(...)` | `selectedExerciseId`が空で`officialExercises`が1件以上あれば、先頭の1件を自動選択する。さっき観察した「開いた瞬間から何かの種目が選ばれている」のはここ。`officialExercises`の並び順は`useExercises()`(`GET /exercises`)がそのまま返す順(使用回数の多い順など)なので、**「一番よく使っている公式種目」が自動的に選ばれる**ことになる |
 | ③ `watch(selectedExerciseId, loadHistory, { immediate: true })` | `selectedExerciseId`が変わるたびに`loadHistory()`を呼ぶ。`{ immediate: true }`が付いているため、**登録した瞬間に一度実行される**(値の変化を待たない)。②の`watchEffect`が同期的に`selectedExerciseId`を埋めた直後にこのwatchが登録されるため、immediateが無いと「②で入った初期値」をこのwatchが変化として検知できない(次の「3. 自分で壊して確かめる」で実際に確認する) |
 | ④ `await loadVolume()` | スクリプトの最後で1回だけ呼ばれる。`/volume`はrangeにしか依存しないため、`watchEffect`のような仕組みは要らず素直に1回呼べばよい |
 

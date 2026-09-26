@@ -473,7 +473,7 @@ const targetSetsSchema = z.array(targetSetSchema).max(20)
 
 `backend`を`npm run dev`で起動した状態で試す。アカウントが無ければ具体例1の手順で`test@example.com`を作成しログインしておく(`cookie.txt`を使う)。
 
-まず、ワークアウトを1件作り、公式種目(ベンチプレス)のセットを2つ追加する。`<exerciseId>`は`curl -b cookie.txt http://localhost:3001/exercises`のレスポンスから`"name":"ベンチプレス"`の`id`を控える。
+まず、ワークアウトを1件作り、公式種目(ベンチプレス)のセットを2つ追加する。`<benchId>`は`curl -b cookie.txt http://localhost:3001/exercises`のレスポンスから`"name":"ベンチプレス"`の`id`を控える。
 
 ```bash
 curl -s -X POST http://localhost:3001/workouts \
@@ -489,10 +489,9 @@ curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
   -d '{"exerciseId":"<benchId>","weightKg":65,"reps":5}'
 ```
 
-続けて、**自重種目(プッシュアップ)のセット(`weightKg`を指定しない)**と、**自分のカスタム種目**を1つ作ってそのセットも追加する。
+続けて、**自重種目(プッシュアップ)のセット(`weightKg`を指定しない)**と、**自分のカスタム種目**を1つ作ってそのセットも追加する。`<pushupId>`は先ほどと同じ`GET /exercises`のレスポンスから`"name":"プッシュアップ(腕立て伏せ)"`の`id`を控える。
 
 ```bash
-# プッシュアップ(自重、公式種目)のidを控えてセットを追加
 curl -s -X POST http://localhost:3001/workouts/<workoutId>/sets \
   -H "Content-Type: application/json" -b cookie.txt \
   -d '{"exerciseId":"<pushupId>","reps":20}'
@@ -574,7 +573,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
 | ① `rangeSchema.safeParse(req.query)` | `range`(`1m`/`3m`/`all`)を検証。デフォルトは`3m` | `range: '3m'` |
 | ② `rangeStartDate(range)` | `3m`なら「今日の0時から90日前」の`Date`を返す。`all`は`undefined`(下限なし) | `startDate`は約90日前 |
 | ③ `prisma.workoutSet.findMany({ where: {...} })` | `weightKg: { not: null }`で自重セットを除外、`exercise: OFFICIAL_EXERCISE_FILTER`でカスタム種目を除外。この2つのwhere条件が、curlで見た「300kg分が含まれない」の正体 | プッシュアップ・カスタム種目のセットは`sets`に入らない |
-| ④ `for (const set of sets)` | `Map<日付, 合計>`に`weightKg * reps`を積み上げていく。同じ日付に複数セットがあれば加算される | `volumeByDate.get('2024-01-15')`が`480`→`805`と2回更新される |
+| ④ `for (const set of sets)` | `Map<日付, 合計>`に`weightKg * reps`を積み上げていく。同じ日付に複数セットがあれば加算される | `volumeByDate.get('2024-01-15')`が`0→480→805`の順に2回更新される(1セット目`60×8=480`、2セット目`+65×5=325`) |
 | ⑤ `Array.from(...).sort(...)` | `Map`を配列に変換し、日付の文字列比較(`localeCompare`。`"2024-01-15" < "2024-01-20"`のようにISO形式なら文字列比較がそのまま時系列順になる)で並べ替える | `[{date:"2024-01-15", volumeKg:805}]` |
 
 `workouts.ts`(具体例1)の「1件のリクエストを検証して1件保存する」形と違い、ここは**「条件に合う行を全部取ってきてJS側でMapに集計する」**という別の形。DB側の`GROUP BY`(Prismaの`groupBy`)を使わずJS側で集計しているのは、日付は`workout.performedAt`(別テーブル)にあり、`weightKg * reps`という掛け算をSQL側でやるよりアプリ側でやる方がシンプルだから。
