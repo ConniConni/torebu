@@ -1317,6 +1317,147 @@ function groupFor(exerciseId: string) {
 - **「表示順」を持つ状態と「表示するかどうか・中身」を計算する`computed`を分ける** — vuedraggableの`v-model`はドラッグ操作のたびに束縛先の配列そのものを書き換える。`groupedSets`はgetterしか持たない`computed`(セッターを定義しない導出値)であるため、そもそも`v-model`の束縛先にはできない(書き込もうとしても失敗する)。だからこそカードの並び順は書き込み可能な生の状態`session.exercises`が持ち、`groupedSets`は`exerciseId`をキーにした中身の辞書(読み取り専用でよい)として、順序を持たない形に設計されている。状態(書き込み可能で順序が意味を持つ`ref`)と算出値(参照専用の中身)の責務を分けることで、vuedraggableのように状態を直接書き換えるライブラリと自然に噛み合っている
 - **バックエンドのtie-break(`createdAt`)をフロントで意識しなくてよい設計になっている** — `groupedSets`はカード内のセットを`setOrder`だけで再ソートするため、`sets`配列自体がどんな順で届いても(同値のときの`createdAt`順が何であっても)最終的な表示には影響しない。バックエンドの並び順の契約(Issue #226)とフロントの再ソートが二重に効いているのではなく、フロントの再ソートがバックエンドの並び順のゆらぎを吸収する形になっている
 
+## 具体例16：セットの重量・回数を編集・削除するとき
+
+[backend-guide.md具体例16](./backend-guide.md)で追ったPATCH/DELETE `/workouts/:id/sets/:setId`を、③記録作成画面(`workouts/new.vue`)がどう呼んでいるかを見る。対象は[`useWorkoutSession.ts`](../../frontend/app/composables/useWorkoutSession.ts)の`updateSet`・`removeSet`と、[`workouts/new.vue`](../../frontend/app/pages/workouts/new.vue)の`onSetFieldBlur`・`onDeleteSet`。⑤ルーティンの目安セット編集(具体例4)と同じ「常時入力欄＋blurで自動保存」方式だが、③はここに自己ベスト判定(具体例13)が重なる分、観察できることが1つ増える。
+
+### 1. まず動かして観察する
+
+`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく。ホーム(`/`)から③(`/workouts/new`)へ**SPA内遷移**で入り、「＋種目を追加」でベンチプレスを選ぶ(その場でセットが1つ、デフォルト値(回数10・自重)で登録される)。ネットワークタブ(`read_network_requests`)を開いた状態で、次を順に試す。
+
+- 重量欄に`999999`のような大きすぎる値(または直接触らず既存の値の末尾に数字を足す)を入力してから、回数欄をクリックしてフォーカスを移す(blur)。**カード内に赤字で「セットの更新に失敗しました」と出て、値は入力欄に残ったまま**になる。ネットワークタブで見るとこの操作で飛んだ`PATCH .../sets/:setId`は`400`。バックエンドの`weightKgSchema`(999.5kg以下・0.5kg刻み)がここで弾いている
+- 重量欄を`62.5`のような正しい値に直して回数欄からもう一度blurする。今度は`200 OK`が返り、**入力欄の下に黄色い帯で「🏆 自己ベスト更新！62.5kg（これまで◯◯kg）」**が表示される(このカードに他のセットが無ければ`previousBestKg`は無くてもこの表示自体は出る場合がある。他のセットがある状態で試すと分かりやすい)
+- 同じセットの**回数欄だけ**を変えてblurする(重量欄には触らない)。`PATCH`は飛ぶが、直前に出ていた自己ベスト表示は**そのまま残り、新たに増えたり消えたりしない**
+- 「このセットを削除」を押す。**確認ダイアログは出ず即座に消える**(Issue #272で意図的にこうなっている)。ネットワークタブでは`DELETE .../sets/:setId`の直後に`GET /api/workouts/:id`が飛んでいるのが見える
+
+### 2. コードを実行順に追う
+
+まず重量・回数欄のblur保存(`workouts/new.vue`)。
+
+```ts
+async function onSetFieldBlur(setId: string) {
+  const previous = pendingSetSaves.get(setId)
+  if (previous) await previous
+
+  const inputs = setInputs[setId]
+  if (!inputs) return
+  const reps = Number(inputs.reps)
+  if (!Number.isInteger(reps) || reps <= 0) return
+  const weightRaw = String(inputs.weight).trim()
+  const weightKg = weightRaw ? Number(weightRaw) : null
+
+  setSaving[setId] = true
+  setErrors[setId] = ''
+  const promise = updateSet(setId, weightKg, reps)
+    .then(({ set, personalBest }) => applyPersonalBest(set, personalBest))
+    .catch(() => {
+      setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
+    })
+    .finally(() => {
+      setSaving[setId] = false
+      pendingSetSaves.delete(setId)
+    })
+  pendingSetSaves.set(setId, promise)
+  return promise
+}
+```
+
+| ステップ | 何が起きるか | このときの値(重量欄に大きすぎる値を入れてblurしたとき) |
+|---|---|---|
+| ① `pendingSetSaves.get(setId)`を待つ | 同じセットへの直前の保存が終わるまで待ってから始める(直列化)。重量欄→回数欄と続けてblurしたときに2つのPATCHが逆順で返ってくる問題を防ぐ(コード中のコメント参照) | 直前の保存が無ければ即座に次へ |
+| ② `reps`のガード | 回数が整数かつ1以上でなければ、**何もせず`return`する**(APIは呼ばない)。壊れた値のまま保存を試みない | 回数はそのままなら通過 |
+| ③ `updateSet(setId, weightKg, reps)` | ここでAPIが呼ばれる。バックエンドの`weightKgSchema`(0.5kg刻み・999.5kg以下)に違反していれば、composable内の`$fetch`が例外を投げる | `weightKg`が範囲外なら`updateSet`が reject する |
+| ④ `.catch()` | ③が失敗すると`setErrors[setId]`にメッセージをセットする。**入力欄の値自体は`setInputs`のままなので巻き戻らない**(1で見た「値が残ったまま」の正体) | `setErrors[setId] = 'セットの更新に失敗しました...'` |
+
+`updateSet`側(`useWorkoutSession.ts`)。
+
+```ts
+async function updateSet(setId: string, weightKg: number | null, reps: number) {
+  if (!session.value.workoutId) throw new Error('workoutが開始されていません')
+  const { personalBest, ...updated } = await $fetch<
+    WorkoutSetItem & { personalBest: PersonalBest | null }
+  >(`/api/workouts/${session.value.workoutId}/sets/${setId}`, {
+    method: 'PATCH',
+    body: { weightKg, reps },
+  })
+  session.value.sets = session.value.sets.map((s) => (s.id === updated.id ? updated : s))
+  // ...(lastSetキャッシュの更新。具体例11参照)
+  return { set: updated, personalBest }
+}
+```
+
+そして自己ベスト表示(`workouts/new.vue`)。
+
+```ts
+function applyPersonalBest(set: WorkoutSetItem, personalBest: PersonalBest | null) {
+  if (personalBest) {
+    personalBests.set(set.exerciseId, { ...personalBest, setId: set.id })
+    return
+  }
+  const current = personalBests.get(set.exerciseId)
+  if (current?.setId === set.id && current.weightKg !== set.weightKg) {
+    personalBests.delete(set.exerciseId)
+  }
+}
+```
+
+| ステップ | 何が起きるか | このときの値(重量で自己ベスト更新した直後に、同じセットの回数だけ変えたとき) |
+|---|---|---|
+| ① 重量変更時のPATCH応答 | サーバー側([backend-guide.md具体例16](./backend-guide.md))が`weightChanged`を`true`と判定し、`personalBest`に値が入って返る | `personalBest = {exerciseId, weightKg:62.5, previousBestKg:60}` |
+| ② `applyPersonalBest`が種目IDをキーに保存 | `personalBests`(`reactive Map`)にこのセットの達成を記録する。**種目ごとに直近1件だけ**保持する設計なので、同じ種目の別セットで新たに達成すればここで上書きされる | `personalBests.get(exerciseId) = {..., setId: このセットのid}` |
+| ③ 回数だけの変更時のPATCH応答 | サーバー側は`weightChanged`が`false`のため`personalBest: null`を返す | `personalBest = null` |
+| ④ `applyPersonalBest(set, null)`の分岐 | `current?.setId === set.id`(表示中の達成が同じセットのもの)かつ`current.weightKg !== set.weightKg`(重量自体が変わった)のときだけ表示を取り下げる。**回数だけの変更ではこの条件が成り立たない(`weightKg`は変わっていない)ため、表示は残ったまま** | `personalBests`は変更されない |
+
+削除(`onDeleteSet`と`removeSet`)。
+
+```ts
+async function onDeleteSet(setId: string) {
+  setDeleting[setId] = true
+  setDeleteErrors[setId] = ''
+  try {
+    await removeSet(setId)
+  } catch {
+    setDeleteErrors[setId] = '削除に失敗しました。時間をおいて再度お試しください'
+  } finally {
+    setDeleting[setId] = false
+  }
+}
+```
+
+```ts
+async function removeSet(setId: string) {
+  if (!session.value.workoutId) return
+  const { deleted } = await $fetch<{ deleted: boolean }>(
+    `/api/workouts/${session.value.workoutId}/sets/${setId}`,
+    { method: 'DELETE' },
+  )
+  if (deleted) {
+    session.value = { workoutId: null, performedAt: session.value.performedAt, sets: [], exercises: [], memo: null }
+    return
+  }
+  await fetchSets()
+}
+```
+
+| ステップ | 何が起きるか | このときの値(3件中2件目を削除したとき) |
+|---|---|---|
+| ① 確認ダイアログが無い | Issue #261で他の削除操作と同じ2段階確認に一度揃えたが、Issue #272でセット削除だけ即時削除に戻された(重量・回数を調整しながら何度も追加/削除する頻度の高い操作のため。コード中のコメント参照)。テンプレート側にも確認用のトグル状態が無い | クリック即`removeSet`が呼ばれる |
+| ② `$fetch`のDELETE | バックエンドが`{"deleted":false}`(このworkoutにまだ他のセットが残っている)を返す | `deleted = false` |
+| ③ `if (deleted)`を通らない | 通らないので`fetchSets()`を呼ぶ。**ローカルで`session.value.sets`から単純に`filter`しない**のは、削除でサーバー側の`setOrder`が詰め直される([backend-guide.md具体例16](./backend-guide.md)参照)ため、ローカルの配列操作だけでは新しい`setOrder`を再現できないから | `GET /api/workouts/:id`を叩き直し、`session.value.sets`をサーバーの最新状態で丸ごと置き換える |
+
+最後のセットを消して`{"deleted":true}`が返るケースは①に入り、`session`を`workoutId: null`から作り直す(具体例1の`updateMemo`と同じ「サーバー側でworkoutごと消えたのでローカルも作成前の状態に戻す」パターン)。
+
+### 3. 自分で壊して確かめる
+
+- `onSetFieldBlur`内、`const previous = pendingSetSaves.get(setId); if (previous) await previous`の2行を一時的にコメントアウトして保存する(HMRで反映)。この2行が無くなると、同じセットへの2回目以降のblur保存は「前の保存の完了を待たずに」即座にPATCHを送るようになる。ローカルの`localhost`同士では応答順が入れ替わることは稀で、毎回目に見えて壊れるとは限らない(具体例15の`tie-break`の話と同じく、「壊れうる」ことと「手元で毎回再現する」ことは別)。それでも、直前の保存が終わる前に次の保存を許すこと自体が、コード中のコメントが説明している「2つのPATCHの応答が送信順と逆に返ってきたら、後から返ってきた方が新しい値として上書きしてしまう」という前提条件を再び成立させる変更であることは、この2行を消して読み比べると分かる。**試したら必ず元に戻すこと**
+- `applyPersonalBest`の`if (current?.setId === set.id && current.weightKg !== set.weightKg)`から`current.weightKg !== set.weightKg`の条件を外し、`current?.setId === set.id`だけにして保存する。自己ベストを出した後、**同じセットの回数だけを変えても達成表示が消えるようになる**(実際に試すとそうなる)。「重量が変わっていないなら達成の事実は変わらない」という前提が、この条件1つで守られていることが分かる。**試したら必ず元に戻すこと**
+
+## 具体例16から読み取れる設計上の判断
+
+- **同じセットへの連続保存は直列化し、削除は再取得で辻褄を合わせる** — 更新(PATCH)は「直前の保存を待ってから始める」ことで順序を保証し、削除(DELETE)は「サーバーの最新状態を取り直す」ことで整合性を取る。両者は違う手段だが、どちらも「クライアント側のローカルな状態操作だけでは順序・整合性を保証できない」という同じ問題への対処である
+- **「達成の表示を消す条件」を「達成の表示を出す条件」より狭くする** — 自己ベスト表示は`personalBest`が返るたびに出るが、消えるのは「表示中のセットの重量が実際に変わったとき」だけに限定されている。回数だけの編集・無関係な操作では表示を消さない非対称な設計にすることで、達成した事実がちらつかず維持される
+- **頻度の高い操作は安全対策を軽くする** — セット削除は他の削除操作と違って確認ダイアログを持たない(Issue #272)。これは統一性より「実際の使われ方」を優先した判断で、[docs/backlog.md](../backlog.md)「削除操作の確認フローが不統一」の経緯に詳しい
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)

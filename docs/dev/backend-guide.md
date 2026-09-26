@@ -1927,6 +1927,136 @@ workoutsRouter.get('/:id', requireAuth, async (req, res) => {
 - **「セットの中身」と「種目カードの並び」を別テーブル・別クエリに分ける** — `sets`(`WorkoutSet.setOrder`)と`exercises`(`WorkoutExercise.sortOrder`)は`Promise.all`で並行取得されるだけの、互いに無関係な2つのクエリ。種目カードの並び替え(Issue #228、`PATCH /workouts/:id/exercises/:workoutExerciseId`)はセットの記録順(`setOrder`)を一切変更しないため、「カードの表示順を変える」操作と「セットの記録順を変える」操作が構造的に分離されている
 - **同値になり得る並び順には、たとえ手元で再現しづらくても機械的にtie-breakを足す** — `setOrder`は種目ごとに1からリセットされる連番であるため、複数の種目を記録している限り必ず同値が発生する。Postgresは`ORDER BY`で指定されなかった列については順序を保証しないため、`createdAt`のtie-break(Issue #226)は「今のクエリプランでは崩れて見えない」こととは無関係に、契約として必要になる
 
+## 具体例16：セットの重量・回数を編集・削除するとき
+
+記録画面(③)でセットの重量・回数欄からフォーカスを外す(blur)たびに自動保存されるPATCH `/workouts/:id/sets/:setId`と、「このセットを削除」ボタンのDELETE `/workouts/:id/sets/:setId`を追う。対象は[`backend/src/routes/workouts.ts`](../../backend/src/routes/workouts.ts)。具体例1(POST)・具体例13(自己ベスト判定そのもの)の続きとして、「保存済みのセットを後から変える・消す」場面を扱う。
+
+### 1. まず動かしてみる
+
+具体例1と同じ手順でログインし、`cookie.txt`を用意する。ワークアウトを1件作り、同じ種目でセットを3つ追加する(`exerciseId`は`GET /exercises`で控えた値に読み替える)。
+
+```bash
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts -H "Content-Type: application/json" -d '{"performedAt":"2024-02-01"}'
+# => {"id":"<workoutId>", ...}
+
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workoutId>/sets -H "Content-Type: application/json" -d '{"exerciseId":"<exerciseId>","weightKg":60,"reps":10}'
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workoutId>/sets -H "Content-Type: application/json" -d '{"exerciseId":"<exerciseId>","weightKg":62.5,"reps":8}'
+curl -s -b cookie.txt -X POST http://localhost:3001/workouts/<workoutId>/sets -H "Content-Type: application/json" -d '{"exerciseId":"<exerciseId>","weightKg":60,"reps":8}'
+```
+
+2件目のPOSTのレスポンスに注目する。`weightKg`が1件目(60kg)を上回っているため、`personalBest`に`{"weightKg":62.5,"previousBestKg":60}`が入って返ってくる(具体例13で追った判定がここでも動く)。
+
+ここで3つ試してほしい。
+
+- **空のPATCHを送る** → `curl -X PATCH .../sets/<1件目のsetId> -d '{}'` は`400 {"error":"invalid_request","details":{"errors":["weightKg・repsのいずれかを指定してください"]}}`になるはず
+- **1件目のPATCHを`{"weightKg":65,"reps":10}`で送る** → `65 > 62.5`(他のセットの最大重量)なので`personalBest`が`{"weightKg":65,"previousBestKg":62.5}`で返る。**同じPATCHを`{"reps":12}`(重量を含めない)で送り直す** → 重量は変わっていないのに`personalBest`は`null`になる。「重量が変わったときだけ判定する」ガードがどこにあるか、これから読む
+- **中央(2件目)のセットをDELETEする** → `{"deleted":false}`が返る。その後`GET /workouts/<workoutId>`を取ると、残った1件目・3件目の`setOrder`が**1・2に詰め直されている**(元は1・3だった)ことを確認する
+- **残りのセットを全部DELETEする**(メモも空のまま) → 最後の1件を消したときのレスポンスが`{"deleted":true}`に変わり、その後の`GET /workouts/<workoutId>`は`404`になる
+
+### 2. コードを実行順に追う
+
+```ts
+const updateSetSchema = z
+  .object({
+    weightKg: weightKgSchema.nullable().optional(),
+    reps: repsSchema.optional(),
+  })
+  .refine((data) => data.weightKg !== undefined || data.reps !== undefined, {
+    message: 'weightKg・repsのいずれかを指定してください',
+  })
+
+async function findOwnSet(userId: string, workoutId: string, setId: string) {
+  const workout = await findOwnWorkout(userId, workoutId)
+  if (!workout) return null
+  return prisma.workoutSet.findFirst({ where: { id: setId, workoutId: workout.id } })
+}
+
+workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
+  const parsed = updateSetSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const userId = req.session.userId!
+  const set = await findOwnSet(userId, req.params.id as string, req.params.setId as string)
+  if (!set) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const updated = await prisma.workoutSet.update({ where: { id: set.id }, data: parsed.data })
+
+  const weightChanged = toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg)
+  const personalBest = weightChanged ? await evaluatePersonalBest(userId, updated) : null
+
+  res.status(200).json({ ...serializeSet(updated), personalBest })
+})
+```
+
+| ステップ | 何が起きるか | このときの値(空のPATCH `{}`を送ったとき) |
+|---|---|---|
+| ① `updateSetSchema.safeParse(req.body)` | `weightKg`・`reps`はどちらも`.optional()`だが、末尾の`.refine()`が「両方とも`undefined`なら失敗」を追加している。個々のフィールドを省略可能にしつつ、**全体としては最低1項目を要求する**という2段構えのバリデーション | `{}`は両方`undefined`なので`refine`に失敗し`parsed.success`が`false` |
+| ② `findOwnSet(userId, workoutId, setId)` | `findOwnWorkout`(具体例1と同じ、自分の・削除されていないworkoutのみ)を経由してから、その`workoutId`配下の`setId`を探す。2段階にすることで、他人のworkoutIdに他人のsetIdを組み合わせて渡されてもここで弾ける(IDOR対策) | - |
+| ③ `weightChanged`の判定 | `set`(更新前)と`updated`(更新後)の`weightKg`を`toWeightNumber()`で比較する。**`reps`だけの変更ではここが`false`になり`evaluatePersonalBest`自体を呼ばない** | `{"reps":12}`のケースでは`set.weightKg === updated.weightKg`なので`weightChanged`は`false` |
+
+DELETEハンドラーは`$transaction`の中で3つのことをまとめて行う。
+
+```ts
+workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
+  const userId = req.session.userId!
+  const workout = await findOwnWorkout(userId, req.params.id as string)
+  if (!workout) { res.status(404).json({ error: 'not_found' }); return }
+  const set = await prisma.workoutSet.findFirst({
+    where: { id: req.params.setId as string, workoutId: workout.id },
+  })
+  if (!set) { res.status(404).json({ error: 'not_found' }); return }
+
+  const shouldDelete = await prisma.$transaction(async (tx) => {
+    await tx.workoutSet.delete({ where: { id: set.id } })
+
+    const remaining = await tx.workoutSet.findMany({
+      where: { workoutId: set.workoutId, exerciseId: set.exerciseId },
+      orderBy: { setOrder: 'asc' },
+    })
+    for (const [index, s] of remaining.entries()) {
+      const setOrder = index + 1
+      if (s.setOrder !== setOrder) {
+        await tx.workoutSet.update({ where: { id: s.id }, data: { setOrder } })
+      }
+    }
+
+    const totalSetCount = await tx.workoutSet.count({ where: { workoutId: set.workoutId } })
+    if (totalSetCount === 0 && workout.memo === null) {
+      await tx.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
+      return true
+    }
+    return false
+  })
+
+  res.status(200).json({ deleted: shouldDelete })
+})
+```
+
+| ステップ | 何が起きるか | このときの値(3件中、真ん中のsetを消したとき) |
+|---|---|---|
+| ① `tx.workoutSet.delete(...)` | 対象の行を物理削除する。ソフトデリート(`deletedAt`を立てるだけ)ではなく本当にDELETEする点が`workout`自体の削除方針と違う | - |
+| ② 残りを`setOrder`昇順で取り直し、`index + 1`で振り直す | 削除で欠番ができた連番(例: 1,3)を、表示上また1から連番になるよう詰め直す。`nextSetOrder()`(具体例1で見た「最大値+1」の採番)自体は詰め直さなくても壊れないが、フロントの表示(「1セット目」「2セット目」)が飛び番になるのを防ぐための後処理 | 元が`{1,2,3}`から2を消して`{1,3}`が残る → ループが3の`setOrder`を`2`に更新する |
+| ③ `totalSetCount === 0 && workout.memo === null` | このworkout全体(他の種目も含む)のセットが0件になり、かつメモも無ければ、中身が空のworkoutをホームに残さないためソフトデリートする(Issue #234)。**メモがあれば消さない**(メモだけの記録として意味があるため) | 3件中1件消しただけなので`totalSetCount`は2、ここは通らない |
+| ④ `res.json({ deleted: shouldDelete })` | ③で実際にworkoutを消したかどうかをフロントに伝える。フロント側はこれを見てセッション状態をリセットする([frontend-guide.md具体例16](./frontend-guide.md)参照) | `false` |
+
+②が①と同じトランザクション内にあるのは、削除と振り直しの間に他のリクエストが割り込んで`setOrder`がずれるのを防ぐため。
+
+### 3. 自分で壊して確かめる
+
+- ②の`remaining`取得〜更新ループを一時的にコメントアウトして保存する(`tsx watch`が自動再起動)。3件セットがある状態で1件目(`setOrder`が1)を消してみると、`{"deleted":false}`は変わらず返るが、`GET /workouts/:id`で見る残り2件の`setOrder`は**`2`・`3`のまま**になる(実際に試すとそうなる)。「1セット目」が存在しない状態でフロントの表示がどう崩れるかは[frontend-guide.md具体例16](./frontend-guide.md)も参照。**試したら必ず元に戻すこと**
+- PATCHハンドラーの`weightChanged ? await evaluatePersonalBest(...) : null`を、条件を外して常に`evaluatePersonalBest(userId, updated)`を呼ぶように変えて保存する。重量はそのままで回数だけPATCHしても`personalBest`が返るようになる(実際に試すとそうなる)。フロント側は`personalBest`が返るたびに達成表示を出す・更新するため、この1行を外すだけで「回数を直しただけなのに自己ベスト表示が出る/更新される」という体感できる不具合になる。**試したら必ず元に戻すこと**
+
+## 具体例16から読み取れる設計上の判断
+
+- **「省略可能な項目」と「最低1項目は必須」を別々の検証で表現する** — `updateSetSchema`は個々のフィールドを`.optional()`にしつつ、`.refine()`で全体としての制約(最低1項目)を追加している。PATCH `/workouts/:id`(メモ更新)も同じ形を使っており、「部分更新を許すPATCH」の共通パターンになっている
+- **削除の副作用(連番の詰め直し・親レコードの後始末)は同じトランザクションにまとめる** — 削除そのもの・`setOrder`の再採番・`workout`のソフトデリート判定という3つの処理を1つの`$transaction`に入れることで、途中でリクエストが割り込んでも整合性が崩れない。レスポンスの`deleted`フィールドは、この中で実際に何が起きたかをフロントに伝えるためのもの
+- **同じ「保存」でも、何を変えたかによって副作用の判定を出し分ける** — PATCHは`weightKg`が変わったときだけ自己ベストを再判定する。フロントは重量欄・回数欄それぞれのblurで同じPATCHを叩くため、この区別がサーバー側に無いと「回数だけ直しても自己ベスト表示が動く」という体感の悪さにつながる
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
