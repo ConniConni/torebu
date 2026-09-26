@@ -1251,6 +1251,98 @@ authRouter.post('/password-resets', async (req, res) => {
 - **ローカル開発とメール送信を両立させる分岐を1箇所に閉じ込める** — `sendPasswordResetEmail()`内の「APIキー未設定ならログ出力に留める」という分岐のおかげで、呼び出し側(`password-reset-requests`のハンドラ)はローカルか本番かを意識せず同じコードで書ける
 - **メール再設定によるパスワード変更は、他端末のセッションを無効化しない**(`docs/backlog.md`「判断保留(再検討のタイミング待ち)」に既知の未対応事項として記載済み)。トークンによる認可の外側で、`express-session`のセッション自体は別ライフサイクルで動いているため、パスワードを変えても既存のログイン状態(Cookie)はそのまま残る
 
+## 具体例10：ログイン中にパスワードを変更するとき
+
+具体例9は「メールのリンク(トークン)を知っていることを認可の根拠にする」未ログインの仕組みだったが、[`backend/src/routes/auth.ts`](../../backend/src/routes/auth.ts)のPOST `/auth/password-changes`は逆に、**ログイン中の本人**が現在のパスワードを入力して変更する仕組み。同じ「パスワードを変える」操作でも、認可の根拠(トークン vs セッション)が異なると、レート制限の考え方まで変わることが読み取れる。
+
+### 1. まず動かしてみる
+
+`backend`を`npm run dev`で起動した状態で試す。具体例1の`cookie.txt`(ログイン済み)を使う。
+
+```bash
+# 現在のパスワードを間違える
+curl -s -i -b cookie.txt -X POST http://localhost:3001/auth/password-changes \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword":"wrong","newPassword":"anotherpassword123"}'
+```
+
+```json
+HTTP/1.1 400 Bad Request
+{"error":"invalid_current_password"}
+```
+
+ここで2つ試してほしい。
+
+- **現在と同じパスワードを新しいパスワードに指定する**(`{"currentPassword":"password123","newPassword":"password123"}`) → `400 {"error":"same_as_current_password"}`
+- **正しく変更する**(`{"currentPassword":"password123","newPassword":"newpassword456"}`) → `200 {"ok":true}`。直後に`curl -b cookie.txt http://localhost:3001/auth/me`を叩くと、**ログアウトさせられておらず`200`のまま**であることが確認できる。パスワードを変えてもセッションは維持される設計
+
+もう1つ、具体例9とまたがる確認をしておく。パスワード変更の**前**に`POST /auth/password-reset-requests`でリセットトークンを発行しておき(具体例9参照)、そのトークンを使わないまま`password-changes`でパスワードを変更する。その後、変更前に発行したトークンで`POST /auth/password-resets`を呼ぶと、
+
+```json
+HTTP/1.1 400 Bad Request
+{"error":"invalid_or_expired_token"}
+```
+
+トークンはまだ有効期限内(1時間)のはずだが、`password-changes`側の処理でこのトークンを失効させているため使えなくなる(実際に確認済み)。
+
+### 2. コードを実行順に追う
+
+```ts
+const passwordChangeRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  keyGenerator: (req) => req.session.userId!,
+  skip: () => process.env.NODE_ENV === 'test',
+})
+
+authRouter.post('/password-changes', requireAuth, passwordChangeRateLimiter, async (req, res) => {
+  const parsed = passwordChangeSchema.safeParse(req.body)
+  if (!parsed.success) { /* 400 */ }
+  const { currentPassword, newPassword } = parsed.data
+
+  const user = await prisma.user.findUnique({ where: { id: req.session.userId } })
+  if (!user) { /* 401、セッションも破棄 */ }
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!passwordMatches) {
+    res.status(400).json({ error: 'invalid_current_password' })
+    return
+  }
+
+  if (newPassword === currentPassword) {
+    res.status(400).json({ error: 'same_as_current_password' })
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, passwordResetToken: null, passwordResetExpiresAt: null },
+  })
+
+  res.status(200).json({ ok: true })
+})
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `requireAuth`(第2引数) | ログイン必須。具体例1の`requireAuth`と同じミドルウェア。具体例9の2エンドポイントには無かった制約 |
+| ② `passwordChangeRateLimiter`(第3引数) | `keyGenerator: (req) => req.session.userId!`で、**IPではなくユーザーID単位**にレート制限する。具体例9の`passwordResetRequestRateLimiter`は未ログイン状態からの攻撃を想定してIP単位で数えるが、こちらはセッションを乗っ取った攻撃者が自分の現在のパスワードを知らずに総当たりする状況を想定している。攻撃者はIPを変えられてもセッション(=`userId`)は変えられないため、ユーザー単位で数える方が防御として意味を持つ |
+| ③ `bcrypt.compare(currentPassword, user.passwordHash)` | ログイン中に本人確認をやり直す。ここが一致しなければ`400 invalid_current_password`で終了 |
+| ④ `if (newPassword === currentPassword)` | ③の比較を通過した後なので、`currentPassword`は「本物の現在のパスワード」と確定している。よって新しいパスワードとの比較は、③のように`bcrypt.compare`をもう一度呼ばず**入力値どうしの単純な文字列比較で足りる** |
+| ⑤ `passwordResetToken: null, passwordResetExpiresAt: null`も一緒に更新 | ログイン中の変更なのに、なぜメールリセット用のトークンまで消すのか。もし消さないと、変更前に発行して未使用のまま残っていたメールリンクが、変更後もそのまま有効なままになってしまう。具体例9とは別のAPIだが、「有効なパスワード変更手段が同時に2つ生き残らないようにする」ためにここで揃えて失効させている(「まず動かしてみる」で確認した挙動の実体) |
+
+### 3. 自分で壊して確かめる
+
+- `if (newPassword === currentPassword)`を一時的にコメントアウトして保存すると、同じパスワードへの「変更」が`200`で成功するようになる(実際に確認済み)。実害は無さそうに見えるが、「変更しました」という成功メッセージが実際には何も変えていないという、ユーザーへの誤った状態通知を許すことになる。**試したら必ず元に戻すこと**
+- `passwordResetToken: null, passwordResetExpiresAt: null`を一時的に外して(`data: { passwordHash }`だけにして)保存すると、どうなるか考えてみる。「まず動かしてみる」で確認した「変更前に発行したトークンが変更後は使えなくなる」という挙動が効かなくなり、古いメールリンクが変更後もそのまま有効なままになってしまうはずだ。実際に試す場合は、リセットトークンを発行→`password-changes`で変更→そのトークンで`password-resets`を呼び、`400`ではなく`200`が返ることを確認する。**この変更は「本来失効しているはずの手段をもう一度使えるようにする」ものなので、試す場合は自分のローカル環境限定にし、確認後は必ず元に戻すこと**(この項目自体は今回コードを読んで導いた予想であり、実際に崩して確認するところまでは行っていない)
+- `passwordChangeRateLimiter`の`keyGenerator`を`(req) => req.ip`に一時的に変えて考えてみる(実際に動かすには複数セッションが要るため、まずはコードを読んで考えるだけでよい)。IP単位に変えると、社内ネットワークやスマホの共有回線など同じIPを複数ユーザーが使う環境で、無関係な他ユーザーの操作が自分のレート制限を消費してしまう。ユーザー単位にしている②の設計判断が、この巻き添えを避けるためでもあることが分かる
+
+## 具体例10から読み取れる設計上の判断
+
+- **「ログイン中の変更」と「ログアウト中の再設定」を別々のAPI・別々のレート制限単位にする** — `password-changes`はログイン必須でユーザーID単位のレート制限、具体例9の2エンドポイントは未ログインでIP単位のレート制限。想定する攻撃者の状態(セッションを乗っ取れているか、そもそもログインできていないか)が違うため、レート制限の数え方もそれに合わせて変えている
+- **パスワードの変更経路が複数あるときは、お互いを無効化し合う** — ログイン中の変更は、未使用のメールリセットトークンも一緒に失効させる。「今から有効なパスワード変更手段」を常に1つに保つことで、過去に発行したまま忘れていたリンクが後から悪用される余地を無くしている。具体例9の「読み取れる設計上の判断」にある「メール再設定によるパスワード変更は、他端末のセッションを無効化しない」とは逆方向の設計で、こちらは「ログイン中の変更が、未使用のメールリセット手段を無効化する」。パスワードの変更経路が複数ある設計では、どちらの方向で無効化するかを個別に決めている
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ
