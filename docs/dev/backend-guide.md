@@ -1299,9 +1299,11 @@ authRouter.post('/password-changes', requireAuth, passwordChangeRateLimiter, asy
 
 ### 3. 自分で壊して確かめる
 
-- `password-resets`の`data: { ... passwordResetToken: null, passwordResetExpiresAt: null }`を一時的に`data: { passwordHash }`だけに変えて保存すると、トークンが消費されなくなり、同じリセットリンクを何度でも使い回せてしまう(「まず動かしてみる」で確認した使い切りが壊れる)。**試したら必ず元に戻すこと**
-- `password-changes`の`if (newPassword === currentPassword)`を一時的にコメントアウトすると、同じパスワードへの「変更」が`200`で成功するようになる。実害は無さそうに見えるが、「変更しました」という成功メッセージが実際には何も変えていないという、ユーザーへの誤った状態通知を許すことになる。**試したら必ず元に戻すこと**
+- `password-resets`の`data: { ... passwordResetToken: null, passwordResetExpiresAt: null }`を一時的に`data: { passwordHash }`だけに変えて保存すると、どうなるか考えてみる。トークンをクリアしなくなるため、「まず動かしてみる」で確認した使い切りが効かなくなり、同じリセットリンクを何度でも使い回せてしまうはずだ。実際に試す場合は、リンクを使い切った後に同じ`token`でもう一度`password-resets`を呼び、`400 invalid_or_expired_token`ではなく`200`が返ることを確認する。**この変更は「秘密の使い切りリンクをもう一度使えるようにする」ものなので、試す場合は自分のローカル環境限定にし、確認後は必ず元に戻すこと**
+- `password-changes`の`if (newPassword === currentPassword)`を一時的にコメントアウトして保存すると、同じパスワードへの「変更」が`200`で成功するようになる(実際に確認済み)。実害は無さそうに見えるが、「変更しました」という成功メッセージが実際には何も変えていないという、ユーザーへの誤った状態通知を許すことになる。**試したら必ず元に戻すこと**
 - `passwordChangeRateLimiter`の`keyGenerator`を`(req) => req.ip`に一時的に変えて考えてみる(実際に動かすには複数セッションが要るため、まずはコードを読んで考えるだけでよい)。IP単位に変えると、社内ネットワークやスマホの共有回線など同じIPを複数ユーザーが使う環境で、無関係な他ユーザーの操作が自分のレート制限を消費してしまう。ユーザー単位にしている②の設計判断が、この巻き添えを避けるためでもあることが分かる
+
+> このガイドを書く過程で、`password-changes`が古い`passwordResetToken`を失効させることの効果と、上の2つ目の項目(`same_as_current_password`チェックの無効化)は実際にcurlで確認した(具体例2の手順と同じく、パスワード変更後に変更前発行のトークンで`password-resets`を呼ぶと`400 invalid_or_expired_token`になる)。1つ目の項目(`password-resets`のトークンクリアを外した場合にどうなるか)は、コードを読んで導いた予想であり、この拡張作業では実際に崩して確認するところまでは行っていない。試す場合は上の注意点を踏まえたうえで各自の判断で行うこと。
 
 ## 具体例9から読み取れる設計上の判断
 

@@ -721,7 +721,7 @@ async function onSelectMetric(next: Metric) {
 
 ## 具体例9：パスワードを再設定・変更するとき
 
-[`backend-guide.md`](./backend-guide.md)で追った3つのエンドポイントを、フロント側の3つの画面([`frontend/app/pages/password-reset/index.vue`](../../frontend/app/pages/password-reset/index.vue)・[`[token].vue`](../../frontend/app/pages/password-reset/%5Btoken%5D.vue)・[`frontend/app/pages/mypage/password.vue`](../../frontend/app/pages/mypage/password.vue))がどう呼んでいるかを見る。具体例2の`guest`/`auth`ミドルウェアが、ログイン関連以外の画面でも同じ形で使われていることが確認できる。
+[`backend-guide.md`](./backend-guide.md)で追った3つのエンドポイントを、フロント側の3つの画面([`frontend/app/pages/password-reset/index.vue`](../../frontend/app/pages/password-reset/index.vue)・[`frontend/app/pages/password-reset/[token].vue`](../../frontend/app/pages/password-reset/[token].vue)・[`frontend/app/pages/mypage/password.vue`](../../frontend/app/pages/mypage/password.vue))がどう呼んでいるかを見る。具体例2の`guest`/`auth`ミドルウェアが、ログイン関連以外の画面でも同じ形で使われていることが確認できる。
 
 ### 1. まず動かして観察する
 
@@ -772,7 +772,7 @@ async function onSubmit() {
 | ステップ | 何が起きるか |
 |---|---|
 | ① `requestPasswordReset(email.value)` | 常に`202`が返るため、`catch`に落ちるのはネットワークエラー等よほどの場合だけ。「メールアドレスが存在しない」という結果分岐がそもそも存在しない |
-| ② `isCompleted.value = true` | ①が例外を投げない限り必ず実行される。フォームを完了メッセージに切り替えるこの1行が、「入力内容に関わらず同じ見た目になる」という observed 動作の実体 |
+| ② `isCompleted.value = true` | ①が例外を投げない限り必ず実行される。フォームを完了メッセージに切り替えるこの1行が、「入力内容に関わらず同じ見た目になる」という、さっき観察した動作の実体 |
 
 `[token].vue`はルートパラメータからトークンを受け取る点が新しい。
 
@@ -831,8 +831,8 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 ### 3. 自分で壊して確かめる
 
-- `password-reset/index.vue`の`isCompleted.value = true`を`try`ブロックの外(`requestPasswordReset`の前)に移動して保存する(HMRで反映)。入力欄を空にして送信すると、`required`属性がブラウザの標準バリデーションで止めてくれるためこのままでは気づきにくいが、開発者ツールで`required`を外してから空欄で送信すると、`400 invalid_request`が返っているにも関わらず画面は完了メッセージになってしまう。**試したら必ず元に戻すこと**
-- `mypage/password.vue`の`v-if="isCompleted"`の分岐を一時的に外して常にフォームを表示させたままにすると、変更成功後も同じフォームが表示され続ける。`currentPassword`・`newPassword`の`ref`はクリアしていないため、値も残ったまま(送信し直すと、今度は新しいパスワードが「現在のパスワード」欄に入ったままの状態で送ることになり、`invalid_current_password`になる)。**試したら必ず元に戻すこと**
+- `password-reset/index.vue`の`isCompleted.value = true`を`try`ブロックの外(`requestPasswordReset`の前)に移動して保存する(HMRで反映)。入力欄を空にして送信すると、`required`属性がブラウザの標準バリデーションで止めてくれるためこのままでは気づきにくいが、開発者ツールのコンソールで`document.querySelector('#email').removeAttribute('required')`を実行してから空欄で送信すると、Networkタブでは`POST /api/auth/password-reset-requests`が`400 invalid_request`で失敗しているにも関わらず、画面は完了メッセージになってしまう(実際に確認済み)。**試したら必ず元に戻すこと**
+- `mypage/password.vue`の`v-if="isCompleted"`を一時的に`v-if="false && isCompleted"`に変えて保存すると、変更成功後も完了メッセージに切り替わらずフォームが表示され続ける。`currentPassword`・`newPassword`の`ref`はクリアしていないため、値も入力したまま残る。ここで**入力欄に残っているのは新しいパスワードではなく、変更前に入力した古い現在のパスワードの方**である点に注意(実際に確認すると、`current-password`欄には変更前の値がそのまま残り、`new-password`欄には新しいパスワードが残る)。この状態でもう一度送信すると、`currentPassword`欄の値(既に無効になった古いパスワード)で認証しようとするため、`invalid_current_password`(現在のパスワードが正しくありません)になる。**試したら必ず元に戻すこと**
 
 ## 具体例9から読み取れる設計上の判断
 
