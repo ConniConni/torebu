@@ -39,7 +39,10 @@
       `addExercise()`→`addTargetSet()`の2段保存の流れまで扱った。検証中に実際のバグ
       （`targetSetsSaving`の宣言順序によるReferenceErrorでPATCHが一度も飛ばない不具合）を発見し、
       [Issue #278](https://github.com/ConniConni/torebu/issues/278)で修正した
-- [ ] 統計・集計（`stats.ts`。ランキング等の集計ロジック）
+- [x] 統計・集計（`stats.ts`。ランキング等の集計ロジック）— backend-guide.md／frontend-guide.mdの
+      「具体例5」で対応済み（2026-09-26）。「公式種目のみ集計」「自重セットは除外」という2つの絞り込みと、
+      `GET /stats/exercises/:exerciseId/history`の「対象外を404で隠す」判定、フロント側の
+      `watchEffect`＋`watch(..., { immediate: true })`による初期表示の仕組み（Issue #126の再現込み）まで扱った
 - [ ] 通知（5分遅延・表示時再確認の設計。`docs/backlog.md`「通知の種類の拡張」節と合わせて読むと
       設計判断の背景まで追える）
 - **再検討のタイミング**：次に「開発者向け資料を整備したい」という作業に着手するとき、

@@ -356,6 +356,86 @@ async function saveTargetSets(element: RoutineExerciseItem) {
 - **「選んだ瞬間にデフォルト値で保存される」設計は複数の画面で繰り返されている** — ワークアウト記録作成(具体例1)の`ensureWorkout()`+セット追加と、ルーティン編集の`addExercise()`+`addTargetSet()`は、「種目を選ぶ操作そのものが暗黙の保存操作になっている」という同じ設計方針をそれぞれの画面で独立に実装している。保存ボタンを持たない画面がこのアプリに複数あることの一貫性を支えている
 - **`<script setup>`のトップレベルの実行順序は、宣言の位置に依存する** — `pickedExerciseId`の分岐のように「画面を開いた直後に副作用のある処理を実行する」コードは、その処理が参照する`ref()`・`const`宣言より下に書くと、意図に反してTDZエラーになる。これは今回のガイド作成中に実際に踏んだ不具合で修正した([Issue #278](https://github.com/ConniConni/torebu/issues/278))。関数宣言は巻き上げられるが中身の変数参照はそうではない、という違いを意識する必要がある
 
+## 具体例5：統計画面でグラフを表示するとき
+
+[`backend-guide.md`](./backend-guide.md)具体例5で追ったGET `/stats/volume`・GET `/stats/exercises/:exerciseId/history`を、フロント側からどう呼んでいるかを見る。対象は[`frontend/app/pages/stats.vue`](../../frontend/app/pages/stats.vue)(統計画面)。ここまでの具体例は「ボタンを押した/種目を選んだ」という**ユーザー操作がきっかけ**でAPIが呼ばれていたが、この画面は**画面を開いた瞬間に2種類のAPIが自動的に呼ばれる**点が違う。
+
+### 1. まず動かして観察する
+
+`frontend`と`backend`を両方`npm run dev`で起動する。ログイン後、Networkタブを開いた状態で下部タブの「統計」をタップして`/stats`へ移動する。
+
+- **画面に切り替わった瞬間** → `GET /api/stats/volume?range=3m`と`GET /api/stats/exercises/<種目id>/history?range=3m`の**2本が、何も操作していないのに続けて流れる**。しかも種目別推移のセレクトボックスには、既に何らかの種目(例:「ベンチプレス」)が選択された状態でグラフが表示されている
+- **期間ボタン(「1ヶ月」等)を切り替えた瞬間** → `range`パラメータが変わった`GET /api/stats/volume`・`GET /api/stats/exercises/.../history`がもう一度流れ、グラフの横軸・データが範囲に応じて変わる
+- **種目別推移のセレクトボックスで種目を変えた瞬間** → `GET /api/stats/exercises/<選んだ種目のid>/history`だけが流れる(`/stats/volume`は流れない)
+
+「画面を開いただけで、種目を何も選んでいないのに1本目の種目別履歴が飛ぶ」のはこれまでの具体例(ワークアウト記録・ルーティン)には無かった挙動。最初にどの種目が選ばれるのか、次でコードから確認する。
+
+### 2. コードを実行順に追う
+
+```ts
+const { fetchVolume, fetchExerciseHistory } = useStats()
+const { exercises, fetchExercises } = useExercises()
+if (!exercises.value) {
+  await fetchExercises()
+}
+
+const officialExercises = computed(
+  () => exercises.value?.filter((e) => e.createdBy === null && !e.deletedAt) ?? [],
+)
+
+const range = ref<StatsRange>('3m')
+const selectedExerciseId = ref<string>('')
+watchEffect(() => {
+  if (!selectedExerciseId.value && officialExercises.value.length > 0) {
+    selectedExerciseId.value = officialExercises.value[0]!.id
+  }
+})
+
+watch(range, () => {
+  loadVolume()
+  loadHistory()
+})
+watch(selectedExerciseId, loadHistory, { immediate: true })
+await loadVolume()
+```
+
+| ステップ | 何が起きるか |
+|---|---|
+| ① `officialExercises` | `useExercises()`が持つ全種目(公式＋自分のカスタム)から、`createdBy === null`(公式種目のみ)・`deletedAt`無しのものだけに絞る。[backend-guide.md具体例5](./backend-guide.md)で見た`OFFICIAL_EXERCISE_FILTER`と同じ「集計対象は公式種目のみ」という方針を、フロント側は選択肢自体を絞ることで表現している |
+| ② `watchEffect(...)` | `selectedExerciseId`が空で`officialExercises`が1件以上あれば、先頭の1件を自動選択する。さっき観察した「開いた瞬間から何かの種目が選ばれている」のはここ。`officialExercises`の並び順は`useExercises()`(`GET /exercises`)がそのまま返す順(使用回数の多い順など)なので、**「一番よく使っている公式種目」が自動的に選ばれる**ことになる |
+| ③ `watch(selectedExerciseId, loadHistory, { immediate: true })` | `selectedExerciseId`が変わるたびに`loadHistory()`を呼ぶ。`{ immediate: true }`が付いているため、**登録した瞬間に一度実行される**(値の変化を待たない)。②の`watchEffect`が同期的に`selectedExerciseId`を埋めた直後にこのwatchが登録されるため、immediateが無いと「②で入った初期値」をこのwatchが変化として検知できない(次の「3. 自分で壊して確かめる」で実際に確認する) |
+| ④ `await loadVolume()` | スクリプトの最後で1回だけ呼ばれる。`/volume`はrangeにしか依存しないため、`watchEffect`のような仕組みは要らず素直に1回呼べばよい |
+
+`fetchVolume`・`fetchExerciseHistory`本体は[`useStats()`](../../frontend/app/composables/useStats.ts)にある。
+
+```ts
+export function useStats() {
+  const requestFetch = useRequestFetch()
+
+  async function fetchVolume(range: StatsRange) {
+    return requestFetch<VolumePoint[]>('/api/stats/volume', { query: { range } })
+  }
+  async function fetchExerciseHistory(exerciseId: string, range: StatsRange) {
+    return requestFetch<ExerciseHistoryPoint[]>(`/api/stats/exercises/${exerciseId}/history`, { query: { range } })
+  }
+
+  return { fetchVolume, fetchExerciseHistory }
+}
+```
+
+具体例1の`useWorkoutSession()`と同じく`useRequestFetch()`(SSR時のCookie転送のため)を使っているが、**`useState`によるセッション中キャッシュを持たない**点が違う。コード中のコメントにある通り、`range`や選択種目が変わるたびに取り直す一覧なので、画面を離れたら破棄してよい(具体例1の「更新漏れに注意すべきキャッシュ」とは逆に、そもそもキャッシュを持たせない設計)。
+
+### 3. 自分で壊して確かめる
+
+- `watch(selectedExerciseId, loadHistory, { immediate: true })`の`{ immediate: true }`を一時的に外して`watch(selectedExerciseId, loadHistory)`にして保存する(Viteのフルリロードが必要。この画面は初回表示の話なのでHMRの差分反映ではなく`http://localhost:3000/stats`を直接開き直して確認する)。すると、種目別推移のセレクトボックスには変わらず「ベンチプレス」(データがある種目)が選ばれているのに、グラフには**「この期間の記録がありません」**と出て、実際に選ばれている種目のデータが表示されない。これが実際に[Issue #126](https://github.com/ConniConni/torebu/issues/126)で起きていた不具合そのもの。原因はコードのコメントの通りで、`watchEffect`が入れた初期値をこの`watch`が「変化」として検知できないため。セレクトボックスを手動で一度触って選び直すと(`selectedExerciseId`が実際に変化するので)正しく表示される、という中途半端な壊れ方になる点も体感できる。**試したら必ず元に戻すこと**
+- `officialExercises`の`filter`条件から`e.createdBy === null`を一時的に外して保存する(HMRで反映)。すると、種目選択のプルダウンに自分のカスタム種目(公式種目ではないもの)も並ぶようになる。選んでみると、`GET /api/stats/exercises/<customId>/history`が[backend-guide.md具体例5](./backend-guide.md)で見た通り`404`になり、グラフ部分にエラーメッセージ「データの取得に失敗しました。時間をおいて再度お試しください」が出る。フロントの選択肢を絞る理由(バックエンドが集計しないものを選べないようにする)が、外したときのエラー表示で確認できる。**試したら必ず元に戻すこと**
+
+## 具体例5から読み取れる設計上の判断
+
+- **「画面を開いた瞬間の自動リクエスト」は`watchEffect`/`watch(..., { immediate: true })`で表現する** — 具体例1・4のように「ユーザー操作の中でAPIを呼ぶ」画面が多い中、この画面は「開いたら勝手に集計結果を出す」閲覧専用の画面のため、素直に`await loadVolume()`(1回だけの初期呼び出し)と`watch(..., { immediate: true })`(初期値を含めて反応する監視)を使い分けている
+- **バックエンドの絞り込み方針をフロントの選択肢にも反映する** — `officialExercises`が`createdBy === null`でフィルタしているのは、[backend-guide.md](./backend-guide.md)の`OFFICIAL_EXERCISE_FILTER`と同じ方針をフロント側でも守っている形。選べない種目を選択肢から最初から外すことで、後段の404エラー表示に頼らずに済んでいる(具体例3の「操作できないボタンは隠す」と同じ考え方)
+- **画面ごとに使い分けるcomposableのキャッシュ方針** — `useWorkouts()`・`useExercises()`のような一覧は`useState`でセッション中キャッシュするが、`useStats()`はキャッシュしない。両者の違いは「同じデータを複数画面で使い回すか」「パラメータ(range・選択種目)によって毎回内容が変わるものか」で、後者にキャッシュを持たせると`range`ごとに古いデータが残るバグの温床になりやすい
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
