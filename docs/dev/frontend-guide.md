@@ -1323,10 +1323,11 @@ function groupFor(exerciseId: string) {
 
 ### 1. まず動かして観察する
 
-`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく。ホーム(`/`)から③(`/workouts/new`)へ**SPA内遷移**で入り、「＋種目を追加」でベンチプレスを選ぶ(その場でセットが1つ、デフォルト値(回数10・自重)で登録される)。ネットワークタブ(`read_network_requests`)を開いた状態で、次を順に試す。
+`frontend`・`backend`を両方`npm run dev`で起動し、ログインしておく。ホーム(`/`)から③(`/workouts/new`)へ**SPA内遷移**で入り、「＋種目を追加」でベンチプレスを選ぶ(その場でセットが1つ登録される。初期値は`defaultSetValuesFor()`(Issue #116、③の`onAddSet`が使う関数)の優先順位次第で、このアカウントでベンチプレスを初めて使うなら回数10・自重、既に使ったことがあれば前回記録の値が入る)。続けて同じカードの「＋セット追加」でもう1つセットを増やす。ネットワークタブ(`read_network_requests`)を開いた状態で、次を順に試す。
 
-- 重量欄に`999999`のような大きすぎる値(または直接触らず既存の値の末尾に数字を足す)を入力してから、回数欄をクリックしてフォーカスを移す(blur)。**カード内に赤字で「セットの更新に失敗しました」と出て、値は入力欄に残ったまま**になる。ネットワークタブで見るとこの操作で飛んだ`PATCH .../sets/:setId`は`400`。バックエンドの`weightKgSchema`(999.5kg以下・0.5kg刻み)がここで弾いている
-- 重量欄を`62.5`のような正しい値に直して回数欄からもう一度blurする。今度は`200 OK`が返り、**入力欄の下に黄色い帯で「🏆 自己ベスト更新！62.5kg（これまで◯◯kg）」**が表示される(このカードに他のセットが無ければ`previousBestKg`は無くてもこの表示自体は出る場合がある。他のセットがある状態で試すと分かりやすい)
+- 1つ目のセットの重量欄に`60`を入力してblurする(`200 OK`が返る)。**このアカウントでベンチプレスの記録がこれが初めてだと、この時点では自己ベスト表示は出ない**(バックエンドが「同じ種目に他のセットが1件も無ければ判定しない」設計のため。2つ目のセットを入れることで、次の手順から「他のセットがある」状態になる)
+- 2つ目のセットの重量欄を選択して`999999`のような大きすぎる値に置き換えてから、回数欄をクリックしてフォーカスを移す(blur)。**カード内に赤字で「セットの更新に失敗しました」と出て、値は入力欄に残ったまま**になる。ネットワークタブで見るとこの操作で飛んだ`PATCH .../sets/:setId`は`400`。バックエンドの`weightKgSchema`(999.5kg以下・0.5kg刻み)がここで弾いている
+- 2つ目のセットの重量欄を`65`のような、1つ目(60)を上回る正しい値に直して回数欄からもう一度blurする。今度は`200 OK`が返り、**入力欄の下に黄色い帯で「🏆 自己ベスト更新！65kg（これまで60kg）」**が表示される
 - 同じセットの**回数欄だけ**を変えてblurする(重量欄には触らない)。`PATCH`は飛ぶが、直前に出ていた自己ベスト表示は**そのまま残り、新たに増えたり消えたりしない**
 - 「このセットを削除」を押す。**確認ダイアログは出ず即座に消える**(Issue #272で意図的にこうなっている)。ネットワークタブでは`DELETE .../sets/:setId`の直後に`GET /api/workouts/:id`が飛んでいるのが見える
 
@@ -1403,7 +1404,7 @@ function applyPersonalBest(set: WorkoutSetItem, personalBest: PersonalBest | nul
 
 | ステップ | 何が起きるか | このときの値(重量で自己ベスト更新した直後に、同じセットの回数だけ変えたとき) |
 |---|---|---|
-| ① 重量変更時のPATCH応答 | サーバー側([backend-guide.md具体例16](./backend-guide.md))が`weightChanged`を`true`と判定し、`personalBest`に値が入って返る | `personalBest = {exerciseId, weightKg:62.5, previousBestKg:60}` |
+| ① 重量変更時のPATCH応答 | サーバー側([backend-guide.md具体例16](./backend-guide.md))が`weightChanged`を`true`と判定し、`personalBest`に値が入って返る | `personalBest = {exerciseId, weightKg:65, previousBestKg:60}` |
 | ② `applyPersonalBest`が種目IDをキーに保存 | `personalBests`(`reactive Map`)にこのセットの達成を記録する。**種目ごとに直近1件だけ**保持する設計なので、同じ種目の別セットで新たに達成すればここで上書きされる | `personalBests.get(exerciseId) = {..., setId: このセットのid}` |
 | ③ 回数だけの変更時のPATCH応答 | サーバー側は`weightChanged`が`false`のため`personalBest: null`を返す | `personalBest = null` |
 | ④ `applyPersonalBest(set, null)`の分岐 | `current?.setId === set.id`(表示中の達成が同じセットのもの)かつ`current.weightKg !== set.weightKg`(重量自体が変わった)のときだけ表示を取り下げる。**回数だけの変更ではこの条件が成り立たない(`weightKg`は変わっていない)ため、表示は残ったまま** | `personalBests`は変更されない |
