@@ -1459,6 +1459,71 @@ async function removeSet(setId: string) {
 - **「達成の表示を消す条件」を「達成の表示を出す条件」より狭くする** — 自己ベスト表示は`personalBest`が返るたびに出るが、消えるのは「表示中のセットの重量が実際に変わったとき」だけに限定されている。回数だけの編集・無関係な操作では表示を消さない非対称な設計にすることで、達成した事実がちらつかず維持される
 - **頻度の高い操作は安全対策を軽くする** — セット削除は他の削除操作と違って確認ダイアログを持たない(Issue #272)。これは統一性より「実際の使われ方」を優先した判断で、[docs/backlog.md](../backlog.md)「削除操作の確認フローが不統一」の経緯に詳しい
 
+## 具体例17：グループ作成・招待コードで参加するとき
+
+[`backend-guide.md`](./backend-guide.md)で追ったPOST `/groups`・POST `/groups/join`を、フロントが[`frontend/app/composables/useGroups.ts`](../../frontend/app/composables/useGroups.ts)・[`frontend/app/pages/groups/index.vue`](../../frontend/app/pages/groups/index.vue)・[`frontend/app/pages/groups/join.vue`](../../frontend/app/pages/groups/join.vue)でどう扱っているかを見る。ここでは「保存直後に一覧を再取得せず、ローカルの配列を直接書き換える」という、`CLAUDE.md`が名指しで注意している類のキャッシュ更新パターン(Issue #116)が、一覧取得を伴わないグループ作成・参加でも同じ形で出てくる。
+
+### 1. まず動かして観察する
+
+`/groups`(グループ一覧)を開き、「新しいグループ名」に入力して「作成」を押す。
+
+- **作成した瞬間、一覧画面には戻らずグループ詳細(`/groups/<groupId>`)に直接遷移する**。一覧に新しいグループが並んだ画面を経由しない
+- その状態で画面上部の「← グループに戻る」で一覧に戻ると、**`GET /api/groups`が再度飛ばずに**、作成したばかりのグループが一覧の先頭に表示される(devtoolsのネットワークタブで確認できる)
+
+招待コードで参加する側(`/groups/join`)も同様に確認する。存在しない招待コードを入力すると「招待コードが正しくありません」がフォーム直下に赤字で出る。正しいコードを入力すると、作成のときと同じくグループ詳細に直接遷移する。
+
+### 2. コードを実行順に追う
+
+```ts
+// composables/useGroups.ts
+async function createGroup(name: string) {
+  const group = await $fetch<Group>('/api/groups', { method: 'POST', body: { name } })
+  groups.value = [group, ...(groups.value ?? [])]
+  return group
+}
+
+async function joinGroup(inviteCode: string) {
+  const group = await $fetch<Group>('/api/groups/join', { method: 'POST', body: { inviteCode } })
+  const others = (groups.value ?? []).filter((g) => g.id !== group.id)
+  groups.value = [group, ...others]
+  return group
+}
+```
+
+```ts
+// pages/groups/index.vue
+async function onCreate() {
+  const group = await createGroup(name)
+  await navigateTo(`/groups/${group.id}`)
+}
+```
+
+```ts
+// pages/groups/join.vue
+async function onJoin() {
+  const group = await joinGroup(code)
+  await navigateTo(`/groups/${group.id}`)
+}
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `$fetch('/api/groups', { method: 'POST', ... })` | `POST /groups`を叩く。バックエンド([backend-guide.md](./backend-guide.md)具体例17参照)は`role: 'owner'`付きのグループを返す | `group = { id, name, ..., role: 'owner' }` |
+| ② `groups.value = [group, ...(groups.value ?? [])]` | `groups`は`useState('groups', ...)`で保持している一覧全体のキャッシュ(具体例1の`useState`と同じ仕組み)。再取得せず、新しい`group`を配列の先頭に足すだけで一覧を更新する | `groups.value`の先頭に新しいグループが入る |
+| ③ `onCreate()`内で`navigateTo(`/groups/${group.id}`)` | 一覧画面(`groups/index.vue`)を経由せず、そのまま詳細画面に遷移する。一覧画面に戻ったときは②で更新済みの`groups.value`をそのまま使う(`groups/index.vue`の`if (!groups.value) { await fetchGroups() }`が、既に値があるため再取得をスキップする) | - |
+
+`joinGroup`は`createGroup`と似ているが、`others = groups.value.filter((g) => g.id !== group.id)`で**同じIDのグループを一度除いてから先頭に足し直す**という1手間が追加されている点が違う。これは、退会済みのグループに再参加したときに一覧の中に同じグループが重複して残らないようにするための処理で、退会(`leaveGroup`)を経験しない`createGroup`には無い分岐。
+
+### 3. 自分で壊して確かめる
+
+- `createGroup`の`groups.value = [group, ...(groups.value ?? [])]`を一時的にコメントアウトして保存する(HMRで即反映)。グループを作成して詳細画面に遷移した後、「← グループに戻る」で一覧に戻ると、**作成したはずのグループが一覧に出てこない**(実際に試すとそうなる)。`groups/index.vue`の`if (!groups.value)`は「一覧を1回でも取得していればtrue」なので、`groups.value`が(空配列であっても)既に存在する限り`fetchGroups()`は呼ばれず、ローカルの配列を更新する行が無いとキャッシュが古いまま取り残される。`CLAUDE.md`が名指しする「保存のたびに変わりうる値のキャッシュ更新漏れ」と全く同じ形の不具合が、ここでも起こることが確認できる。**試したら必ず元に戻すこと**
+- `joinGroup`の`others = (groups.value ?? []).filter((g) => g.id !== group.id)`を`others = groups.value ?? []`(フィルタなし)に変えて保存する。同じ招待コードで2回連続で参加する(2回目はバックエンドが`already_member`として`200`を返すだけで、フロントの`joinGroup`自体は成功として同じ処理を通る)と、一覧に同じグループが2件並ぶようになる(実際に試すとそうなる)。退会せずに何度も参加ボタンを押しただけでも起こる、というのがこの分岐の実用上の重みどころ。**試したら必ず元に戻すこと**
+
+## 具体例17から読み取れる設計上の判断
+
+- **一覧のキャッシュは「作成・参加のたびにローカルで更新する」設計を保存操作全体で徹底している** — `createGroup`・`joinGroup`・`leaveGroup`・`deleteGroup`はいずれも`GET /groups`を呼び直さず、`groups.value`という同じ配列を直接書き換える。これは具体例11(カスタム種目の`createExercise`/`deleteExercise`)と同じ方針で、Issue #116以降このプロジェクトで繰り返し使われているパターンであることが分かる
+- **画面遷移の順序自体もキャッシュ更新の一部として設計されている** — 作成・参加の直後に一覧画面を経由させず詳細画面へ直接飛ばすのは、UXの近道であると同時に、「一覧画面がマウントされて`fetchGroups()`が呼ばれる」タイミングを作らないという意味も持つ。もし直後に一覧画面を経由する設計だったら、`groups.value`のローカル更新が無くても`fetchGroups()`がその場でズレを埋め合わせてしまい、更新漏れのバグに気づきにくくなっていたはずである
+
 ## 次に読むと理解が深まるファイル
 
 - `frontend/app/composables/useAuth.ts`の`logout()` — ログアウト後にあえてフルリロードする理由(Issue #245)
