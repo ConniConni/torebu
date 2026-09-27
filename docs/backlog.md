@@ -120,7 +120,13 @@
       exerciseIdをキーにした中身の辞書でしかない）という、当初想定と異なる実装を検証して発見した点まで扱った
 - [ ] ワークアウトのメモ更新・ソフトデリート（`PATCH/DELETE /workouts/:id`。レスポンスの
       `deleted`フィールドの意味）
-- [ ] セット更新・削除（`PATCH/DELETE /workouts/:id/sets/:setId`）
+- [x] セット更新・削除（`PATCH/DELETE /workouts/:id/sets/:setId`）— backend-guide.md／frontend-guide.mdの
+      「具体例16」で対応済み（2026-09-27）。PATCHは`weightKg`・`reps`いずれかを最低1項目要求するzodの
+      `.refine()`、重量が変わったときだけ自己ベストを再判定するガード、DELETEは削除・`setOrder`の
+      連番詰め直し・全セット0件かつメモ無しでのworkoutソフトデリートを1つのトランザクションにまとめる
+      設計まで扱った。フロント側はPATCHの直列化(`pendingSetSaves`)とDELETE後の`fetchSets()`再取得
+      (setOrderの詰め直しをローカルでは再現できないため)、自己ベスト表示を消す条件が出す条件より
+      狭い非対称設計をcurl・ブラウザ操作の両方で検証した
 - [ ] 種目カード並び替え（`PATCH /workouts/:id/exercises/:workoutExerciseId`）
 - [ ] 自己ベスト・継続日数の達成判定（`personalBest`/`achievements`と達成通知の作成ロジック）
 - [ ] ルーティン本体のCRUD（`POST/GET/PATCH/DELETE /routines`、
