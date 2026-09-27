@@ -2057,6 +2057,157 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
 - **削除の副作用(連番の詰め直し・親レコードの後始末)は同じトランザクションにまとめる** — 削除そのもの・`setOrder`の再採番・`workout`のソフトデリート判定という3つの処理を1つの`$transaction`に入れることで、途中でリクエストが割り込んでも整合性が崩れない。レスポンスの`deleted`フィールドは、この中で実際に何が起きたかをフロントに伝えるためのもの
 - **同じ「保存」でも、何を変えたかによって副作用の判定を出し分ける** — PATCHは`weightKg`が変わったときだけ自己ベストを再判定する。フロントは重量欄・回数欄それぞれのblurで同じPATCHを叩くため、この区別がサーバー側に無いと「回数だけ直しても自己ベスト表示が動く」という体感の悪さにつながる
 
+## 具体例17：グループを作成・招待コードで参加するとき
+
+[`backend/src/routes/groups.ts`](../../backend/src/routes/groups.ts)のPOST `/groups`・POST `/groups/join`を追う。これまでの具体例は「既にあるグループ」を前提に権限判定(具体例3)やランキング集計(具体例8)を見てきたが、ここでは「グループという入れ物とオーナー権限がどう同時に生まれるか」「招待コード1本で参加を制御する仕組み」を扱う。
+
+### 1. まず動かしてみる
+
+具体例3と同じく、A(`test@example.com`)ともう1アカウントB(`test-b@example.com`)を使う。まずAでグループを作る。
+
+```bash
+curl -i -X POST http://localhost:3001/groups \
+  -H "Content-Type: application/json" -b cookie.txt \
+  -d '{"name":"招待検証グループ"}'
+```
+
+```json
+HTTP/1.1 201 Created
+{"id":"<groupId>","name":"招待検証グループ","memberLimit":5,"inviteCode":"<code>","inviteExpiresAt":"...","createdAt":"...","updatedAt":"...","role":"owner"}
+```
+
+**作成しただけなのに`role":"owner"`が返り、`GET /groups`(自分の所属一覧)にも既にこのグループが出てくる**(試してみてほしい)。グループ作成イコール参加、という前提で作られている。
+
+次に、返ってきた`inviteCode`を使ってBを参加させる。
+
+```bash
+curl -i -X POST http://localhost:3001/groups/join \
+  -H "Content-Type: application/json" -b cookieB.txt \
+  -d '{"inviteCode":"<code>"}'
+# => HTTP/1.1 201 {"id":"<groupId>", ..., "role":"member"}
+```
+
+ここで3パターン試してほしい。
+
+- **同じBが同じ招待コードでもう一度参加する** → `201`ではなく`200`が返る(レスポンスの中身は変わらない)。「既に参加済み」であることをエラーにせず、参加した後と同じ状態として扱っている
+- **でたらめな招待コードで参加する** → `curl -b cookieC.txt -d '{"inviteCode":"not-a-real-code"}'`は`404 {"error":"invalid_invite_code"}`
+- **Bがオーナーでないのに招待コードを再発行しようとする** → `curl -X POST -b cookieB.txt http://localhost:3001/groups/<groupId>/invite`は`403 {"error":"forbidden"}`。Aで同じリクエストを送ると`200`で新しい`inviteCode`が返り、**古いコードは以後`invalid_invite_code`になる**
+
+この「1回目は201、2回目は200」という差と、「オーナーだけ再発行できる」という制限が、次にコードのどこで起きているかを追う。
+
+### 2. コードを実行順に追う
+
+```ts
+groupsRouter.post('/', requireAuth, async (req, res) => {
+  const parsed = createGroupSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const userId = req.session.userId!
+
+  const group = await prisma.$transaction(async (tx) => {
+    const created = await tx.group.create({
+      data: {
+        name: parsed.data.name,
+        createdBy: userId,
+        inviteCode: generateInviteCode(),
+        inviteExpiresAt: inviteExpiresAt(),
+      },
+    })
+    await tx.groupMember.create({
+      data: { groupId: created.id, userId, role: 'owner' },
+    })
+    return created
+  })
+
+  res.status(201).json({ ...serializeGroup(group), role: 'owner' as const })
+})
+```
+
+| ステップ | 何が起きるか | このときの値 |
+|---|---|---|
+| ① `generateInviteCode()` | `randomBytes(24).toString('base64url')`。base64urlは`[A-Za-z0-9_-]`だけで構成されるため、URLにそのまま埋め込んでも壊れない | 例: `"Z2U6OYZG7bayxdDoozMxUqg6x2EScSXE"` |
+| ② `$transaction`で`group.create`と`groupMember.create`をまとめる | グループ本体の作成と、作成者を`role: 'owner'`でメンバーに登録する処理を1トランザクションにする。途中で失敗すれば両方ロールバックされ、「グループはあるのにオーナーがいない」状態が起きない | `created`は新しい`group`行 |
+| ③ `res.json({ ...serializeGroup(group), role: 'owner' as const })` | `group`テーブル自体には`role`列が無いため(`role`は`groupMember`側の列)、レスポンスを作るときに`'owner'`を手で足している | `role: "owner"` |
+
+続けて参加(POST `/groups/join`)側。
+
+```ts
+groupsRouter.post('/join', requireAuth, async (req, res) => {
+  const parsed = joinGroupSchema.safeParse(req.body)
+  // (中略: バリデーション失敗時は400)
+  const userId = req.session.userId!
+
+  const group = await prisma.group.findFirst({
+    where: { inviteCode: parsed.data.inviteCode, deletedAt: null },
+  })
+  if (!group) {
+    res.status(404).json({ error: 'invalid_invite_code' })
+    return
+  }
+  if (group.inviteExpiresAt && group.inviteExpiresAt < new Date()) {
+    res.status(400).json({ error: 'invite_expired' })
+    return
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.groupMember.findUnique({
+      where: { groupId_userId: { groupId: group.id, userId } },
+    })
+    if (existing && existing.leftAt === null) {
+      return { status: 'already_member' as const, membership: existing }
+    }
+
+    const activeCount = await tx.groupMember.count({ where: { groupId: group.id, leftAt: null } })
+    if (activeCount >= group.memberLimit) {
+      return { status: 'member_limit_exceeded' as const, membership: null }
+    }
+
+    const membership = existing
+      ? await tx.groupMember.update({
+          where: { groupId_userId: { groupId: group.id, userId } },
+          data: { leftAt: null },
+        })
+      : await tx.groupMember.create({
+          data: { groupId: group.id, userId, role: 'member' },
+        })
+
+    // (中略: member_joined通知の作成)
+    return { status: 'joined' as const, membership }
+  })
+
+  if (result.status === 'member_limit_exceeded') {
+    res.status(400).json({ error: 'member_limit_exceeded' })
+    return
+  }
+  res.status(result.status === 'joined' ? 201 : 200).json({
+    ...serializeGroup(group), role: result.membership!.role,
+  })
+})
+```
+
+| ステップ | 何が起きるか | Bが1回目に参加したとき | Bが2回目に参加したとき |
+|---|---|---|---|
+| ① `group.findFirst({ inviteCode, deletedAt: null })` | 招待コードそのものが主キー代わりの検索条件。存在しなければ`invalid_invite_code`(でたらめなコードを送ったときはここ) | 見つかる | 見つかる |
+| ② `inviteExpiresAt < new Date()` | 期限切れなら`invite_expired`。オーナーが再発行すると`inviteExpiresAt`も更新されるため、古いコードは②より前の①で(`inviteCode`列自体が変わるので)そもそも見つからなくなる | 通過 | 通過 |
+| ③ `existing`(このuserId×groupIdの`groupMember`行) | 過去に参加したことがあるかを見る。初参加なら`existing`は`null` | `null` | `{ leftAt: null, role: 'member', ... }`(1回目で作られた行) |
+| ④ `existing && existing.leftAt === null` | 「過去に参加していて、かつ退会もしていない」なら`already_member`として即座に`return`し、以降の人数チェック・INSERTを一切行わない | 通らない(`existing`が`null`のため) | ここで打ち切り。**2回目は`activeCount`のチェックすら通らない** |
+| ⑤ `activeCount >= group.memberLimit` | アクティブなメンバー数を都度数えて上限と比較(専用のカウンタ列は持たない)。超えていれば`member_limit_exceeded` | 通過(オーナー1人のみ) | (到達しない) |
+| ⑥ `existing ? update(leftAt: null) : create(...)` | 初参加は新規INSERT、退会済みからの再参加はUPDATE(`leftAt`を`null`に戻す)。**「既に参加済みで退会していない」場合はこの分岐にすら来ない**(④で打ち切られるため) | `create` | (到達しない) |
+| ⑦ `res.status(result.status === 'joined' ? 201 : 200)` | `joined`なら201、`already_member`なら200。**1回目と2回目でHTTPステータスが変わったのはここ** | `201` | `200` |
+
+### 3. 自分で壊して確かめる
+
+- ④の`if (existing && existing.leftAt === null)`の条件を一時的に`if (false)`にして保存する(`tsx watch`が自動再起動)。その状態で既に参加済みのBが同じ招待コードでもう一度参加すると、⑥の三項演算子は`existing`(トランザクション内で見つかった行そのもの)を見ているため、二重INSERTでエラーにはならず`update(leftAt: null)`という無害な上書きが再実行される。ただし後続の`member_joined`通知作成(中略部分)は素通りするため、**同じ参加で通知だけ重複して作られ、レスポンスも本来の`200`ではなく`201`になる**(実際に試すとそうなる)。「既に参加済みかどうかを先に見る」判定が、二重登録そのものではなく二重の副作用(通知・ステータス)を防ぐための入り口だと分かる。**試したら必ず元に戻すこと**
+- `inviteExpiresAt()`の`INVITE_CODE_EXPIRY_DAYS`を一時的に`-1`にして保存し、新しくグループを作ってみる。作成直後から`inviteExpiresAt`が過去の日時になり、その招待コードで参加しようとすると即座に`invite_expired`になるはずだ(実際に試すとそうなる)。**試したら必ず元に戻すこと**
+
+## 具体例17から読み取れる設計上の判断
+
+- **「作成」と「オーナーとして参加」を1つのトランザクションにまとめ、レスポンス側で`role`を合成する** — `group`テーブルに`role`という概念は無く、あくまで`groupMember`側の属性である。作成直後のレスポンスに`role: "owner"`を含めるのは、フロントがこの1回のレスポンスだけで「自分がオーナーである」ことを判定できるようにするための整形であり、DBの正規化構造とAPIレスポンスの形が一致していない一例
+- **「既に参加済み」を専用の判定で先に弾き、二重登録・二重通知を防ぐ** — 参加処理の本体(人数チェック・INSERT・通知作成)に入る前に`existing && existing.leftAt === null`で早期`return`する。これにより、同じ招待コードを何度叩いても副作用(通知の再作成など)が増えない
+- **人数制限は専用のカウンタ列ではなく、その場で数える** — `member_limit`の判定は`groupMember.count()`で毎回アクティブなメンバー数を数え直す。カウンタ列を持たない分、退会・再参加のたびに増減の更新漏れが起きるリスクが無い(具体例11のカスタム種目の`lastSet`キャッシュのような「増分を保持する値」とは対照的な設計判断)
+
 ## 次に読むと理解が深まるファイル
 
 - `backend/src/routes/auth.ts`の`authRouter.post('/logout', ...)` — セッション破棄とCookie削除の流れ

@@ -131,8 +131,13 @@
 - [ ] 自己ベスト・継続日数の達成判定（`personalBest`/`achievements`と達成通知の作成ロジック）
 - [ ] ルーティン本体のCRUD（`POST/GET/PATCH/DELETE /routines`、
       `DELETE /routines/:id/exercises/:routineExerciseId`）
-- [ ] グループ作成・招待コード発行・参加（`POST /groups`・`POST /groups/:id/invite`・
-      `POST /groups/join`。期限切れ・`member_limit`判定）
+- [x] グループ作成・招待コード発行・参加（`POST /groups`・`POST /groups/:id/invite`・
+      `POST /groups/join`。期限切れ・`member_limit`判定）— backend-guide.md／frontend-guide.mdの
+      「具体例17」で対応済み（2026-09-27）。グループ作成が「作成イコールオーナーとして参加」を
+      1トランザクションで行う設計、招待コードの「既に参加済みなら201ではなく200」という差分、
+      人数制限をカウンタ列ではなくその場で数える設計まで扱った。フロント側は`createGroup`/`joinGroup`
+      が一覧を再取得せず`useState`の配列を直接書き換える設計（Issue #116の再発防止パターン）を、
+      実際にその更新処理を外して一覧から消える不具合・重複して残る不具合の両方を再現して確認した
 - [ ] グループ退会・削除（`POST /groups/:id/leave`・`DELETE /groups/:id`。唯一のオーナー
       退会禁止）
 - [ ] グループフィード集約（`GET /groups/:id/workouts`。いいね情報・コメント件数の合成）
