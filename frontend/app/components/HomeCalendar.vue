@@ -10,8 +10,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [date: string] }>()
 
-const today = todayLocalDateString()
-const [initialYear, initialMonth] = today.split('-').map(Number) as [number, number]
+const today = useToday()
+const [initialYear, initialMonth] = today.value.split('-').map(Number) as [number, number]
 
 const viewYear = ref(initialYear)
 const viewMonth = ref(initialMonth) // 1〜12
@@ -42,7 +42,7 @@ const cells = computed<CalendarCell[]>(() => {
       date: dateStr,
       day: d.getDate(),
       inCurrentMonth: d.getMonth() === viewMonth.value - 1,
-      isToday: dateStr === today,
+      isToday: dateStr === today.value,
       hasSets: props.recordedDates.has(dateStr),
       memoOnly: props.memoOnlyDates.has(dateStr),
     }

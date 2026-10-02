@@ -32,3 +32,14 @@ export function resolveTargetDate(queryDate: unknown, today: string): string {
   if (queryDate > today) return today
   return queryDate
 }
+
+// 日付をまたいで「今日」が previousToday → nextToday に変わったとき、選択中の日をどうするかを返す。
+// 選択中が旧「今日」だった場合だけ新しい「今日」へ追従させ、別の日を選んでいた場合は動かさない
+// （「今日を見ていたなら翌朝も今日を見ていたい」という使い方に合わせる、Issue #310）
+export function followTodayOnRollover(
+  selectedDate: string,
+  previousToday: string,
+  nextToday: string,
+): string {
+  return selectedDate === previousToday ? nextToday : selectedDate
+}
