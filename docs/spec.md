@@ -147,7 +147,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 ## 3. 画面と、画面をまたぐ状態の持ち方（読む章）
 
-### 3-1. 画面一覧（実装済み21ページ）
+### 3-1. 画面一覧（実装済み22ページ）
 
 丸数字は [concept.md](./concept.md) で使っている画面番号。**⑥記録詳細は③記録作成に統合されて廃止した**
 （③⑥統合ステップ4。②の記録カードのリンク先も⑥→③に切り替え済み。経緯は
@@ -155,8 +155,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
-| `/login` | ① | ログイン | `POST /auth/login` | `guest` |
-| `/register` | ① | 新規登録。表示名・メール・パスワードに加え、生年月（年月のみ）・性別・職業が必須（いずれも「回答しない」を選択可能。下記参照）。利用規約・プライバシーポリシーへの同意チェックボックス必須（下記参照） | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
+| `/login` | ① | ログイン。`?redirect=`（アプリ内パスのみ）があればログイン後にそこへ戻る（招待リンク用、[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。無ければ`/` | `POST /auth/login` | `guest` |
+| `/register` | ① | 新規登録。表示名・メール・パスワードに加え、生年月（年月のみ）・性別・職業が必須（いずれも「回答しない」を選択可能。下記参照）。利用規約・プライバシーポリシーへの同意チェックボックス必須（下記参照）。`?redirect=`は`/login`と同じ扱い | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/password-reset` | - | パスワード再設定のメール送信。メールアドレスを入力すると再設定リンク付きメールが届く（Issue #213） | `POST /auth/password-reset-requests` | `guest` |
 | `/password-reset/[token]` | - | 新しいパスワードの設定。メール内のリンクからアクセスする（Issue #213） | `POST /auth/password-resets` | `guest` |
 | `/terms` | - | 利用規約（Issue #160） | なし | なし |
@@ -170,8 +170,9 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
 | `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
 | `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
-| `/groups/join` | - | 招待コードで参加（Phase4） | `POST /groups/join` | `auth` |
-| `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待コード表示/再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
+| `/groups/join` | - | 招待コードで参加（Phase4）。招待リンクを丸ごと（共有文ごと）貼り付けてもコードを読み取る（[Issue #312](https://github.com/ConniConni/torebu/issues/312)） | `POST /groups/join` | `auth` |
+| `/invite/[code]` | - | 招待リンクの受け口（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。ログイン不要でグループ名・人数を表示し、未ログインなら「新規登録して参加」「ログインして参加」、ログイン中なら「参加する」、参加済みなら「グループを開く」を出す | `GET /groups/invites/:code`, `POST /groups/join` | なし（`robots.txt`で`Disallow`） |
+| `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待リンク／招待コードの表示とコピー・共有、再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、仲間の通算の節目・久しぶりの復帰（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。「合計／種目別／継続」の3タブ（[Issue #258](https://github.com/ConniConni/torebu/issues/258)）。合計・種目別は週間/月間/通算のタブで挙上重量の順位を表示する。種目別の種目セレクタは、グループの誰かが記録したことのある公式種目だけに絞り込む。継続は順位を持たず、各メンバーを名前順（あいうえお順）に並べ、直近28日の参加・継続の可視化スタンプ（none/bronze/silver/gold）だけを表示する | `GET /groups/:id/ranking`, `GET /groups/:id/ranking/default-exercise`, `GET /groups/:id/ranking/exercises` | `auth` |
@@ -202,7 +203,8 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
 **Google検索対応（Issue #208）**
 - `frontend/public/sitemap.xml`には`auth`ミドルウェアの無い公開ページ（`/`・`/login`・`/register`・
   `/terms`・`/privacy`）だけを載せる。`auth`が付いている非公開ページは`robots.txt`で個別に`Disallow`
-  にしてクロール対象から外す
+  にしてクロール対象から外す。例外として`/invite`（招待リンクの受け口）は`auth`無しの公開ページだが、
+  招待された人だけが開く前提のため`sitemap.xml`には載せず`Disallow`にしている（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）
 - Google Search Consoleの所有権確認用meta タグ（`google-site-verification`）は
   [nuxt.config.ts](../frontend/nuxt.config.ts)に置く。Vercelの無料サブドメイン運用でDNS設定ができない
   ため、HTMLタグ方式で確認している
@@ -527,6 +529,32 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   再現）。`fetchGroups`が既にしていた通り`useRequestFetch()`に統一して解消した。
   グロッサリー（§1「SSR」）に載っている既知の落とし穴だが、新しいAPI呼び出しを追加するたびに
   同じミスが起きうるため、`useGroups.ts`にコメントを追記した
+
+**グループ招待リンク（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）の実装メモ**
+- 目的は「1人の登録が仲間の登録につながる」こと。招待コードを手で渡す形だと、未登録の人は
+  サイトを探す→登録→グループ画面→コードを貼る、と手順が多く離脱しやすかった
+- **リンクは既存ユーザー・未登録の人の共通**：`/invite/<招待コード>`。リンクの中身は既存の
+  招待コードそのもので、新しいトークンやテーブルは作っていない。そのため再発行（`POST /groups/:id/invite`）
+  すると古いリンクも無効になり、有効期限（30日）・`member_limit`の判定も従来の招待コードと同じ
+- **受け口の画面は`auth`ミドルウェアを付けない**（未登録の人がグループ名を見られるようにするため）。
+  表示用の`GET /groups/invites/:code`もログイン不要で、返すのはグループ名・人数・上限・参加済みかどうか
+  だけ（メンバー名は返さない。グループIDは参加済みのときだけ返す）。「招待コードを知っている＝
+  招待された人」という扱いで、コードは192bitの乱数のため総当たり対策のレート制限は付けていない
+- **参加は自動にせず、必ず「参加する」ボタンを押させる**（ログイン・登録直後に勝手に参加させない）
+- **ログイン・新規登録後に元の画面へ戻す`?redirect=`**：招待ページの「新規登録して参加」
+  「ログインして参加」から`/register?redirect=/invite/<code>`の形で渡す。ログイン⇔新規登録の
+  相互リンクでも引き継ぐ。ログイン済みで`?redirect=`付きの`/login`を開いた場合は`guest`ミドルウェアが
+  そのパスへ送る。値は[invite.ts](../frontend/app/utils/invite.ts)の`safeRedirectPath`で検証し、
+  アプリ内パス（`/`始まり）以外（外部URL・`//evil.example`・`/\evil.example`・制御文字入り）は無視して
+  従来どおり`/`へ遷移する（オープンリダイレクト対策、§6）
+- **`auth`ミドルウェア（保護ページ→`/login`）には`?redirect=`を付けていない**：今回は招待ページからの
+  明示的なリンクだけが対象。他の保護ページでもログイン後に元の画面へ戻したくなったら、`auth.ts`で
+  `to.fullPath`を渡すだけで同じ仕組みに乗れる
+- **グループ詳細の招待欄**：リンクを主役にし（コピー／共有）、コードは「リンクが開けない場合」の予備として
+  小さく残した。共有ボタンはWeb Share API（`navigator.share`）がある環境（主にスマホ）だけに出す。
+  SSR時は`navigator`が無いので`onMounted`で判定し、サーバーとクライアントの描画を食い違わせない
+- **OGP（LINE等のリンクプレビュー）**：グループ名を含めない汎用の文面にした（プレビューは
+  トークの他の参加者やLINEのサーバーにも渡るため）。`robots: noindex`も付けている
 
 **グループの記録フィード（Phase4、[Issue #138](https://github.com/ConniConni/torebu/issues/138)）の実装メモ**
 - いいね・コメント機能の対象となる「仲間の記録を見る画面」が無いことに気づき、グループ基盤の次に
@@ -1030,6 +1058,7 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 | `usePickedExerciseId` | `useState('picked-exercise-id')` | ④⑦で選んだ種目を、戻り先の画面へ渡す | **残る**（戻り先が読み取ったら即クリアする。戻るボタンで再度開いてしまうのを防ぐため。ログアウト時はフルリロードで破棄） |
 | `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときにリセット。ログアウト時はフルリロードで破棄） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
+| `redirect` | クエリパラメータ（URLに乗る） | ①ログイン・新規登録の完了後にどこへ戻るか（招待リンク用、[Issue #312](https://github.com/ConniConni/torebu/issues/312)。未指定・不正な値なら `/`） | **残る**（`returnTo`と同じ。外部から細工できる値なので`safeRedirectPath`で必ず検証する） |
 
 **なぜ4つあるのか**
 - ④⑦は③からもルーティン編集画面からも来る**共通画面**なので、戻り先を知る必要がある → `returnTo`
@@ -1172,6 +1201,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
 | GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）。`exercises`の並びは`WorkoutExercise.sortOrder`昇順（③記録作成でのカード並び替えと同じ並び順。[Issue #228](https://github.com/ConniConni/torebu/issues/228)）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
+| GET | `/groups/invites/:code` | **不要** | 招待リンクの表示用に、招待コードからグループの概要（`name`・`memberCount`〈退会済みを除く〉・`memberLimit`・`isMember`・`groupId`）を返す（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。`isMember`はログイン中かつアクティブなメンバーのときだけ`true`で、そのときだけ`groupId`を返す（それ以外は`null`）。メンバー名は返さない。存在しない・削除済みは`404 invalid_invite_code`、期限切れは`400 invite_expired`（`POST /groups/join`と同じ） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE。参加（再参加含む）したときは他のアクティブなメンバー宛に`member_joined`通知を作る（[Issue #249](https://github.com/ConniConni/torebu/issues/249)） |
 | POST | `/groups/:id/leave` | 要 | 退会する（`left_at`を立てるソフトデリート）。唯一のオーナーは`400 sole_owner_cannot_leave` |
 | DELETE | `/groups/:id` | 要 | グループを削除する（**ソフトデリート**）。**オーナー限定**（オーナー以外は`403`） |
@@ -1277,6 +1307,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | Cookieの属性 | `HttpOnly` / `Secure`（本番のみ） / `SameSite=Lax` / 有効期限14日（[session.ts](../backend/src/session.ts)） |
 | CSRF対策 | `SameSite=Lax` のみ。**フロントとバックを同一サイトに揃えている前提**で成立している（§1-1） |
 | 認可（IDOR対策） | 自分のリソースかを必ず確認し、違えば `404`（`findOwnWorkout` / `findOwnRoutine`） |
+| オープンリダイレクト対策 | ログイン・新規登録後の戻り先`?redirect=`はアプリ内パスのみ許可（`safeRedirectPath`、[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。外部URL・プロトコル相対URL等は無視して`/`へ |
+| ログイン不要の公開API | `GET /groups/invites/:code`のみ。返す情報をグループ名・人数に絞り、招待コード（192bitの乱数）を知っている人だけが引ける（[Issue #312](https://github.com/ConniConni/torebu/issues/312)） |
 
 **注意**：`POST /auth/register` は「このメールアドレスは既に登録されています（`409`）」を返すため、
 列挙対策の対象外にしている。登録画面では重複を伝える必要があるため、意図的な判断
