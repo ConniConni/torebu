@@ -1,6 +1,12 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'guest' })
 
+// 招待リンク等から来た場合の戻り先（Issue #312）。外部URLは弾き、無ければ従来どおり`/`へ
+const route = useRoute()
+const redirectPath = safeRedirectPath(route.query.redirect)
+// ログイン⇔新規登録の相互リンクでも戻り先を引き継ぐ
+const redirectQuery = redirectPath ? { redirect: redirectPath } : undefined
+
 const { login } = useAuth()
 
 const email = ref('')
@@ -14,7 +20,7 @@ async function onSubmit() {
   isSubmitting.value = true
   try {
     await login({ email: email.value, password: password.value })
-    await navigateTo('/')
+    await navigateTo(redirectPath ?? '/')
   } catch (error) {
     errorMessage.value = authErrorMessage(error)
   } finally {
@@ -90,7 +96,9 @@ async function onSubmit() {
 
       <p class="mt-4 text-center text-sm text-gray-600 dark:text-muted">
         アカウントをお持ちでない方は
-        <NuxtLink to="/register" class="text-brand-600 dark:text-accent hover:underline"
+        <NuxtLink
+          :to="{ path: '/register', query: redirectQuery }"
+          class="text-brand-600 dark:text-accent hover:underline"
           >新規登録</NuxtLink
         >
       </p>

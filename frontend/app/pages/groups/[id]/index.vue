@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Phase4: グループ詳細。メンバー一覧・招待コード表示/再発行(オーナー限定)・退会・削除(オーナー限定)
+// Phase4: グループ詳細。メンバー一覧・招待リンク/コード表示・再発行(オーナー限定)・退会・削除(オーナー限定)
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -28,12 +28,27 @@ const isOwner = computed(() => group.value?.role === 'owner')
 
 const reissuing = ref(false)
 const reissueError = ref('')
-const copied = ref(false)
+// どれをコピーしたかで「コピーしました」表示を出し分ける
+const copied = ref<'link' | 'code' | null>(null)
+
+// 招待リンク(Issue #312)。既存ユーザー・未登録の人のどちらにも同じリンクを送れる。
+// 再発行するとinviteCodeが変わり、古いリンクは無効になる
+const requestOrigin = useRequestURL().origin
+const inviteUrl = computed(() =>
+  group.value ? new URL(inviteLinkPath(group.value.inviteCode), requestOrigin).href : '',
+)
+
+// Web Share API(スマホの共有シート)が使える環境でだけ「共有」ボタンを出す。
+// SSR時はnavigatorが無く、サーバーとクライアントで表示が食い違わないようマウント後に判定する
+const canShare = ref(false)
+onMounted(() => {
+  canShare.value = typeof navigator.share === 'function'
+})
 
 async function onReissueInvite() {
   reissuing.value = true
   reissueError.value = ''
-  copied.value = false
+  copied.value = null
   try {
     const updated = await reissueInvite(groupId)
     if (group.value) {
@@ -47,14 +62,26 @@ async function onReissueInvite() {
   }
 }
 
-async function onCopyInviteCode() {
+async function onCopy(kind: 'link' | 'code') {
   if (!group.value) return
   try {
-    await navigator.clipboard.writeText(group.value.inviteCode)
-    copied.value = true
+    await navigator.clipboard.writeText(kind === 'link' ? inviteUrl.value : group.value.inviteCode)
+    copied.value = kind
   } catch {
     // クリップボードAPIが使えない環境（権限拒否等）もあるため、失敗時は何もしない
-    // （招待コードはこの画面に表示済みなので、手動選択でコピーできる）
+    // （招待リンク・コードはこの画面に表示済みなので、手動選択でコピーできる）
+  }
+}
+
+async function onShareInvite() {
+  if (!group.value) return
+  try {
+    await navigator.share({
+      text: `トレ部のグループ「${group.value.name}」に招待しています。リンクから参加してね`,
+      url: inviteUrl.value,
+    })
+  } catch {
+    // 共有シートを閉じた(AbortError)場合なども含め、何もしない
   }
 }
 
@@ -135,30 +162,60 @@ async function onDelete() {
           </div>
 
           <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">招待コード</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-ink">メンバーを招待</h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-muted">
+              リンクを送るだけで、まだトレ部を使っていない人も登録してそのまま参加できます
+            </p>
             <p
-              class="mt-2 break-all rounded border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-surface px-3 py-2 font-mono text-sm"
+              class="mt-2 break-all rounded border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-surface px-3 py-2 font-mono text-xs"
             >
-              {{ group.inviteCode }}
+              {{ inviteUrl }}
             </p>
             <div class="mt-2 flex gap-2">
               <button
                 type="button"
                 class="flex-1 rounded border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold text-brand-600 dark:text-accent"
-                @click="onCopyInviteCode"
+                @click="onCopy('link')"
               >
-                {{ copied ? 'コピーしました' : 'コピー' }}
+                {{ copied === 'link' ? 'コピーしました' : 'リンクをコピー' }}
               </button>
               <button
-                v-if="isOwner"
+                v-if="canShare"
                 type="button"
-                :disabled="reissuing"
-                class="flex-1 rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
-                @click="onReissueInvite"
+                class="flex-1 rounded bg-brand-600 py-1.5 text-sm font-semibold text-white dark:bg-accent dark:text-surface"
+                @click="onShareInvite"
               >
-                {{ reissuing ? '再発行中...' : '再発行' }}
+                共有
               </button>
             </div>
+
+            <div class="mt-4 border-t border-gray-100 dark:border-border-dark pt-3">
+              <p class="text-xs text-gray-500 dark:text-muted">
+                招待コード（リンクが開けない場合）
+              </p>
+              <div class="mt-1 flex items-center gap-2">
+                <p class="flex-1 break-all font-mono text-xs text-gray-700 dark:text-ink">
+                  {{ group.inviteCode }}
+                </p>
+                <button
+                  type="button"
+                  class="shrink-0 text-xs font-semibold text-brand-600 dark:text-accent"
+                  @click="onCopy('code')"
+                >
+                  {{ copied === 'code' ? 'コピーしました' : 'コピー' }}
+                </button>
+              </div>
+            </div>
+
+            <button
+              v-if="isOwner"
+              type="button"
+              :disabled="reissuing"
+              class="mt-3 w-full rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm text-gray-700 dark:text-ink disabled:opacity-50"
+              @click="onReissueInvite"
+            >
+              {{ reissuing ? '再発行中...' : 'リンクとコードを再発行（古いものは無効になります）' }}
+            </button>
             <p v-if="reissueError" class="mt-2 text-sm text-red-600 dark:text-red-400">
               {{ reissueError }}
             </p>
