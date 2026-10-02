@@ -178,7 +178,20 @@ function onCloseRoutinePicker() {
   routineApplyNotice.value = ''
 }
 
-async function onApplyRoutine(routineId: string) {
+// ルーティン適用は種目・セットを1件ずつ順番にAPIへ登録するため時間がかかる。
+// 途中で「ホームへ戻る」等の離脱をすると一部しか登録されないので、進行中の適用を
+// pendingRoutineApplyで追跡し、離脱前に必ず待ち合わせる（onLeaveWorkout参照）
+let pendingRoutineApply: Promise<void> | null = null
+
+function onApplyRoutine(routineId: string) {
+  const promise = applyRoutine(routineId).finally(() => {
+    pendingRoutineApply = null
+  })
+  pendingRoutineApply = promise
+  return promise
+}
+
+async function applyRoutine(routineId: string) {
   routineApplyError.value = ''
   routineApplyNotice.value = ''
   routineApplying.value = true
@@ -454,6 +467,7 @@ if (initialPickedExerciseId) {
 const isLeavingWorkout = ref(false)
 
 async function onLeaveWorkout() {
+  await pendingRoutineApply
   await (pendingMemoSave ?? saveMemoIfChanged())
   await Promise.all(pendingSetSaves.values())
   isLeavingWorkout.value = true
@@ -472,6 +486,7 @@ onUnmounted(() => {
 // 「＋種目を追加」も④への画面遷移(離脱)を伴うため、onLeaveWorkoutと同じ理由で
 // 保存中のセット編集を待ってから遷移する
 async function onGoToExercisePicker() {
+  await pendingRoutineApply
   await Promise.all(pendingSetSaves.values())
   await navigateTo({
     path: '/workouts/exercises',
