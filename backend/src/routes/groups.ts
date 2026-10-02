@@ -106,6 +106,38 @@ groupsRouter.get('/', requireAuth, async (req, res) => {
   )
 })
 
+// 招待リンク(/invite/[code])の表示用に、招待コードからグループの概要を返す(Issue #312)。
+// 未登録の人にも「どのグループに招待されているか」を見せるためログイン不要にしている。
+// 招待コードを知っている＝招待された人という扱いのため、返すのは参加判断に必要な最小限
+// (グループ名・人数)だけにし、メンバー名やグループIDは返さない。
+// 招待コードは192bitの乱数(generateInviteCode)で総当たりは現実的でないため、レート制限は付けていない
+groupsRouter.get('/invites/:code', async (req, res) => {
+  const group = await prisma.group.findFirst({
+    where: { inviteCode: req.params.code, deletedAt: null },
+  })
+  if (!group) {
+    res.status(404).json({ error: 'invalid_invite_code' })
+    return
+  }
+  if (group.inviteExpiresAt && group.inviteExpiresAt < new Date()) {
+    res.status(400).json({ error: 'invite_expired' })
+    return
+  }
+
+  const memberCount = await prisma.groupMember.count({ where: { groupId: group.id, leftAt: null } })
+  // ログイン中なら参加済みかを返し、参加済みのときだけグループ詳細への遷移用にIDを返す
+  const userId = req.session.userId
+  const isMember = userId ? (await findActiveMembership(userId, group.id)) !== null : false
+
+  res.status(200).json({
+    name: group.name,
+    memberCount,
+    memberLimit: group.memberLimit,
+    isMember,
+    groupId: isMember ? group.id : null,
+  })
+})
+
 groupsRouter.get('/:id', requireAuth, async (req, res) => {
   const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
   const groupId = req.params.id as string
