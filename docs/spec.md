@@ -1065,6 +1065,15 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 **日本時間の深夜0:00〜8:59に「今日」が前日にズレる**（JSTはUTC+9のため）。
 APIとやり取りする日付（`performedAt`）は `YYYY-MM-DD` の文字列で統一している。
 
+**「今日」は画面・部品ごとに`todayLocalDateString()`を呼ばず、[useToday.ts](../frontend/app/composables/useToday.ts)の`useToday()`を使う**
+（[Issue #310](https://github.com/ConniConni/torebu/issues/310)）。`useState('today')`でアプリ全体で1つを共有し、
+タブへの復帰（`visibilitychange`）と1分おきのタイマーで日付を見直して、変わっていれば更新する。
+以前は各部品がsetup時に1回だけ計算していたため、タブを開いたまま日付をまたぐと、再マウントされた
+`HomeCalendar`だけ新しい「今日」になり、②ホームのカレンダーで選択日（塗りつぶし）と今日（リング）が
+別々の日に出る不具合があった。②ホームでは`watch(today)`で、**旧「今日」を選択中だった場合のみ新しい
+「今日」へ追従**し、別の日を選択中なら動かさない（`followTodayOnRollover()`）。
+なお`useToday()`は`ref`を返すので、`<script>`内では`today.value`で読む。
+
 **③記録作成（`/workouts/new`）の`?date=`クエリ**は [utils/date.ts](../frontend/app/utils/date.ts) の
 `resolveTargetDate()` で解決する。形式が不正・実在しない暦日（`2026-02-30`等）・未来日のいずれかであれば
 今日にフォールバックする（フロント側のガードのみ。バックエンドAPI側に未来日を弾くバリデーションはまだ無い）。

@@ -26,8 +26,7 @@ const {
 // startWorkout側は既に「同じ日付のworkoutがあれば再利用する」ロジックを持っているため、
 // ここでは開く日付を解決するだけでよい
 const route = useRoute()
-const today = todayLocalDateString()
-const targetDate = resolveTargetDate(route.query.date, today)
+const targetDate = resolveTargetDate(route.query.date, useToday().value)
 const previousWorkoutId = session.value.workoutId
 await startWorkout(targetDate)
 // ②ホームの記録カードから別の日のworkoutへ直接遷移した場合、入力待ちの種目(pendingExercises)は

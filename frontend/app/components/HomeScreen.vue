@@ -48,7 +48,7 @@ const memoOnlyDates = computed(
   () => new Set((workouts.value ?? []).filter((w) => !w.hasSets).map((w) => w.performedAt)),
 )
 
-const today = todayLocalDateString()
+const today = useToday()
 
 // 通算の記録日数（Phase3-B）。「セットが1件以上ある日」だけを数える(Issue #255。C1・C2の判定と
 // 数字を揃えるための変更。以前はhasSetsを問わずメモのみの日も含めていた)
@@ -100,12 +100,12 @@ const PERIODS: { key: SummaryPeriod; label: string }[] = [
 const selectedPeriod = ref<SummaryPeriod>('recent7')
 const periodStats = computed<Record<SummaryPeriod, { volumeKg: number; days: number }>>(() => ({
   recent7: {
-    volumeKg: sumRecentVolume(volumePoints.value, today, 7),
-    days: countRecentTrainingDays(allRecordedDates.value, today, 7),
+    volumeKg: sumRecentVolume(volumePoints.value, today.value, 7),
+    days: countRecentTrainingDays(allRecordedDates.value, today.value, 7),
   },
   recent28: {
-    volumeKg: sumRecentVolume(volumePoints.value, today, 28),
-    days: countRecentTrainingDays(allRecordedDates.value, today, 28),
+    volumeKg: sumRecentVolume(volumePoints.value, today.value, 28),
+    days: countRecentTrainingDays(allRecordedDates.value, today.value, 28),
   },
   total: { volumeKg: sumTotalVolume(volumePoints.value), days: totalTrainingDays.value },
 }))
@@ -116,20 +116,25 @@ const activeAnimalCaption = computed(() => animalCaption(activeStats.value.volum
 // （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
 // バーの長さのみで比較させる形をモックで比較して決定、2026-09-08。
 // 4週間だと隣の期間別サマリーカードより短くなり余白ができるため5週間に変更、2026-09-11）
-const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(volumePoints.value, today, 5))
+const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(volumePoints.value, today.value, 5))
 const weeklyVolumeTrendDisplay = computed(() => [...weeklyVolumeTrendPoints.value].reverse())
 const weeklyVolumeTrendMax = computed(() =>
   Math.max(1, ...weeklyVolumeTrendPoints.value.map((p) => p.volumeKg)),
 )
 
-const selectedDate = ref(today)
+const selectedDate = ref(today.value)
 const selectedWorkouts = computed(() =>
   (workouts.value ?? []).filter((w) => w.performedAt === selectedDate.value),
 )
 // 今日・過去日にまだ記録が無いときだけ、その日で③記録作成を始める導線を出す。
 // 未来日は③側で今日にクランプされてしまい紛らわしいため対象外（Issue #99で今日も対象に含めた。
 // 以前は過去日のみだったが、今日を選択した場合だけ導線が出ないのは不自然という指摘を受けた）
-const isTodayOrPastDate = computed(() => selectedDate.value <= today)
+const isTodayOrPastDate = computed(() => selectedDate.value <= today.value)
+
+// 日付をまたいだとき、旧「今日」を選択していたなら新しい「今日」に追従する（Issue #310）
+watch(today, (next, previous) => {
+  selectedDate.value = followTodayOnRollover(selectedDate.value, previous, next)
+})
 
 function onSelectDate(date: string) {
   selectedDate.value = date

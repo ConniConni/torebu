@@ -19,7 +19,7 @@ if (!groups.value) {
 // docs/backlog.md参照）。合計負荷重量は既存GET /stats/volume（range=all）、トレ日数は
 // 既存GET /workoutsのperformedAt一覧をそれぞれフロントで直近28日分に集計する
 // （②ホームと同じtrainingVolume.ts・trainingDays.tsを流用。HomeScreen.vue参照）
-const today = todayLocalDateString()
+const today = useToday()
 const recentVolumeKg = ref(0)
 const recentTrainingDays = ref(0)
 const summaryPending = ref(true)
@@ -30,10 +30,10 @@ async function loadSummary() {
   summaryError.value = false
   try {
     const [points] = await Promise.all([fetchVolume('all'), fetchWorkouts()])
-    recentVolumeKg.value = sumRecentVolume(points, today, 28)
+    recentVolumeKg.value = sumRecentVolume(points, today.value, 28)
     recentTrainingDays.value = countRecentTrainingDays(
       (workouts.value ?? []).filter((w) => w.hasSets).map((w) => w.performedAt),
-      today,
+      today.value,
       28,
     )
   } catch {
