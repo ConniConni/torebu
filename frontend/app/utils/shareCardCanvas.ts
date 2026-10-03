@@ -223,20 +223,11 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, th
   // フッター：サービス名と説明。当初はドメインも入れていた（インスタのストーリーは画像内の文字を
   // タップできないため）が、本番のドメイン（torebu-7gf1.vercel.app）は覚えにくく検索にも向かないため、
   // 「トレ部」で検索してもらう前提で外した（2026-10-03、ユーザー判断。独自ドメインを取ったら再検討）
-  const footerBaseline = SHARE_CARD_HEIGHT - 72
+  // サービス名だけ太字にすると違和感があるという指摘を受け、1行を同じ太さ・色で描く（2026-10-03）
   ctx.textAlign = 'left'
-  ctx.fillStyle = colors.ink
-  ctx.font = `700 32px ${FONT}`
-  const serviceName = 'トレ部'
-  ctx.fillText(serviceName, PADDING, footerBaseline)
-  const serviceNameWidth = ctx.measureText(serviceName).width
   ctx.fillStyle = colors.muted
   ctx.font = `500 28px ${FONT}`
-  ctx.fillText(
-    '｜ 仲間と筋トレを記録・応援しあうアプリ',
-    PADDING + serviceNameWidth + 12,
-    footerBaseline,
-  )
+  ctx.fillText('トレ部 ｜ 仲間と筋トレを記録・応援しあうアプリ', PADDING, SHARE_CARD_HEIGHT - 72)
 }
 
 export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
