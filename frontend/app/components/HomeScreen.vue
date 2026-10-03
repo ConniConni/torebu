@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ShareCardData } from '~/utils/shareCard'
+
 // ②ホーム画面の中身。index.vue（`/`）はログイン中かどうかで表示を出し分けるため
 // （ログイン中はここ、未ログインはWelcomeScreen）、v-ifで条件付きマウントされたときだけ
 // 中のfetch系処理が走るようこのコンポーネントに切り出した（Issue #151）
@@ -28,12 +30,16 @@ await fetchUnreadCount()
 const { workouts, pending, error, fetchWorkouts, deleteWorkout } = useWorkouts()
 const { exercises, fetchExercises } = useExercises()
 const { fetchVolume } = useStats()
+const { groups, fetchGroups } = useGroups()
 const requestFetch = useRequestFetch()
 
 await fetchWorkouts()
 if (!exercises.value) {
   await fetchExercises()
 }
+// グループ未所属の案内（Issue #314）の表示判定に使う。グループの作成・参加・退会は別画面で
+// 行われるため、キャッシュ（useState）があっても毎回取り直して最新の所属状況で判定する
+await fetchGroups()
 
 function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
@@ -116,7 +122,9 @@ const activeAnimalCaption = computed(() => animalCaption(activeStats.value.volum
 // （weeklyVolumeTrend自体は古い週→新しい週の時系列順を返す。値ラベルは出さず、
 // バーの長さのみで比較させる形をモックで比較して決定、2026-09-08。
 // 4週間だと隣の期間別サマリーカードより短くなり余白ができるため5週間に変更、2026-09-11）
-const weeklyVolumeTrendPoints = computed(() => weeklyVolumeTrend(volumePoints.value, today.value, 5))
+const weeklyVolumeTrendPoints = computed(() =>
+  weeklyVolumeTrend(volumePoints.value, today.value, 5),
+)
 const weeklyVolumeTrendDisplay = computed(() => [...weeklyVolumeTrendPoints.value].reverse())
 const weeklyVolumeTrendMax = computed(() =>
   Math.max(1, ...weeklyVolumeTrendPoints.value.map((p) => p.volumeKg)),
@@ -180,6 +188,33 @@ watch(
   },
   { immediate: true },
 )
+
+// 自分の記録の画像カードシェア（Issue #314）。選択中の日の記録（同じ日に複数あればまとめて）を
+// 1枚の画像にする。詳細(workoutGroups)の読み込みが終わり、セットのある種目が1つ以上あるときだけ出す
+const shareExercises = computed(() =>
+  selectedWorkouts.value.flatMap((w) => workoutGroups.value[w.id] ?? []),
+)
+const canShareSelectedDate = computed(
+  () =>
+    shareExercises.value.length > 0 &&
+    !selectedWorkouts.value.some((w) => summaryPending.value[w.id]),
+)
+const shareCardData = ref<ShareCardData | null>(null)
+const shareCardDate = ref('')
+
+function onOpenShareCard() {
+  shareCardDate.value = selectedDate.value
+  shareCardData.value = buildShareCardData(
+    selectedDate.value,
+    shareExercises.value,
+    allRecordedDates.value,
+  )
+}
+
+// グループ未所属の人への案内（Issue #314）。シェア画像経由で登録した人はグループ無しで
+// 登録を終えるため、ここから仲間を招待してグループを作る流れ（招待リンク、Issue #312）につなげる。
+// 取得に失敗した場合（groupsがnullのまま）は出さない
+const showGroupGuide = computed(() => groups.value?.length === 0)
 
 // /loginへの遷移はlogout()内でフルリロードにより行う（Issue #245、useAuth.ts参照）
 async function onLogout() {
@@ -266,11 +301,30 @@ async function onDeleteWorkout(id: string) {
       </p>
 
       <template v-else>
+        <NuxtLink
+          v-if="showGroupGuide"
+          to="/groups"
+          class="flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50 p-3 dark:border-accent/30 dark:bg-accent/10"
+        >
+          <GroupIcon class="h-6 w-6 shrink-0 text-brand-700 dark:text-accent" />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-gray-900 dark:text-ink"
+              >仲間を誘ってグループを作ろう</span
+            >
+            <span class="block text-xs text-gray-600 dark:text-muted"
+              >招待リンクを送ると、記録にいいね・コメントで応援しあえます</span
+            >
+          </span>
+          <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-400 dark:text-muted" />
+        </NuxtLink>
+
         <!-- 期間別サマリーカード（今週/今月/通算、Issue #169）。旧「今月/通算の記録日数帯」+
              「今週のサマリー」の2種類のカードを1枚に統合した（モックで複数案を比較して決定。
              経緯はdocs/spec.md参照）。このAPI呼び出し（GET /stats/volume）だけ失敗しても
              他の表示は妨げないよう独立してエラー処理する -->
-        <LoadingText v-if="weeklyVolumePending" size="xs" subtle>サマリーを読み込み中...</LoadingText>
+        <LoadingText v-if="weeklyVolumePending" size="xs" subtle
+          >サマリーを読み込み中...</LoadingText
+        >
         <p v-else-if="weeklyVolumeError" class="text-xs text-red-600 dark:text-red-400">
           サマリーの取得に失敗しました
         </p>
@@ -523,8 +577,23 @@ async function onDeleteWorkout(id: string) {
               </div>
             </li>
           </ul>
+          <button
+            v-if="canShareSelectedDate"
+            type="button"
+            class="mt-3 w-full rounded border border-brand-600 dark:border-accent py-2 text-center text-sm font-semibold text-brand-600 dark:text-accent"
+            @click="onOpenShareCard"
+          >
+            この日の記録を画像でシェア
+          </button>
         </div>
       </template>
     </div>
+
+    <ShareCardModal
+      v-if="shareCardData"
+      :date="shareCardDate"
+      :data="shareCardData"
+      @close="shareCardData = null"
+    />
   </div>
 </template>

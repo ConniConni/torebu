@@ -5,7 +5,7 @@
 <template>
   <div>
     <p class="mb-1 text-xl font-bold text-gray-900 dark:text-ink">プライバシーポリシー</p>
-    <p class="mb-6 text-xs text-gray-500 dark:text-muted">最終更新日：2026年9月15日</p>
+    <p class="mb-6 text-xs text-gray-500 dark:text-muted">最終更新日：2026年10月3日</p>
 
     <div class="space-y-6 text-sm leading-relaxed text-gray-700 dark:text-ink">
       <section>
@@ -35,6 +35,7 @@
             コメント
           </li>
           <li>グループの作成・参加状況</li>
+          <li>登録のきっかけ（他のユーザーがシェアした記録の画像経由で登録したかどうか）</li>
         </ul>
       </section>
 
@@ -46,6 +47,9 @@
             本サービスの提供（ログイン認証、記録の保存・表示、グループ内での共有・ランキング表示等）
           </li>
           <li>不正利用の防止、お問い合わせへの対応</li>
+          <li>
+            登録のきっかけは、記録のシェア機能の効果を確かめるなど、本サービスの改善に利用します
+          </li>
           <li>
             生年月・性別・職業は、将来的に属性別の傾向分析機能（例：年代別のトレーニング傾向表示）の
             提供に利用する場合があります

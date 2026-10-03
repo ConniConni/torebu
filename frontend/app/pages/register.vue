@@ -90,6 +90,8 @@ async function onSubmit() {
         : { year: Number(birthYear.value), month: Number(birthMonth.value) },
       gender: gender.value,
       occupation: occupation.value,
+      // 画像カードシェア経由の登録かどうか（Issue #314、効果測定用）。無ければ送らない
+      signupRef: loadSignupRef() ?? undefined,
     })
     await navigateTo(redirectPath ?? '/')
   } catch (error) {
