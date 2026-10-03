@@ -45,6 +45,8 @@ const registerSchema = z.object({
     'other',
     'no_answer',
   ]),
+  // 登録のきっかけ（Issue #314、効果測定用）。クエリ由来でユーザーが細工できるため許可リスト方式にする
+  signupRef: z.enum(['share']).optional(),
 })
 
 authRouter.post('/register', async (req, res) => {
@@ -53,7 +55,8 @@ authRouter.post('/register', async (req, res) => {
     res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
     return
   }
-  const { email, password, displayName, birthYearMonth, gender, occupation } = parsed.data
+  const { email, password, displayName, birthYearMonth, gender, occupation, signupRef } =
+    parsed.data
 
   const existingUser = await prisma.user.findUnique({ where: { email } })
   if (existingUser) {
@@ -79,6 +82,7 @@ authRouter.post('/register', async (req, res) => {
       birthDate,
       gender,
       occupation,
+      signupRef: signupRef ?? null,
     },
   })
 
