@@ -27,3 +27,17 @@ export function sumRecentVolume(
 export function sumTotalVolume(points: { date: string; volumeKg: number }[]): number {
   return points.reduce((sum, p) => sum + p.volumeKg, 0)
 }
+
+// セットの一覧から合計負荷重量(kg)を求める。Σ weightKg × reps で、自重セット(weightKgがnull)は
+// 除外する（GET /stats/volumeと同じ定義）。③記録画面の日別サマリー（Issue #320）と
+// 画像カードシェア（shareCard.ts）で使う
+export function sumSetVolumeKg(sets: { weightKg: number | null; reps: number }[]): number {
+  return sets.reduce((sum, s) => sum + (s.weightKg === null ? 0 : s.weightKg * s.reps), 0)
+}
+
+// 合計負荷重量をkg表記の文字列にする（3桁区切り。重量は0.5kg刻みのため、端数は小数第1位まで）。
+// ホームの期間別サマリーはt表記（weightDisplay.tsのformatTons）だが、1日分は数千kg程度で、
+// t表記だとセットを1つ足しても数字が変わらないことが多いためkg表記にした（Issue #320、ユーザー判断）
+export function formatKg(kg: number): string {
+  return `${kg.toLocaleString('ja-JP', { maximumFractionDigits: 1 })}kg`
+}
