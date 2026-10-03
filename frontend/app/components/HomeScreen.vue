@@ -439,9 +439,23 @@ async function onDeleteWorkout(id: string) {
         />
 
         <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
-          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">
-            {{ selectedDate }}の記録
-          </p>
+          <!-- シェアの導線は見出しの右端に置く（当初はカード末尾のボタンだったが、記録が長いと
+               スクロールしないと届かないという指摘を受けて移した。2026-10-03）。ボタンが無い日も
+               見出しの高さが変わらないよう、h-8の行にしている -->
+          <div class="mb-2 flex h-8 items-center justify-between gap-2">
+            <p class="text-sm font-semibold text-gray-900 dark:text-ink">
+              {{ selectedDate }}の記録
+            </p>
+            <button
+              v-if="canShareSelectedDate"
+              type="button"
+              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 dark:border-accent/30 bg-brand-50 dark:bg-accent/10 text-brand-600 dark:text-accent before:absolute before:-inset-1.5 before:content-['']"
+              aria-label="この日の記録を画像でシェア"
+              @click="onOpenShareCard"
+            >
+              <ShareIcon class="h-4 w-4" />
+            </button>
+          </div>
           <template v-if="selectedWorkouts.length === 0">
             <p class="text-sm text-gray-500 dark:text-muted">記録がありません</p>
             <NuxtLink
@@ -577,14 +591,6 @@ async function onDeleteWorkout(id: string) {
               </div>
             </li>
           </ul>
-          <button
-            v-if="canShareSelectedDate"
-            type="button"
-            class="mt-3 w-full rounded border border-brand-600 dark:border-accent py-2 text-center text-sm font-semibold text-brand-600 dark:text-accent"
-            @click="onOpenShareCard"
-          >
-            この日の記録を画像でシェア
-          </button>
         </div>
       </template>
     </div>
