@@ -116,12 +116,7 @@ function drawValueWithUnit(
   ctx.fillText(unit, x + valueWidth + 10, y)
 }
 
-export function drawShareCard(
-  canvas: HTMLCanvasElement,
-  data: ShareCardData,
-  host: string,
-  theme: Theme,
-) {
+export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, theme: Theme) {
   const colors = SHARE_CARD_PALETTES[theme]
   canvas.width = SHARE_CARD_WIDTH
   canvas.height = SHARE_CARD_HEIGHT
@@ -225,17 +220,23 @@ export function drawShareCard(
     )
   }
 
-  // フッター：アプリの説明とドメイン（インスタのストーリーは画像内の文字がタップできないため、
-  // URLの代わりにドメインを入れて検索してもらえるようにする）
-  // 本番のドメイン（torebu-7gf1.vercel.app）は長く、説明文と横に並べると端末のフォントによっては
-  // 重なるため、2行に分けて左揃えにする
+  // フッター：サービス名と説明。当初はドメインも入れていた（インスタのストーリーは画像内の文字を
+  // タップできないため）が、本番のドメイン（torebu-7gf1.vercel.app）は覚えにくく検索にも向かないため、
+  // 「トレ部」で検索してもらう前提で外した（2026-10-03、ユーザー判断。独自ドメインを取ったら再検討）
+  const footerBaseline = SHARE_CARD_HEIGHT - 72
+  ctx.textAlign = 'left'
+  ctx.fillStyle = colors.ink
+  ctx.font = `700 32px ${FONT}`
+  const serviceName = 'トレ部'
+  ctx.fillText(serviceName, PADDING, footerBaseline)
+  const serviceNameWidth = ctx.measureText(serviceName).width
   ctx.fillStyle = colors.muted
   ctx.font = `500 28px ${FONT}`
-  ctx.textAlign = 'left'
-  ctx.fillText('仲間と筋トレを記録・応援しあうアプリ', PADDING, SHARE_CARD_HEIGHT - 112)
-  ctx.fillStyle = colors.ink
-  ctx.font = `700 34px ${FONT}`
-  ctx.fillText(fitText(ctx, host, contentWidth), PADDING, SHARE_CARD_HEIGHT - 60)
+  ctx.fillText(
+    '｜ 仲間と筋トレを記録・応援しあうアプリ',
+    PADDING + serviceNameWidth + 12,
+    footerBaseline,
+  )
 }
 
 export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

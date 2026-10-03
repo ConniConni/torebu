@@ -31,7 +31,7 @@ async function generate() {
   try {
     await loadShareCardFonts()
     const canvas = document.createElement('canvas')
-    drawShareCard(canvas, props.data, requestUrl.host, theme.value)
+    drawShareCard(canvas, props.data, theme.value)
     const blob = await canvasToPngBlob(canvas)
     if (!blob) throw new Error('toBlob failed')
     imageFile.value = new File([blob], fileName, { type: 'image/png' })
