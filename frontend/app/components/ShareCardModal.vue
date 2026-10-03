@@ -56,16 +56,29 @@ onUnmounted(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
 })
 
+const text = shareText(props.data)
+const landingUrl = shareLandingUrl(requestUrl.origin)
+
 async function onShare() {
   if (!imageFile.value) return
   try {
-    await navigator.share({
-      files: [imageFile.value],
-      text: shareText(props.data),
-      url: shareLandingUrl(requestUrl.origin),
-    })
+    await navigator.share({ files: [imageFile.value], text, url: landingUrl })
   } catch {
     // 共有シートを閉じた(AbortError)場合なども含め、何もしない
+  }
+}
+
+// 「画像を保存」で投稿する場合（PC、または本文を受け取らないアプリ）は画像だけになり、
+// トップへのURL（?ref=share）が付かない。投稿時に貼り付けてもらえるよう本文とURLをコピーできるようにする
+const copied = ref(false)
+
+async function onCopyText() {
+  try {
+    await navigator.clipboard.writeText(`${text}\n${landingUrl}`)
+    copied.value = true
+  } catch {
+    // クリップボードAPIが使えない環境もあるため、失敗時は何もしない
+    // （本文とURLは画面に表示済みなので、手動選択でコピーできる。グループ詳細の招待リンクと同じ方針）
   }
 }
 </script>
@@ -99,6 +112,21 @@ async function onShare() {
         <p class="text-xs text-gray-500 dark:text-muted">
           画像に載るのはあなたの記録の数字だけです（表示名・メモ・グループの情報は載りません）。
         </p>
+        <div class="rounded-lg border border-gray-200 dark:border-border-dark p-3">
+          <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">
+            画像を保存して投稿するときは、この本文も貼り付けてください
+          </p>
+          <p class="break-all text-sm text-gray-900 dark:text-ink">
+            {{ text }}<br />{{ landingUrl }}
+          </p>
+          <button
+            type="button"
+            class="mt-2 w-full rounded border border-gray-300 dark:border-border-dark py-1.5 text-sm font-semibold text-gray-700 dark:text-ink"
+            @click="onCopyText"
+          >
+            {{ copied ? 'コピーしました' : '本文とURLをコピー' }}
+          </button>
+        </div>
       </div>
     </div>
 
