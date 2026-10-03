@@ -125,7 +125,9 @@ async function onCopyText() {
             画像を保存して投稿するときは、この本文も貼り付けてください
           </p>
           <p class="break-all text-sm text-gray-900 dark:text-ink">
-            {{ text }}<br />{{ landingUrl }}
+            <!-- 本文はハッシュタグの前で改行しているため、改行をそのまま表示する -->
+            <span class="whitespace-pre-line">{{ text }}</span
+            ><br />{{ landingUrl }}
           </p>
           <button
             type="button"

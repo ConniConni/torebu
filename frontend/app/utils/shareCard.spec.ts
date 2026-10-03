@@ -109,13 +109,13 @@ describe('buildShareCardData', () => {
 })
 
 describe('shareText', () => {
-  it('通算日数とハッシュタグだけの短い本文にする', () => {
+  it('通算日数とハッシュタグだけの短い本文にし、ハッシュタグは改行して1行にまとめる', () => {
     const data = buildShareCardData(
       '2026-10-03',
       [{ name: 'ベンチプレス', sets: [{ weightKg: 60, reps: 10 }] }],
       ['2026-10-01', '2026-10-03'],
     )
-    expect(shareText(data)).toBe('筋トレ2日目 #トレ部')
+    expect(shareText(data)).toBe('筋トレ2日目\n#トレ部 #筋トレ記録 #筋トレ仲間')
   })
 })
 
