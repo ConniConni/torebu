@@ -276,7 +276,9 @@ describe('GET /workouts/:id', () => {
 
     const agent = await loginAsOwner()
     // 先にスクワットを追加してから、ベンチプレスを2番目に追加する
-    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId: secondExercise.id, reps: 8 })
+    await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: secondExercise.id, reps: 8 })
     await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
 
     const res = await agent.get(`/workouts/${workout.id}`)
@@ -586,6 +588,52 @@ describe('POST /workouts/:id/sets', () => {
     expect(res.body).toMatchObject({ setOrder: 2 })
   })
 
+  it('同じ種目へ同時にsetを追加しても、setOrderが重複せず連番になる(Issue #322)', async () => {
+    const workout = await createWorkout(ownerId)
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+
+    // ③記録画面で「＋セット追加」を素早く2回押した状況。awaitせずに並行で送る
+    const agent = await loginAsOwner()
+    const responses = await Promise.all([
+      agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 }),
+      agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 }),
+    ])
+
+    expect(responses.map((res) => res.status)).toEqual([201, 201])
+    expect(responses.map((res) => res.body.setOrder).sort()).toEqual([2, 3])
+    const sets = await prisma.workoutSet.findMany({
+      where: { workoutId: workout.id, exerciseId },
+      orderBy: { setOrder: 'asc' },
+    })
+    expect(sets.map((s) => s.setOrder)).toEqual([1, 2, 3])
+  })
+
+  it('setの追加と削除が同時に起きても、残りのsetOrderは重複せず1から連番になる(Issue #322)', async () => {
+    const workout = await createWorkout(ownerId)
+    const set1 = await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 10 },
+    })
+
+    const agent = await loginAsOwner()
+    const [deleteRes, addRes] = await Promise.all([
+      agent.delete(`/workouts/${workout.id}/sets/${set1.id}`),
+      agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 }),
+    ])
+
+    expect(deleteRes.status).toBe(200)
+    expect(addRes.status).toBe(201)
+    const sets = await prisma.workoutSet.findMany({
+      where: { workoutId: workout.id, exerciseId },
+      orderBy: { setOrder: 'asc' },
+    })
+    expect(sets.map((s) => s.setOrder)).toEqual([1, 2])
+  })
+
   it('setOrderが欠番になっても次のsetOrderは既存の最大値+1になる', async () => {
     const workout = await createWorkout(ownerId)
     const first = await prisma.workoutSet.create({
@@ -645,7 +693,9 @@ describe('POST /workouts/:id/sets', () => {
 
     const agent = await loginAsOwner()
     await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId, reps: 10 })
-    await agent.post(`/workouts/${workout.id}/sets`).send({ exerciseId: secondExercise.id, reps: 8 })
+    await agent
+      .post(`/workouts/${workout.id}/sets`)
+      .send({ exerciseId: secondExercise.id, reps: 8 })
 
     const cards = await prisma.workoutExercise.findMany({
       where: { workoutId: workout.id },
@@ -1170,7 +1220,9 @@ describe('POST /workouts/:id/comments', () => {
       await (await loginAsOther()).post(`/workouts/${workout.id}/comments`).send({ body: '1つ目' })
       await (
         await loginAsOutsider()
-      ).post(`/workouts/${workout.id}/comments`).send({ body: '2つ目' })
+      )
+        .post(`/workouts/${workout.id}/comments`)
+        .send({ body: '2つ目' })
 
       // 記録の投稿者(owner)へは引き続きtype: commentで通知される
       const ownerNotification = await prisma.notification.findFirst({
@@ -1214,7 +1266,12 @@ describe('POST /workouts/:id/comments', () => {
       await (await loginAsOwner()).post(`/workouts/${workout.id}/comments`).send({ body: '返信' })
 
       const notification = await prisma.notification.findFirst({
-        where: { recipientId: otherId, actorId: ownerId, type: 'comment_reply', targetId: workout.id },
+        where: {
+          recipientId: otherId,
+          actorId: ownerId,
+          type: 'comment_reply',
+          targetId: workout.id,
+        },
       })
       expect(notification).not.toBeNull()
     })

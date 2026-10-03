@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { shiftDateString, todayInJst } from '../lib/date.js'
+import type { Prisma } from '../generated/prisma/client.js'
 import type {
   WorkoutModel,
   WorkoutSetModel,
@@ -291,10 +292,21 @@ const createSetSchema = z.object({
   reps: repsSchema,
 })
 
+// セットの追加(採番)・削除(詰め直し)の前に、対象workoutの行をトランザクション内でロックする。
+// 「最大setOrderを読む→作成する」の間に別リクエストが割り込むと、同じsetOrderが2つできてしまうため
+// (③記録画面で「＋セット追加」を素早く連打すると起きた。Issue #322)、同じworkoutへのセット操作を
+// この行ロックで直列化する。ロック取得の時点で(並行した削除により)ソフトデリート済みならfalseを返す
+async function lockWorkoutForSetChange(tx: Prisma.TransactionClient, workoutId: string) {
+  const rows = await tx.$queryRaw<{ id: string }[]>`
+    SELECT id FROM workouts WHERE id = ${workoutId} AND deleted_at IS NULL FOR UPDATE`
+  return rows.length > 0
+}
+
 // 同じworkout内で同じ種目のsetが並ぶ順番。クライアント指定だと同時追加時にずれる懸念があるため、
-// サーバー側で「その種目の既存setの最大setOrder + 1」を採番する(削除で欠番が出ても採番はズレない)
-async function nextSetOrder(workoutId: string, exerciseId: string) {
-  const aggregate = await prisma.workoutSet.aggregate({
+// サーバー側で「その種目の既存setの最大setOrder + 1」を採番する(削除で欠番が出ても採番はズレない)。
+// 同時追加で重複しないよう、lockWorkoutForSetChangeでロックを取ったトランザクション内で呼ぶ
+async function nextSetOrder(tx: Prisma.TransactionClient, workoutId: string, exerciseId: string) {
+  const aggregate = await tx.workoutSet.aggregate({
     where: { workoutId, exerciseId },
     _max: { setOrder: true },
   })
@@ -305,12 +317,16 @@ async function nextSetOrder(workoutId: string, exerciseId: string) {
 // 既にある場合は何もしない(セットを追加しただけではカードの並びは動かさない)。
 // フロントが並び替え(PATCH .../exercises/:workoutExerciseId)に使うIDをその場で持てるよう、
 // 呼び出し側(POST /:id/sets)のレスポンスに含めて返す
-async function ensureWorkoutExercise(workoutId: string, exerciseId: string) {
-  const aggregate = await prisma.workoutExercise.aggregate({
+async function ensureWorkoutExercise(
+  tx: Prisma.TransactionClient,
+  workoutId: string,
+  exerciseId: string,
+) {
+  const aggregate = await tx.workoutExercise.aggregate({
     where: { workoutId },
     _max: { sortOrder: true },
   })
-  return prisma.workoutExercise.upsert({
+  return tx.workoutExercise.upsert({
     where: { workoutId_exerciseId: { workoutId, exerciseId } },
     create: { workoutId, exerciseId, sortOrder: (aggregate._max.sortOrder ?? 0) + 1 },
     update: {},
@@ -547,21 +563,35 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     return
   }
 
-  const workoutExercise = await ensureWorkoutExercise(workout.id, parsed.data.exerciseId)
-  const setOrder = await nextSetOrder(workout.id, parsed.data.exerciseId)
-  // C1・C2の判定用に、このセットを追加する前の時点でこのworkoutにセットが無かったか(=その日付の
-  // 初めてのセットになるか)を先に見ておく
-  const isFirstSetOfWorkout =
-    (await prisma.workoutSet.count({ where: { workoutId: workout.id } })) === 0
-  const set = await prisma.workoutSet.create({
-    data: {
-      workoutId: workout.id,
-      exerciseId: parsed.data.exerciseId,
-      setOrder,
-      weightKg: parsed.data.weightKg,
-      reps: parsed.data.reps,
-    },
+  // 採番〜作成を1トランザクションにまとめ、同じworkoutへの同時追加を直列化する(Issue #322)。
+  // 中ではprismaではなく必ずtxを使う(prisma.tsのプールはmax: 1のため、トランザクション中に
+  // prismaで別クエリを投げると接続待ちのまま止まる)
+  const created = await prisma.$transaction(async (tx) => {
+    if (!(await lockWorkoutForSetChange(tx, workout.id))) return null
+
+    const workoutExercise = await ensureWorkoutExercise(tx, workout.id, parsed.data.exerciseId)
+    const setOrder = await nextSetOrder(tx, workout.id, parsed.data.exerciseId)
+    // C1・C2の判定用に、このセットを追加する前の時点でこのworkoutにセットが無かったか(=その日付の
+    // 初めてのセットになるか)を先に見ておく
+    const isFirstSetOfWorkout =
+      (await tx.workoutSet.count({ where: { workoutId: workout.id } })) === 0
+    const set = await tx.workoutSet.create({
+      data: {
+        workoutId: workout.id,
+        exerciseId: parsed.data.exerciseId,
+        setOrder,
+        weightKg: parsed.data.weightKg,
+        reps: parsed.data.reps,
+      },
+    })
+    return { workoutExercise, isFirstSetOfWorkout, set }
   })
+  // 並行した最後のセット削除でworkoutがソフトデリートされた直後だった場合(Issue #234)
+  if (!created) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  const { workoutExercise, isFirstSetOfWorkout, set } = created
 
   const personalBest = await evaluatePersonalBest(userId, set)
   const achievements = await evaluateAchievements(userId, workout, isFirstSetOfWorkout)
@@ -633,9 +663,13 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
 
   // 削除すると、その種目の残りのsetOrderに欠番ができる(例: 1,2,3から2を消すと1,3が残る)。
   // 採番自体はnextSetOrderが最大値+1で拾うため壊れないが、表示上「1セット目から始まらない」
-  // 「セット数と連番がずれる」ことになるため、削除のたびに残りを1から連番に詰め直す
-  const shouldDelete = await prisma.$transaction(async (tx) => {
-    await tx.workoutSet.delete({ where: { id: set.id } })
+  // 「セット数と連番がずれる」ことになるため、削除のたびに残りを1から連番に詰め直す。
+  // 同時に走るセット追加(POST /:id/sets)の採番と食い違わないよう、同じworkoutの行ロックを取る(Issue #322)
+  const result = await prisma.$transaction(async (tx) => {
+    if (!(await lockWorkoutForSetChange(tx, workout.id))) return null
+    // ロック待ちの間に同じsetが別リクエストで削除されていることがあるため、ロック後に数え直す
+    const { count } = await tx.workoutSet.deleteMany({ where: { id: set.id } })
+    if (count === 0) return null
 
     const remaining = await tx.workoutSet.findMany({
       where: { workoutId: set.workoutId, exerciseId: set.exerciseId },
@@ -659,9 +693,14 @@ workoutsRouter.delete('/:id/sets/:setId', requireAuth, async (req, res) => {
     return false
   })
 
+  if (result === null) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
   // フロント(useWorkoutSession.tsのremoveSet)はdeleted:trueを見てセッションをリセットし、
   // 既に削除済みのworkoutIdを使い回して後続のAPI呼び出しが404になるのを防ぐ
-  res.status(200).json({ deleted: shouldDelete })
+  res.status(200).json({ deleted: result })
 })
 
 // 種目カードの並び替え(Issue #228。ルーティン画面のPATCH /routines/:id/exercises/:idと同じ方針)
