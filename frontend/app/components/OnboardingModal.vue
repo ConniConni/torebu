@@ -1,8 +1,9 @@
 <!--
   未ログイン時のトップ画面（WelcomeScreen）から開く、サービス説明用の全画面オンボーディングモーダル
-  （Issue #200）。実際のアプリ画面のスクリーンショット4枚（ダミーデータで撮影、
+  （Issue #200）。実際のアプリ画面のスクリーンショット5枚（ダミーデータで撮影、
   frontend/app/assets/images/onboarding_*.png）を使い、「記録する」「部位ハイライトを確認する」
-  「仲間とリアクション・コメントし合う」「ランキングで競う」の4つのコア体験を伝える。
+  「仲間とリアクション・コメントし合う」「ランキングで競う」「記録を画像でシェアする（Issue #318）」の
+  5つの体験を伝える。
   全画面シート・背景スクロールロックの実装はTermsPrivacyModal.vueに倣った。
   スライドの切り替えはJSのスワイプライブラリを使わず、横並び要素+scroll-snapのCSSのみで実装している
 -->
@@ -11,6 +12,7 @@ import recordImage from '~/assets/images/onboarding_record.png'
 import muscleImage from '~/assets/images/onboarding_muscle.png'
 import feedImage from '~/assets/images/onboarding_feed.png'
 import rankingImage from '~/assets/images/onboarding_ranking.png'
+import shareImage from '~/assets/images/onboarding_share.png'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -51,6 +53,12 @@ const slides = [
     title: 'ランキングで競い合う',
     description:
       '週間・月間・通算の合計挙上重量でグループ内ランキング。仲間と競い合うから、もうひと踏ん張りできる。',
+  },
+  {
+    image: shareImage,
+    title: '記録を画像にしてシェア',
+    description:
+      'その日の記録をワンタップで画像カードに。XやLINE・インスタにシェアできる。表示名やメモは載らないから安心。',
   },
 ]
 
