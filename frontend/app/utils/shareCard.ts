@@ -16,8 +16,8 @@ export interface ShareCardExerciseInput {
 
 export interface ShareCardExercise {
   name: string
-  // その種目のトップセット。例:「60kg × 10回」「自重 × 15回」
-  topSetText: string
+  // その種目の全セットの内訳。例:「60kg × 10・8・6回」「40kg × 10回 / 45kg × 8回」
+  setsText: string
   setCount: number
 }
 
@@ -31,8 +31,8 @@ export interface ShareCardData {
   hiddenExerciseCount: number // 画像に収まらず省略した種目数
 }
 
-// 1080×1350の画像に無理なく収まる種目数。超えた分は「ほか◯種目」とする
-export const MAX_CARD_EXERCISES = 6
+// 1080×1350の画像に無理なく収まる種目数（1種目＝種目名とセット内訳の2行）。超えた分は「ほか◯種目」とする
+export const MAX_CARD_EXERCISES = 5
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -42,20 +42,22 @@ export function formatShareCardDate(date: string): string {
   return `${date.replaceAll('-', '.')} (${weekday})`
 }
 
-// トップセット：重量が一番重いセット（同重量なら回数が多い方）。重量のあるセットが1つも無い
-// （全セット自重）ときは回数が一番多いセット
-export function topSetText(sets: ShareCardSetInput[]): string {
-  const weighted = sets.filter((s) => s.weightKg !== null)
-  if (weighted.length > 0) {
-    const top = weighted.reduce((best, s) =>
-      s.weightKg! > best.weightKg! || (s.weightKg === best.weightKg && s.reps > best.reps)
-        ? s
-        : best,
-    )
-    return `${top.weightKg}kg × ${top.reps}回`
+// 全セットの内訳を1行にまとめる。当初は最大重量のセット1つ＋「◯セット」だけを載せていたが、
+// 他のセットも同じ重量・回数だったように見えてしまうという指摘を受け、全セットを載せる形にした
+// （2026-10-03）。連続する同じ重量のセットは回数だけを「・」で並べて短くする
+// （例：60kg×10, 60kg×8, 70kg×5 →「60kg × 10・8回 / 70kg × 5回」）。セット順は呼び出し側で並べておく
+export function formatSetsText(sets: ShareCardSetInput[]): string {
+  const runs: { weightKg: number | null; reps: number[] }[] = []
+  for (const set of sets) {
+    const last = runs[runs.length - 1]
+    if (last && last.weightKg === set.weightKg) last.reps.push(set.reps)
+    else runs.push({ weightKg: set.weightKg, reps: [set.reps] })
   }
-  const maxReps = Math.max(...sets.map((s) => s.reps))
-  return `自重 × ${maxReps}回`
+  return runs
+    .map(
+      (run) => `${run.weightKg === null ? '自重' : `${run.weightKg}kg`} × ${run.reps.join('・')}回`,
+    )
+    .join(' / ')
 }
 
 export function buildShareCardData(
@@ -77,7 +79,7 @@ export function buildShareCardData(
     dayNumber,
     exercises: withSets.slice(0, MAX_CARD_EXERCISES).map((e) => ({
       name: e.name,
-      topSetText: topSetText(e.sets),
+      setsText: formatSetsText(e.sets),
       setCount: e.sets.length,
     })),
     hiddenExerciseCount: Math.max(0, withSets.length - MAX_CARD_EXERCISES),

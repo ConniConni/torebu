@@ -142,15 +142,15 @@ export function drawShareCard(
   ctx.fillStyle = colors.ink
   ctx.font = `72px ${LOGO_FONT}`
   ctx.textAlign = 'left'
-  ctx.fillText('トレ部', PADDING, 160)
+  ctx.fillText('トレ部', PADDING, 150)
   ctx.fillStyle = colors.muted
   ctx.font = `600 40px ${FONT}`
   ctx.textAlign = 'right'
-  ctx.fillText(data.dateLabel, right, 155)
+  ctx.fillText(data.dateLabel, right, 145)
 
   // サマリーパネル：合計負荷重量・種目数・セット数
-  const panelTop = 210
-  const panelHeight = 220
+  const panelTop = 195
+  const panelHeight = 200
   ctx.fillStyle = colors.panel
   roundedRect(ctx, PADDING, panelTop, contentWidth, panelHeight, 28)
   ctx.fill()
@@ -170,12 +170,12 @@ export function drawShareCard(
     ctx.textAlign = 'left'
     ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
-    ctx.fillText(column.label, x, panelTop + 72)
-    drawValueWithUnit(ctx, colors, column.value, column.unit, x, panelTop + 172)
+    ctx.fillText(column.label, x, panelTop + 66)
+    drawValueWithUnit(ctx, colors, column.value, column.unit, x, panelTop + 160)
   }
 
   // 通算日数のバッジ
-  const badgeTop = 470
+  const badgeTop = 425
   const badgeText = `通算 ${data.dayNumber} 日目のトレーニング`
   ctx.font = `700 36px ${FONT}`
   const badgeWidth = ctx.measureText(badgeText).width + 64
@@ -186,29 +186,29 @@ export function drawShareCard(
   ctx.textAlign = 'left'
   ctx.fillText(badgeText, PADDING + 32, badgeTop + 49)
 
-  // 種目ごとのトップセットとセット数
-  const listTop = 570
-  const rowHeight = 96
+  // 種目ごと：1行目に種目名とセット数、2行目に全セットの内訳（formatSetsText）。
+  // 内訳が長くて幅に収まらない場合は「…」で切る
+  const listTop = 525
+  const rowHeight = 120
   data.exercises.forEach((exercise, i) => {
     const rowTop = listTop + rowHeight * i
-    const baseline = rowTop + 62
+    const nameBaseline = rowTop + 50
     ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
     ctx.textAlign = 'right'
     const setLabel = `${exercise.setCount}セット`
-    ctx.fillText(setLabel, right, baseline)
+    ctx.fillText(setLabel, right, nameBaseline)
     const setLabelWidth = ctx.measureText(setLabel).width
 
     ctx.fillStyle = colors.ink
-    ctx.font = `700 40px ${FONT}`
-    const topSetRight = right - setLabelWidth - 36
-    ctx.fillText(exercise.topSetText, topSetRight, baseline)
-    const topSetWidth = ctx.measureText(exercise.topSetText).width
-
     ctx.textAlign = 'left'
     ctx.font = `600 40px ${FONT}`
-    const nameMaxWidth = topSetRight - topSetWidth - 40 - PADDING
-    ctx.fillText(fitText(ctx, exercise.name, nameMaxWidth), PADDING, baseline)
+    const nameMaxWidth = contentWidth - setLabelWidth - 32
+    ctx.fillText(fitText(ctx, exercise.name, nameMaxWidth), PADDING, nameBaseline)
+
+    ctx.fillStyle = colors.value
+    ctx.font = `700 34px ${FONT}`
+    ctx.fillText(fitText(ctx, exercise.setsText, contentWidth), PADDING, rowTop + 98)
 
     ctx.fillStyle = colors.border
     ctx.fillRect(PADDING, rowTop + rowHeight - 2, contentWidth, 2)
@@ -221,20 +221,21 @@ export function drawShareCard(
     ctx.fillText(
       `ほか${data.hiddenExerciseCount}種目`,
       PADDING,
-      listTop + rowHeight * data.exercises.length + 56,
+      listTop + rowHeight * data.exercises.length + 48,
     )
   }
 
   // フッター：アプリの説明とドメイン（インスタのストーリーは画像内の文字がタップできないため、
   // URLの代わりにドメインを入れて検索してもらえるようにする）
+  // 本番のドメイン（torebu-7gf1.vercel.app）は長く、説明文と横に並べると端末のフォントによっては
+  // 重なるため、2行に分けて左揃えにする
   ctx.fillStyle = colors.muted
   ctx.font = `500 28px ${FONT}`
   ctx.textAlign = 'left'
-  ctx.fillText('仲間と筋トレを記録・応援しあうアプリ', PADDING, SHARE_CARD_HEIGHT - 64)
+  ctx.fillText('仲間と筋トレを記録・応援しあうアプリ', PADDING, SHARE_CARD_HEIGHT - 112)
   ctx.fillStyle = colors.ink
-  ctx.font = `700 32px ${FONT}`
-  ctx.textAlign = 'right'
-  ctx.fillText(host, right, SHARE_CARD_HEIGHT - 64)
+  ctx.font = `700 34px ${FONT}`
+  ctx.fillText(fitText(ctx, host, contentWidth), PADDING, SHARE_CARD_HEIGHT - 60)
 }
 
 export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

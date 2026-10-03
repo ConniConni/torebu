@@ -4,7 +4,7 @@ import {
   buildShareCardData,
   formatShareCardDate,
   shareLandingUrl,
-  topSetText,
+  formatSetsText,
 } from './shareCard'
 
 describe('formatShareCardDate', () => {
@@ -14,37 +14,36 @@ describe('formatShareCardDate', () => {
   })
 })
 
-describe('topSetText', () => {
-  it('重量が一番重いセットを選び、同重量なら回数が多い方にする', () => {
+describe('formatSetsText', () => {
+  it('同じ重量が続くセットは回数だけを並べてまとめる', () => {
     expect(
-      topSetText([
-        { weightKg: 50, reps: 12 },
-        { weightKg: 60, reps: 8 },
+      formatSetsText([
         { weightKg: 60, reps: 10 },
+        { weightKg: 60, reps: 8 },
+        { weightKg: 60, reps: 6 },
       ]),
-    ).toBe('60kg × 10回')
+    ).toBe('60kg × 10・8・6回')
   })
 
-  it('自重セットが混ざっていても、重量のあるセットを優先する', () => {
+  it('重量が変わるセットは「/」で区切り、セット順のまま並べる', () => {
     expect(
-      topSetText([
-        { weightKg: null, reps: 20 },
-        { weightKg: 10, reps: 5 },
+      formatSetsText([
+        { weightKg: 40, reps: 10 },
+        { weightKg: 45, reps: 8 },
+        { weightKg: 45, reps: 8 },
+        { weightKg: 40, reps: 12 },
       ]),
-    ).toBe('10kg × 5回')
+    ).toBe('40kg × 10回 / 45kg × 8・8回 / 40kg × 12回')
   })
 
-  it('全セット自重なら回数が一番多いセットにする', () => {
+  it('自重セットは「自重」と表示し、小数の重量はそのまま表示する', () => {
     expect(
-      topSetText([
+      formatSetsText([
         { weightKg: null, reps: 12 },
-        { weightKg: null, reps: 15 },
+        { weightKg: null, reps: 10 },
+        { weightKg: 22.5, reps: 10 },
       ]),
-    ).toBe('自重 × 15回')
-  })
-
-  it('小数の重量もそのまま表示する', () => {
-    expect(topSetText([{ weightKg: 22.5, reps: 10 }])).toBe('22.5kg × 10回')
+    ).toBe('自重 × 12・10回 / 22.5kg × 10回')
   })
 })
 
@@ -68,8 +67,8 @@ describe('buildShareCardData', () => {
     expect(data.exerciseCount).toBe(2)
     expect(data.setCount).toBe(3)
     expect(data.exercises).toEqual([
-      { name: 'ベンチプレス', topSetText: '60kg × 10回', setCount: 2 },
-      { name: '懸垂', topSetText: '自重 × 10回', setCount: 1 },
+      { name: 'ベンチプレス', setsText: '60kg × 10・8回', setCount: 2 },
+      { name: '懸垂', setsText: '自重 × 10回', setCount: 1 },
     ])
     expect(data.hiddenExerciseCount).toBe(0)
   })
