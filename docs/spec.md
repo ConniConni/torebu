@@ -163,7 +163,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/privacy` | - | プライバシーポリシー（Issue #160）。収集する情報・利用目的・第三者提供の有無・運営者情報を明示 | なし | なし |
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。下部バーには実画面のスクリーンショットで機能を紹介するオンボーディングスライド（5枚）への導線も置く（Issue #200・#318、下記参照）。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。ログイン後の全画面はIssue #241でダーク対応済み、backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・記録の画像カードシェア・グループ未所属時の案内・通知バッジ。シェアと案内は[Issue #314](https://github.com/ConniConni/torebu/issues/314)、下記参照） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /groups`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
-| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
+| `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。上部にその日の合計負荷重量・セット数を表示する（Issue #320、§3-2参照）。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
@@ -999,6 +999,17 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
    ┌───────────────────────────────────┘
    │
    ③ 記録作成でできること
+   │
+   ├─ 画面上部（メモの上）に、その日の合計負荷重量とセット数のサマリーカードを表示する
+   │    （[Issue #320](https://github.com/ConniConni/torebu/issues/320)。モックで3案を比較して決定）
+   │      ・合計負荷重量はΣ重量×回数で、自重セットは除外する（`GET /stats/volume`・画像カード
+   │        シェアと同じ定義。`utils/trainingVolume.ts`の`sumSetVolumeKg`を共用）
+   │      ・単位はkg（3桁区切り、端数は小数第1位まで。例：「3,240kg」「937.5kg」）。ホームの
+   │        期間別サマリーはt表記だが、1日分はt表記だとセットを足しても数字が変わらないことが
+   │        多いためkgにした（ユーザー判断）
+   │      ・`session.sets`から都度算出するため、セットの追加・削除・重量/回数の編集・ルーティン
+   │        適用にその場で追従する（別途キャッシュは持たない）。APIの追加は無い
+   │      ・セットが0件の日は出さない（「まだ種目が追加されていません」と重複するため）
    │
    ├─「＋種目を追加」──> ④ 種目選択（/workouts/exercises）
    │                        部位ごとのセクション。各5件＋開閉で全件

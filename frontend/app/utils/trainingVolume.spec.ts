@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sumRecentVolume, sumTotalVolume } from './trainingVolume'
+import { formatKg, sumRecentVolume, sumSetVolumeKg, sumTotalVolume } from './trainingVolume'
 
 describe('sumRecentVolume', () => {
   const today = '2026-09-08'
@@ -39,5 +39,33 @@ describe('sumTotalVolume', () => {
 
   it('データが無ければ0を返す', () => {
     expect(sumTotalVolume([])).toBe(0)
+  })
+})
+
+describe('sumSetVolumeKg', () => {
+  it('Σ重量×回数を求め、自重セットは除外する', () => {
+    expect(
+      sumSetVolumeKg([
+        { weightKg: 60, reps: 10 },
+        { weightKg: 62.5, reps: 3 },
+        { weightKg: null, reps: 15 },
+      ]),
+    ).toBe(787.5)
+  })
+
+  it('セットが無ければ0', () => {
+    expect(sumSetVolumeKg([])).toBe(0)
+  })
+})
+
+describe('formatKg', () => {
+  it('3桁区切りのkg表記にする', () => {
+    expect(formatKg(3240)).toBe('3,240kg')
+    expect(formatKg(0)).toBe('0kg')
+  })
+
+  it('端数は小数第1位まで（不要な0は付けない）', () => {
+    expect(formatKg(787.5)).toBe('787.5kg')
+    expect(formatKg(0.1 + 0.2)).toBe('0.3kg')
   })
 })

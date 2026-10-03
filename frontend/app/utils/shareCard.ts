@@ -4,6 +4,8 @@
 // 載せないもの（docs/backlog.md「ユーザー獲得：自分の記録の画像カードシェア」の方針）：
 // 表示名・メモ・仲間のいいね/コメント・招待リンク。外部SNSに出る画像のため、本人の記録の数字だけにする
 
+import { sumSetVolumeKg } from './trainingVolume'
+
 export interface ShareCardSetInput {
   weightKg: number | null
   reps: number
@@ -66,9 +68,7 @@ export function buildShareCardData(
   recordedDates: string[], // セットが1件以上ある日の一覧（HomeScreen.vueのallRecordedDates）
 ): ShareCardData {
   const withSets = exercises.filter((e) => e.sets.length > 0)
-  const totalVolumeKg = withSets
-    .flatMap((e) => e.sets)
-    .reduce((sum, s) => sum + (s.weightKg === null ? 0 : s.weightKg * s.reps), 0)
+  const totalVolumeKg = sumSetVolumeKg(withSets.flatMap((e) => e.sets))
   const dayNumber = new Set(recordedDates.filter((d) => d <= date)).size
 
   return {
