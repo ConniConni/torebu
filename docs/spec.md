@@ -156,13 +156,13 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | パス | 画面 | 役割 | 主に使うAPI | ミドルウェア |
 |---|---|---|---|---|
 | `/login` | ① | ログイン。`?redirect=`（アプリ内パスのみ）があればログイン後にそこへ戻る（招待リンク用、[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。無ければ`/` | `POST /auth/login` | `guest` |
-| `/register` | ① | 新規登録。表示名・メール・パスワードに加え、生年月（年月のみ）・性別・職業が必須（いずれも「回答しない」を選択可能。下記参照）。利用規約・プライバシーポリシーへの同意チェックボックス必須（下記参照）。`?redirect=`は`/login`と同じ扱い | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
+| `/register` | ① | 新規登録。表示名・メール・パスワードに加え、生年月（年月のみ）・性別・職業が必須（いずれも「回答しない」を選択可能。下記参照）。利用規約・プライバシーポリシーへの同意チェックボックス必須（下記参照）。`?redirect=`は`/login`と同じ扱い。トップで`?ref=share`を受け取っていれば`signupRef`も送る（[Issue #314](https://github.com/ConniConni/torebu/issues/314)） | `POST /auth/register` → 続けて `POST /auth/login` | `guest` |
 | `/password-reset` | - | パスワード再設定のメール送信。メールアドレスを入力すると再設定リンク付きメールが届く（Issue #213） | `POST /auth/password-reset-requests` | `guest` |
 | `/password-reset/[token]` | - | 新しいパスワードの設定。メール内のリンクからアクセスする（Issue #213） | `POST /auth/password-resets` | `guest` |
 | `/terms` | - | 利用規約（Issue #160） | なし | なし |
 | `/privacy` | - | プライバシーポリシー（Issue #160）。収集する情報・利用目的・第三者提供の有無・運営者情報を明示 | なし | なし |
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。下部バーには実画面のスクリーンショットで機能を紹介するオンボーディングスライド（4枚）への導線も置く（Issue #200、下記参照）。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。ログイン後の全画面はIssue #241でダーク対応済み、backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
-| `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・通知バッジ） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
+| `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・記録の画像カードシェア・グループ未所属時の案内・通知バッジ。シェアと案内は[Issue #314](https://github.com/ConniConni/torebu/issues/314)、下記参照） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /groups`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
 | `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加 | `POST /exercises` | `auth` |
@@ -555,6 +555,39 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   SSR時は`navigator`が無いので`onMounted`で判定し、サーバーとクライアントの描画を食い違わせない
 - **OGP（LINE等のリンクプレビュー）**：グループ名を含めない汎用の文面にした（プレビューは
   トークの他の参加者やLINEのサーバーにも渡るため）。`robots: noindex`も付けている
+
+**自分の記録の画像カードシェア（[Issue #314](https://github.com/ConniConni/torebu/issues/314)）の実装メモ**
+- 目的はユーザー獲得（招待リンク#312に続く2つ目）。自分の記録を画像にして外部SNSへ共有し、
+  トップ→新規登録→グループ作成・招待、とつなげる。これに合わせて`concept.md`の「やらないこと」を
+  「自分の記録を画像カードにして外部SNSへ共有することだけは許可」に書き換えた
+- **導線**：②ホームの「◯◯の記録」カードの下に「この日の記録を画像でシェア」ボタン。選択日の記録
+  （同じ日に複数あればまとめて）の詳細の読み込みが終わり、セットのある種目が1つ以上あるときだけ出す。
+  押すと全画面モーダル（[ShareCardModal.vue](../frontend/app/components/ShareCardModal.vue)）でプレビューを出す
+- **画像に載せるもの**（[shareCard.ts](../frontend/app/utils/shareCard.ts)の`buildShareCardData`）：
+  日付・合計負荷重量（Σ重量×回数、自重セットは除外＝`GET /stats/volume`と同じ定義）・種目数・セット数・
+  通算何日目か（その日までのセットがある日の数＝トレ日数と同じ定義）・種目ごとのトップセット
+  （最大重量、同重量なら回数が多い方。全セット自重なら最大回数）とセット数（最大6種目、残りは「ほか◯種目」）・
+  アプリ名・ドメイン。**載せないもの**：表示名・メモ・グループや仲間の情報（いいね・コメント）・招待リンク
+- **画像の生成**：ブラウザのCanvasで1080×1350（4:5）のPNGを描く（[shareCardCanvas.ts](../frontend/app/utils/shareCardCanvas.ts)。
+  新しい依存関係・サーバー負荷なし）。配色はダークテーマのトークン。ロゴ用フォント（Yusei Magic）は
+  描く前に`document.fonts.load`で読み込むが、遅い回線で待たされ続けないよう2秒で打ち切って代替フォントで描く。
+  PNGへの変換に1秒前後かかるため、その間は「画像を作成中...」を出す
+- **共有**：Web Share APIに画像ファイル・本文・URLを渡す。共有シートはボタン押下の直後に呼ぶ必要が
+  あるため、画像はモーダルを開いた時点で作っておく。`navigator.canShare({ files })`がfalseの環境
+  （PCのブラウザ等）では「共有する」を出さず、「画像を保存」（`<a download>`）だけにする
+- **共有URLはトップ（`/?ref=share`）**：招待リンクは不特定多数がクローズドなグループに入れてしまうため
+  載せない。画像内にもドメインを入れる（インスタのストーリーは画像内の文字をタップできないため）
+- **効果測定（`users.signup_ref`）**：トップ（WelcomeScreen）が`?ref=share`を受け取るとsessionStorageに
+  保存し、新規登録時に`POST /auth/register`の`signupRef`として送る（[signupRef.ts](../frontend/app/utils/signupRef.ts)）。
+  トップ→登録の間でクエリが消えるためsessionStorageを使う。タブ単位なので、別タブ・別端末で登録した場合は
+  記録されない（目安の計測と割り切った）。値はフロント・バックとも許可リスト（`share`のみ）。
+  確認はNeonのSQL Editorで`select count(*) from users where signup_ref = 'share';`。
+  プライバシーポリシーの「収集する情報」「利用目的」に追記した（最終更新日：2026年10月3日）
+- **グループ未所属の案内**：シェア経由の人はグループ無しで登録を終えるため、所属グループが0件のとき
+  ②ホームの上部に「仲間を誘ってグループを作ろう」（`/groups`へのリンク）を出す。グループの作成・参加・退会は
+  別画面で起きるため、②を開くたびに`GET /groups`を取り直して判定する（`useGroups`のキャッシュを信用しない）。
+  取得に失敗したときは出さない
+- 自己ベスト更新・継続日数の節目のカードは対象外（このIssueの反応を見てから別Issueで検討。backlog.md参照）
 
 **グループの記録フィード（Phase4、[Issue #138](https://github.com/ConniConni/torebu/issues/138)）の実装メモ**
 - いいね・コメント機能の対象となる「仲間の記録を見る画面」が無いことに気づき、グループ基盤の次に
@@ -1059,6 +1092,7 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 | `usePendingExercises` | `useState('pending-exercises')` | ⑤ルーティン適用で積まれた「入力待ちの種目」リスト | **残る**（`finishWorkout` を呼んだときにリセット。ログアウト時はフルリロードで破棄） |
 | `returnTo` | クエリパラメータ（URLに乗る） | ④⑦が「どこへ戻るか」（未指定なら `/workouts/new`） | **残る**（URLの一部なのでリロードしても消えない） |
 | `redirect` | クエリパラメータ（URLに乗る） | ①ログイン・新規登録の完了後にどこへ戻るか（招待リンク用、[Issue #312](https://github.com/ConniConni/torebu/issues/312)。未指定・不正な値なら `/`） | **残る**（`returnTo`と同じ。外部から細工できる値なので`safeRedirectPath`で必ず検証する） |
+| `signupRef` | sessionStorage（`torebu:signupRef`） | トップに`?ref=share`で来たことを、①新規登録まで持ち越す（効果測定用、[Issue #314](https://github.com/ConniConni/torebu/issues/314)） | **残る**（同じタブの中だけ。タブを閉じると消える。許可値以外は保存・送信しない） |
 
 **なぜ4つあるのか**
 - ④⑦は③からもルーティン編集画面からも来る**共通画面**なので、戻り先を知る必要がある → `returnTo`
@@ -1066,6 +1100,9 @@ Issue10で判断がブレたのはここ。違いを押さえておく。
 - ③は画面を離れている間も「今日のworkout」を保持し続ける必要がある → `useWorkoutSession`
 - ③は④⑦への往復を挟んでも「入力待ちの種目」を保持し続ける必要がある → `usePendingExercises`
   （Issue13で作り込み、Issue #36で修正したバグの原因。当初 `ref` で持っていたため画面遷移で消えていた）
+- `signupRef`だけは`useState`ではなくsessionStorage：トップ（SSRで描かれる未ログインページ）から
+  ①新規登録までの間に、リロードや外部ブラウザでの開き直しを挟んでも同じタブなら残したいため。
+  ブラウザにしか無いので、保存は`onMounted`、読み出しは送信時に行う
 
 **横断ルール：画面をまたいで残したい状態は `ref` ではなく `useState` に置く。**
 
@@ -1137,7 +1174,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
-| POST | `/auth/register` | 不要 | ユーザー登録（登録だけ。ログイン状態にはならない） |
+| POST | `/auth/register` | 不要 | ユーザー登録（登録だけ。ログイン状態にはならない）。任意の`signupRef`（登録のきっかけ、許可値は`share`のみ。それ以外は`400 invalid_request`）を`users.signup_ref`に保存する（[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
 | POST | `/auth/login` | 不要 | ログイン。**レート制限あり**（同一IPから15分に10回まで） |
 | GET | `/auth/me` | 要 | ログイン中のユーザー情報を返す |
 | POST | `/auth/logout` | 要 | セッションを破棄する |
@@ -1269,7 +1306,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
-| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_token`にはトークンの生の値ではなくSHA-256ハッシュを保存する（DB漏洩時の悪用対策）。`password_reset_expires_at`は発行から1時間後、使用後または期限切れで`null`に戻る（Issue #213）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない |
+| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_token`にはトークンの生の値ではなくSHA-256ハッシュを保存する（DB漏洩時の悪用対策）。`password_reset_expires_at`は発行から1時間後、使用後または期限切れで`null`に戻る（Issue #213）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない。`signup_ref`（nullable）は登録のきっかけで、画像カードシェアの共有URL経由で登録した場合だけ`share`が入る（効果測定用、アプリの動作には使わない。[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
 | `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order`は公式種目のみ設定（種目マスタ元データの並び順。使用実績が無いユーザーの初期並び順に使う、Issue #167）、カスタム種目は常にnull。公式種目77件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
 | `workouts` | 1日1回分のトレーニング | `deleted_at` を持つ（ソフトデリート） |
 | `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` は種目ごとに1からリセットされる連番でサーバー採番（種目カード自体の並び順は`workout_exercises`が持つ） |
