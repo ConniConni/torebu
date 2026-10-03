@@ -95,7 +95,9 @@ export function shareLandingUrl(origin: string): string {
   return new URL(`/?ref=${SHARE_SIGNUP_REF}`, origin).href
 }
 
-// 過去日の記録もシェアできるため「今日」などの日付に依存する言い回しは避ける
+// 過去日の記録もシェアできるため「今日」などの日付に依存する言い回しは避ける。
+// 当初は「トレーニングを記録しました💪 通算◯日目 #トレ部」だったが、いかにも定型文で不自然という
+// 指摘を受け、続けていることだけが伝わる短い形にした（2026-10-03、ユーザー判断）
 export function shareText(data: ShareCardData): string {
-  return `トレーニングを記録しました💪 通算${data.dayNumber}日目 #トレ部`
+  return `筋トレ${data.dayNumber}日目 #トレ部`
 }

@@ -4,6 +4,7 @@ import {
   buildShareCardData,
   formatShareCardDate,
   shareLandingUrl,
+  shareText,
   formatSetsText,
 } from './shareCard'
 
@@ -104,6 +105,17 @@ describe('buildShareCardData', () => {
     expect(data.exercises).toHaveLength(MAX_CARD_EXERCISES)
     expect(data.exerciseCount).toBe(MAX_CARD_EXERCISES + 2)
     expect(data.hiddenExerciseCount).toBe(2)
+  })
+})
+
+describe('shareText', () => {
+  it('通算日数とハッシュタグだけの短い本文にする', () => {
+    const data = buildShareCardData(
+      '2026-10-03',
+      [{ name: 'ベンチプレス', sets: [{ weightKg: 60, reps: 10 }] }],
+      ['2026-10-01', '2026-10-03'],
+    )
+    expect(shareText(data)).toBe('筋トレ2日目 #トレ部')
   })
 })
 
