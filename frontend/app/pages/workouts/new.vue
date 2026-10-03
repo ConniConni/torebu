@@ -99,6 +99,11 @@ const groupedSets = computed(() => {
     }))
 })
 
+// その日の合計負荷重量・セット数（Issue #320）。session.setsから都度算出するため、
+// セットの追加・削除・編集・ルーティン適用にそのまま追従する（別途キャッシュは持たない）
+const dayVolumeKg = computed(() => sumSetVolumeKg(session.value.sets))
+const daySetCount = computed(() => session.value.sets.length)
+
 function groupFor(exerciseId: string) {
   return groupedSets.value.find((g) => g.exerciseId === exerciseId)
 }
@@ -499,6 +504,31 @@ async function onGoToExercisePicker() {
     <PageHeader back-label="ホームに戻る" :title="`${targetDate}の記録`" @back="onLeaveWorkout" />
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
+        <!-- その日の合計（Issue #320）。モックで3案を比較し、メモの上に独立した2マスのカードを置く
+             案に決めた。数字の見た目はホームの期間別サマリーに揃える。セットが無い日は
+             「まだ種目が追加されていません」と重複するため出さない -->
+        <section
+          v-if="daySetCount > 0"
+          class="grid grid-cols-2 gap-3 rounded-lg bg-white dark:bg-panel p-4 shadow"
+        >
+          <div>
+            <p
+              class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
+            >
+              {{ formatKg(dayVolumeKg) }}
+            </p>
+            <p class="mt-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
+          </div>
+          <div>
+            <p
+              class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
+            >
+              {{ daySetCount }}セット
+            </p>
+            <p class="mt-1 text-xs font-semibold text-gray-500 dark:text-muted">セット数</p>
+          </div>
+        </section>
+
         <section class="rounded-lg bg-white dark:bg-panel p-4 shadow">
           <label class="flex flex-col gap-1 text-sm text-gray-700 dark:text-ink">
             メモ
