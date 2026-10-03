@@ -20,6 +20,8 @@ interface RegisterPayload {
     | 'homemaker'
     | 'other'
     | 'no_answer'
+  // 登録のきっかけ（Issue #314、utils/signupRef.ts参照）
+  signupRef?: 'share'
 }
 
 interface LoginPayload {

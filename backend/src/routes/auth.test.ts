@@ -21,6 +21,36 @@ afterEach(async () => {
 })
 
 describe('POST /auth/register', () => {
+  // 画像カードシェア経由の登録の効果測定（Issue #314）
+  it('signupRefに"share"を指定するとsignup_refに保存される', async () => {
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ ...validPayload, signupRef: 'share' })
+
+    expect(res.status).toBe(201)
+    const user = await prisma.user.findUnique({ where: { email: testEmail } })
+    expect(user?.signupRef).toBe('share')
+  })
+
+  it('signupRefを指定しない通常の登録ではsignup_refはnullになる', async () => {
+    const res = await request(app).post('/auth/register').send(validPayload)
+
+    expect(res.status).toBe(201)
+    const user = await prisma.user.findUnique({ where: { email: testEmail } })
+    expect(user?.signupRef).toBeNull()
+  })
+
+  it('許可されていないsignupRefは400で拒否し、ユーザーを作成しない', async () => {
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ ...validPayload, signupRef: 'evil' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_request')
+    const user = await prisma.user.findUnique({ where: { email: testEmail } })
+    expect(user).toBeNull()
+  })
+
   it('有効な入力で登録に成功し、パスワードハッシュを含まないユーザー情報を返す', async () => {
     const res = await request(app).post('/auth/register').send(validPayload)
 

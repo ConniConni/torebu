@@ -11,6 +11,11 @@ import topIllustrationDark from '~/assets/images/top_image_dark.jpeg'
 // トレ部でできることを4枚のスクリーンショットで説明するオンボーディングモーダル（Issue #200）
 const isOnboardingOpen = ref(false)
 
+// 画像カードシェアの共有URL（/?ref=share）で来た場合、新規登録まで目印を持ち越す（Issue #314、
+// utils/signupRef.ts参照）。sessionStorageはブラウザにしか無いためマウント後に保存する
+const route = useRoute()
+onMounted(() => saveSignupRef(route.query.ref))
+
 const { theme } = useTheme()
 const heroImage = computed(() => (theme.value === 'dark' ? topIllustrationDark : topIllustration))
 </script>
