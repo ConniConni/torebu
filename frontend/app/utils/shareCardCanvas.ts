@@ -3,20 +3,49 @@
 // 何を載せるかはshareCard.tsのbuildShareCardDataで決め、ここは配置と見た目だけを担う。
 //
 // サイズは1080×1350（4:5）。Instagramのフィード・Xのどちらでも大きく切れずに表示される比率。
-// 配色はアプリのダークテーマのトークン（assets/css/main.css）に揃え、SNSのタイムラインで目立つようにした
+// 配色はシェアした本人のアプリのテーマ（useTheme）に合わせ、ライト／ダークのトークン（assets/css/main.css・
+// 各画面のTailwindクラス）に揃える（2026-10-03、ユーザー判断。当初はダーク固定だった）
 
 import type { ShareCardData } from './shareCard'
+import type { Theme } from './theme'
 
 export const SHARE_CARD_WIDTH = 1080
 export const SHARE_CARD_HEIGHT = 1350
 
-const COLORS = {
-  surface: '#141414',
-  panel: '#1f1f1d',
-  ink: '#f2f2ee',
-  muted: '#a3a29b',
-  border: '#33322c',
-  accent: '#c8ff4d',
+interface ShareCardPalette {
+  surface: string // 背景
+  panel: string // サマリーパネル
+  ink: string // 本文
+  muted: string // ラベル・補足
+  border: string // 種目の区切り線
+  value: string // 大きな数字
+  highlight: string // 上端のライン・通算日数バッジの背景
+  onHighlight: string // バッジの文字
+}
+
+// ライトは②ホーム等の配色（bg-gray-50・白パネル・brand-700の数字・brand-600のボタン）、
+// ダークはdark:系のトークン（surface/panel/ink/muted/border-dark/accent）と同じ値
+export const SHARE_CARD_PALETTES: Record<Theme, ShareCardPalette> = {
+  light: {
+    surface: '#f9fafb',
+    panel: '#ffffff',
+    ink: '#111827',
+    muted: '#6b7280',
+    border: '#e5e7eb',
+    value: '#b8431a',
+    highlight: '#d8531f',
+    onHighlight: '#ffffff',
+  },
+  dark: {
+    surface: '#141414',
+    panel: '#1f1f1d',
+    ink: '#f2f2ee',
+    muted: '#a3a29b',
+    border: '#33322c',
+    value: '#c8ff4d',
+    highlight: '#c8ff4d',
+    onHighlight: '#141414',
+  },
 }
 
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Meiryo", sans-serif'
@@ -71,22 +100,29 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) 
 // 数値と単位を、数値を大きく・単位を小さくして同じベースラインに並べる
 function drawValueWithUnit(
   ctx: CanvasRenderingContext2D,
+  colors: ShareCardPalette,
   value: string,
   unit: string,
   x: number,
   y: number,
 ) {
   ctx.textAlign = 'left'
-  ctx.fillStyle = COLORS.accent
+  ctx.fillStyle = colors.value
   ctx.font = `800 88px ${FONT}`
   ctx.fillText(value, x, y)
   const valueWidth = ctx.measureText(value).width
-  ctx.fillStyle = COLORS.ink
+  ctx.fillStyle = colors.ink
   ctx.font = `600 34px ${FONT}`
   ctx.fillText(unit, x + valueWidth + 10, y)
 }
 
-export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, host: string) {
+export function drawShareCard(
+  canvas: HTMLCanvasElement,
+  data: ShareCardData,
+  host: string,
+  theme: Theme,
+) {
+  const colors = SHARE_CARD_PALETTES[theme]
   canvas.width = SHARE_CARD_WIDTH
   canvas.height = SHARE_CARD_HEIGHT
   const ctx = canvas.getContext('2d')
@@ -96,18 +132,18 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
   const contentWidth = SHARE_CARD_WIDTH - PADDING * 2
   const right = SHARE_CARD_WIDTH - PADDING
 
-  ctx.fillStyle = COLORS.surface
+  ctx.fillStyle = colors.surface
   ctx.fillRect(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT)
   // 上端のアクセントライン
-  ctx.fillStyle = COLORS.accent
+  ctx.fillStyle = colors.highlight
   ctx.fillRect(0, 0, SHARE_CARD_WIDTH, 12)
 
   // ヘッダー：ロゴと日付
-  ctx.fillStyle = COLORS.ink
+  ctx.fillStyle = colors.ink
   ctx.font = `72px ${LOGO_FONT}`
   ctx.textAlign = 'left'
   ctx.fillText('トレ部', PADDING, 160)
-  ctx.fillStyle = COLORS.muted
+  ctx.fillStyle = colors.muted
   ctx.font = `600 40px ${FONT}`
   ctx.textAlign = 'right'
   ctx.fillText(data.dateLabel, right, 155)
@@ -115,7 +151,7 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
   // サマリーパネル：合計負荷重量・種目数・セット数
   const panelTop = 210
   const panelHeight = 220
-  ctx.fillStyle = COLORS.panel
+  ctx.fillStyle = colors.panel
   roundedRect(ctx, PADDING, panelTop, contentWidth, panelHeight, 28)
   ctx.fill()
 
@@ -132,10 +168,10 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
   for (const column of columns) {
     const x = PADDING + 44 + (contentWidth - 44) * column.x
     ctx.textAlign = 'left'
-    ctx.fillStyle = COLORS.muted
+    ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
     ctx.fillText(column.label, x, panelTop + 72)
-    drawValueWithUnit(ctx, column.value, column.unit, x, panelTop + 172)
+    drawValueWithUnit(ctx, colors, column.value, column.unit, x, panelTop + 172)
   }
 
   // 通算日数のバッジ
@@ -143,10 +179,10 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
   const badgeText = `通算 ${data.dayNumber} 日目のトレーニング`
   ctx.font = `700 36px ${FONT}`
   const badgeWidth = ctx.measureText(badgeText).width + 64
-  ctx.fillStyle = COLORS.accent
+  ctx.fillStyle = colors.highlight
   roundedRect(ctx, PADDING, badgeTop, badgeWidth, 72, 36)
   ctx.fill()
-  ctx.fillStyle = COLORS.surface
+  ctx.fillStyle = colors.onHighlight
   ctx.textAlign = 'left'
   ctx.fillText(badgeText, PADDING + 32, badgeTop + 49)
 
@@ -156,14 +192,14 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
   data.exercises.forEach((exercise, i) => {
     const rowTop = listTop + rowHeight * i
     const baseline = rowTop + 62
-    ctx.fillStyle = COLORS.muted
+    ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
     ctx.textAlign = 'right'
     const setLabel = `${exercise.setCount}セット`
     ctx.fillText(setLabel, right, baseline)
     const setLabelWidth = ctx.measureText(setLabel).width
 
-    ctx.fillStyle = COLORS.ink
+    ctx.fillStyle = colors.ink
     ctx.font = `700 40px ${FONT}`
     const topSetRight = right - setLabelWidth - 36
     ctx.fillText(exercise.topSetText, topSetRight, baseline)
@@ -174,12 +210,12 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
     const nameMaxWidth = topSetRight - topSetWidth - 40 - PADDING
     ctx.fillText(fitText(ctx, exercise.name, nameMaxWidth), PADDING, baseline)
 
-    ctx.fillStyle = COLORS.border
+    ctx.fillStyle = colors.border
     ctx.fillRect(PADDING, rowTop + rowHeight - 2, contentWidth, 2)
   })
 
   if (data.hiddenExerciseCount > 0) {
-    ctx.fillStyle = COLORS.muted
+    ctx.fillStyle = colors.muted
     ctx.font = `600 32px ${FONT}`
     ctx.textAlign = 'left'
     ctx.fillText(
@@ -191,11 +227,11 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, ho
 
   // フッター：アプリの説明とドメイン（インスタのストーリーは画像内の文字がタップできないため、
   // URLの代わりにドメインを入れて検索してもらえるようにする）
-  ctx.fillStyle = COLORS.muted
+  ctx.fillStyle = colors.muted
   ctx.font = `500 28px ${FONT}`
   ctx.textAlign = 'left'
   ctx.fillText('仲間と筋トレを記録・応援しあうアプリ', PADDING, SHARE_CARD_HEIGHT - 64)
-  ctx.fillStyle = COLORS.ink
+  ctx.fillStyle = colors.ink
   ctx.font = `700 32px ${FONT}`
   ctx.textAlign = 'right'
   ctx.fillText(host, right, SHARE_CARD_HEIGHT - 64)

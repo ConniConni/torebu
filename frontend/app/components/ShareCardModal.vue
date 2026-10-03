@@ -19,6 +19,8 @@ let previousHtmlOverflow = ''
 let previousBodyOverflow = ''
 
 const requestUrl = useRequestURL()
+// 画像の配色はアプリのテーマ（ライト／ダーク）に合わせる
+const { theme } = useTheme()
 const previewUrl = ref<string | null>(null)
 const imageFile = ref<File | null>(null)
 const canShareFile = ref(false)
@@ -29,7 +31,7 @@ async function generate() {
   try {
     await loadShareCardFonts()
     const canvas = document.createElement('canvas')
-    drawShareCard(canvas, props.data, requestUrl.host)
+    drawShareCard(canvas, props.data, requestUrl.host, theme.value)
     const blob = await canvasToPngBlob(canvas)
     if (!blob) throw new Error('toBlob failed')
     imageFile.value = new File([blob], fileName, { type: 'image/png' })
