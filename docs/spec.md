@@ -114,7 +114,10 @@
 6. `isExerciseVisible`。公式種目か自分のカスタム種目でなければ `400 invalid_exercise`
 7. **`nextSetOrder`（採番）**。「同じworkout・同じ種目の中で、既存の最大 `setOrder` + 1」をサーバーが決める
    - クライアントに番号を決めさせると、連続で押したときに同じ番号がぶつかる。だからサーバーが決める
-8. `prisma.workoutSet.create` でDBに保存
+   - 7〜8は1つのトランザクションの中で、先に**対象workoutの行ロック（`SELECT ... FOR UPDATE`）**を取ってから行う。
+     「最大値を読む→作成」の間に別リクエストが割り込むと、連打した2件が同じ番号になるため
+     （[Issue #322](https://github.com/ConniConni/torebu/issues/322)）。同じworkoutへのセット追加・削除はこのロックで1件ずつ順番に処理される
+8. `workoutSet.create` でDBに保存
 9. 返ってきたセットを `session.value.sets` に足す → **Vueが変化を検知して画面が自動で描き直される**
 
 ---
@@ -1288,8 +1291,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → `default_sort_order`昇順 → 名前順」の3段階**（Issue #167で3段階に変更。公式種目には種目マスタ元データの並び順＝部位ごとに「コンパウンド→バリエーション→アイソレーション」を`default_sort_order`として`seed.ts`で投入済み。カスタム種目は`default_sort_order`がnullのままのため、同じ使用回数の公式種目より後ろに来る）。各種目に `useCount`（自分の使用回数）が付いてくる。**削除済み（`deletedAt`有り）のカスタム種目もレスポンスには含める**（過去の記録・ルーティンがこのレスポンスをキャッシュして種目名を解決しているため、除外すると過去記録の表示が壊れる）。新規の記録・ルーティンへの追加候補からの除外は、`deletedAt`を見てフロント側（④種目選択・⑦種目追加の重複サジェスト）で行う |
 | `GET /exercises` の `lastSet`（[Issue #116](https://github.com/ConniConni/torebu/issues/116)） | `{ weightKg, reps } \| null`。自分の削除されていない（`deletedAt: null`の）workoutの中で、その種目を一番新しく記録したセット1件（`performedAt`降順→`setOrder`降順で先頭）。記録が無ければ`null`。③記録作成でのセット追加のデフォルト値決定に使う（§3-2「＋セット追加」参照） |
 | `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`isExerciseVisible`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`isExerciseVisible`を呼ばないため削除済みでも編集できる） |
-| `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない |
-| `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
+| `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない。採番〜作成はトランザクション内で対象workoutの行ロック（`FOR UPDATE`）を取ってから行い、同時に追加しても番号が重複しない（[Issue #322](https://github.com/ConniConni/torebu/issues/322)）。ロック取得時点でworkoutがソフトデリート済み（並行した最後のセット削除による）なら`404` |
+| `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。追加と同じworkoutの行ロックを取ってから削除・詰め直しを行うため、追加と並行しても連番が崩れない（Issue #322）。ロック待ちの間に同じセットが別リクエストで削除済みなら`404`。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
 | `DELETE /workouts/:id/sets/:setId`<br>`PATCH /workouts/:id` の`deleted` | セットを削除、またはメモをクリアした結果、そのworkoutが**セット0件・メモ無し**（中身が空）になった場合、workout自体もソフトデリートする（Issue #234）。中身の無いworkoutを放置すると、②ホームの「記録がありません」判定（`GET /workouts`一覧の件数のみで判定）が中身の無い行を「記録あり」と誤判定し、実在しない記録の削除ボタンが機能してしまう不具合につながるため。レスポンスの`deleted: true`でこれをフロントに伝え、`useWorkoutSession.ts`の`removeSet`/`updateMemo`は`session.workoutId`を`null`に戻す（削除済みのworkoutIdを使い回して後続の保存操作が404になるのを防ぐため）。逆に、セットが無くてもメモがあれば（またはその逆）削除しない |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`reps` は正の整数・999以下 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
