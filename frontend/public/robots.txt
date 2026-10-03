@@ -7,4 +7,4 @@ Disallow: /notifications
 Disallow: /mypage
 Disallow: /invite
 
-Sitemap: https://torebu-7gf1.vercel.app/sitemap.xml
+Sitemap: https://torebu.com/sitemap.xml
