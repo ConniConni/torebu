@@ -364,8 +364,8 @@
 - [x] `member_limit`のデフォルト値が5になっているか確認する（バックログ「収益化の方針」節で決定済み。
       `backend/prisma/schema.prisma`の`memberLimit Int @default(5)`で確認済み）
 - [ ] Neon Freeプランのバックアップ制約（PITR6時間のみ）を認識した上でリリースする（対応は不要、認識のみ）
-- [ ] 独自ドメインは取得しない（無料サブドメインで運用開始。取得タイミングは本節「ドメイン方針」参照）
-      → 2026-10-03に取得を決定（本節「ドメイン方針」参照）
+- [x] 独自ドメインは取得しない（無料サブドメインで運用開始。取得タイミングは本節「ドメイン方針」参照）
+      → 2026-10-03に方針変更して取得（`torebu.com`。本節「ドメイン方針」参照）
 - [x] 実際のブラウザ操作（SPA内遷移）で主要フローを一通り確認する（`CLAUDE.md`のセルフチェック方針に沿う）
 - [ ] （任意・優先度低）CI（GitHub Actions）・エラー監視（Sentry等）の導入は別Issueとして切り出すか判断する
 - [ ] **本番DBへのマイグレーション適用**（`prisma migrate deploy`）を、新しいNeonプロジェクトを作るたびに
@@ -839,9 +839,12 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
     - 3年間の差は1,500〜3,000円程度と小さく、「なるべく安く」を優先してお名前.comに決めた
     - 合わなければ取得から60日後にCloudflareへ移管できる。DNSの管理だけCloudflareに移すのも無料で、
       その場合はCloudflare Email Routing（`info@torebu.com`等の受信をGmailへ転送）も使える
+  - **取得済み（2026-10-03）**：`torebu.com`をお名前.comで取得。Whois情報公開代行は有効、自動更新オン。
+    Whois情報公開代行**メール転送オプション**・ドメインプロテクションは付けていない（前者は別サービス。
+    メール転送が必要になったらCloudflareにDNS管理だけ移してEmail Routingを使う）
   - **取得時の注意（ユーザー作業）**：Whois情報公開代行にチェックを入れる／サーバー契約などの有料
     オプションは外す（サーバーはVercel）／購入画面で翌年の更新料を確認し、自動更新をオンにする
-  - **切り替え時にやること（Claude作業、別Issue）**：DNS設定とVercelへのドメイン追加、旧URL
+  - **切り替え時にやること（Claude作業、[Issue #326](https://github.com/ConniConni/torebu/issues/326)）**：DNS設定とVercelへのドメイン追加、旧URL
     （`torebu-7gf1.vercel.app`）から新URLへの転送、`frontend/public/robots.txt`・`sitemap.xml`のURL更新、
     `frontend/app/utils/shareCardCanvas.ts`のシェア画像へのURL記載の再検討
 - **公開ページの候補**（いずれも記録を使わない、サービスについての情報）：

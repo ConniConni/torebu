@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://torebu-7gf1.vercel.app/</loc>
+    <loc>https://torebu.com/</loc>
   </url>
   <url>
-    <loc>https://torebu-7gf1.vercel.app/login</loc>
+    <loc>https://torebu.com/login</loc>
   </url>
   <url>
-    <loc>https://torebu-7gf1.vercel.app/register</loc>
+    <loc>https://torebu.com/register</loc>
   </url>
   <url>
-    <loc>https://torebu-7gf1.vercel.app/password-reset</loc>
+    <loc>https://torebu.com/password-reset</loc>
   </url>
   <url>
-    <loc>https://torebu-7gf1.vercel.app/terms</loc>
+    <loc>https://torebu.com/terms</loc>
   </url>
   <url>
-    <loc>https://torebu-7gf1.vercel.app/privacy</loc>
+    <loc>https://torebu.com/privacy</loc>
   </url>
 </urlset>
