@@ -68,7 +68,7 @@ async function onShare() {
   }
 }
 
-// 「画像を保存」で投稿する場合（PC、または本文を受け取らないアプリ）は画像だけになり、
+// 「共有する」が使えない環境（PC等）は「画像を保存」での投稿になり、画像だけでは
 // トップへのURL（?ref=share）が付かない。投稿時に貼り付けてもらえるよう本文とURLをコピーできるようにする
 const copied = ref(false)
 
@@ -112,7 +112,13 @@ async function onCopyText() {
         <p class="text-xs text-gray-500 dark:text-muted">
           画像に載るのはあなたの記録の数字だけです（表示名・メモ・グループの情報は載りません）。
         </p>
-        <div class="rounded-lg border border-gray-200 dark:border-border-dark p-3">
+        <!-- 「共有する」が使える環境（ほぼスマホ）では共有シートに本文・URLも渡るため出さない
+             （2026-10-03ユーザー判断。インスタ等の本文を受け取らないアプリ向けの案内も置かない）。
+             判定は画像の作成と同時に決まるため、作成前に一瞬表示されないようpreviewUrlも条件にする -->
+        <div
+          v-if="previewUrl && !canShareFile"
+          class="rounded-lg border border-gray-200 dark:border-border-dark p-3"
+        >
           <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">
             画像を保存して投稿するときは、この本文も貼り付けてください
           </p>
