@@ -133,7 +133,7 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
   忘れず本番DB（Neon）に`prisma migrate deploy`を手動実行する**。Vercelのビルドが自動で行うのは
   Prisma Client（コード側のDB操作ライブラリ）の生成だけで、実際のテーブル構造の変更は含まれない。
   忘れると、新しいコードが古いテーブル構造に対して動くことになりエラーになる。
-  **`prisma migrate deploy`を打つときは以下3点に注意する**（Issue #228のPR対応中、2026-09-23に
+  **`prisma migrate deploy`を打つときは以下の点に注意する**（Issue #228のPR対応中、2026-09-23に
   実際に詰まった。詳細はメモリ`neon-production-migrate-deploy`参照）：
   1. 接続文字列は**Vercelではなく[Neonコンソール](https://console.neon.tech)から取る**
      （Vercelの環境変数は一度セットすると値が再表示できないため）
@@ -147,13 +147,32 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
      シェルが`&`の位置でコマンドを分割してしまい、`DATABASE_URL`がセットされないまま実行される
      （気づかずローカルDBに対して実行してしまう事故につながる）。必ず`export`＋ダブルクォートで
      値全体を1つの文字列として渡し、`migrate status`で接続先（`Datasource`行のホスト名）が
-     本番Neonになっているか確認してから`migrate deploy`を実行する：
+     本番Neonになっているか確認してから`migrate deploy`を実行する
+  4. **接続文字列（パスワード入り）をターミナルの画面・履歴・環境変数に残さない**（2026-10-03追加）。
+     `export DATABASE_URL="..."`と直接打つと、値が画面に表示されたうえシェルの履歴にも残る。
+     `read -rs`で画面に表示せずに受け取り（履歴にも残らない）、作業が終わったら`unset`で消す。
+     `read -rs`はbash・zshのどちらでも動く：
      ```bash
      cd backend
-     export DATABASE_URL="<Neonのdirect接続文字列>"
-     npx prisma migrate status   # 接続先を確認してから
+     printf 'Neonのdirect接続文字列: '; read -rs DATABASE_URL; echo; export DATABASE_URL
+     npx prisma migrate status   # Datasource行のホストがneon.tech（-poolerなし）か確認してから
      npx prisma migrate deploy
+     unset DATABASE_URL          # 終わったら必ず消す（ローカル開発時は.envの値に戻る）
      ```
+     貼り付けても何も表示されないのが正常（そのままEnterを押す）。
+     **うっかり`export DATABASE_URL="..."`と打ってしまった場合**は、その行を打ったターミナルのタブで
+     以下を実行して履歴から消す（bashの場合）：
+     ```bash
+     unset DATABASE_URL
+     history | grep DATABASE_URL   # 行頭の番号を確認
+     history -d <番号>             # 複数あるときは番号の大きい方から消す（先に小さい方を消すと番号がずれる）
+     history -w                    # 消した後の履歴で~/.bash_historyを上書きする
+     clear                         # 画面に残った表示も消す
+     ```
+     別のターミナルのタブが開いていると、そのタブを閉じたときに古い履歴がファイルへ書き戻されることがあるため、
+     作業したタブで実行する
+  5. 初回の`P1001: Can't reach database server`は、停止していたNeonが起動するのを待っているだけのことが
+     多い。`Datasource`行のホストが正しければ、数秒おいて同じコマンドを再実行すれば通る
 - PRに新しい環境変数（`SESSION_SECRET`のような秘密情報や設定値）が必要になった場合は、
   マージ前にVercel側（バックエンド・フロントエンドそれぞれ）のダッシュボードで設定しておく
 - 現時点では、PR単位で作られるPreviewデプロイ環境もProductionと**同じNeonデータベース**を
