@@ -62,7 +62,9 @@ const landingUrl = shareLandingUrl(requestUrl.origin)
 async function onShare() {
   if (!imageFile.value) return
   try {
-    await navigator.share({ files: [imageFile.value], text, url: landingUrl })
+    // URLはurl項目に分けず本文の末尾に含める。分けて渡すと、X（旧Twitter）が本文を捨ててURLと画像だけを
+    // 投稿画面に入れることがスマホの実機確認で分かったため（2026-10-03。LINEは分けても両方届いていた）
+    await navigator.share({ files: [imageFile.value], text: `${text}\n${landingUrl}` })
   } catch {
     // 共有シートを閉じた(AbortError)場合なども含め、何もしない
   }
