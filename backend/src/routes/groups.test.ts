@@ -515,6 +515,77 @@ describe('POST /groups/:id/invite', () => {
   })
 })
 
+// 招待リンクの表示用(Issue #312)
+describe('GET /groups/invites/:code', () => {
+  it('未ログインでもグループ名と人数を取得できる(メンバー名・グループIDは返さない)', async () => {
+    const group = await createGroup({ memberLimit: 5 })
+    await addMember(group.id, memberId)
+    await addMember(group.id, outsiderId, { leftAt: new Date('2026-01-01') })
+
+    const res = await request(app).get(`/groups/invites/${group.inviteCode}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      name: 'ベンチプレス部',
+      memberCount: 2, // 退会済みは数えない
+      memberLimit: 5,
+      isMember: false,
+      groupId: null,
+    })
+  })
+
+  it('存在しない招待コードは404を返す', async () => {
+    const res = await request(app).get('/groups/invites/no-such-code')
+
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('invalid_invite_code')
+  })
+
+  it('削除済みグループの招待コードは404を返す', async () => {
+    const group = await createGroup()
+    await prisma.group.update({ where: { id: group.id }, data: { deletedAt: new Date() } })
+
+    const res = await request(app).get(`/groups/invites/${group.inviteCode}`)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('期限切れの招待コードは400を返す', async () => {
+    const group = await createGroup({ inviteExpiresAt: new Date(Date.now() - 1000) })
+
+    const res = await request(app).get(`/groups/invites/${group.inviteCode}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invite_expired')
+  })
+
+  it('ログイン中のアクティブなメンバーにはisMember: trueとグループIDを返す', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId)
+
+    const agent = await loginAs(memberEmail)
+    const res = await agent.get(`/groups/invites/${group.inviteCode}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.isMember).toBe(true)
+    expect(res.body.groupId).toBe(group.id)
+  })
+
+  it('ログイン中でも未所属・退会済みならisMember: false', async () => {
+    const group = await createGroup()
+    await addMember(group.id, memberId, { leftAt: new Date('2026-01-01') })
+
+    const outsider = await loginAs(outsiderEmail)
+    const outsiderRes = await outsider.get(`/groups/invites/${group.inviteCode}`)
+    const leftMember = await loginAs(memberEmail)
+    const leftRes = await leftMember.get(`/groups/invites/${group.inviteCode}`)
+
+    expect(outsiderRes.body.isMember).toBe(false)
+    expect(outsiderRes.body.groupId).toBeNull()
+    expect(leftRes.body.isMember).toBe(false)
+  })
+})
+
 describe('POST /groups/join', () => {
   it('招待コードが不正なら404を返す', async () => {
     const agent = await loginAs(outsiderEmail)

@@ -91,6 +91,16 @@ interface WorkoutComment {
   createdAt: string
 }
 
+// 招待リンクの表示用に、招待コードから引くグループの概要(GET /groups/invites/:code、Issue #312)
+interface InvitePreview {
+  name: string
+  memberCount: number
+  memberLimit: number
+  isMember: boolean
+  // 参加済み(isMember: true)のときだけ入る。グループ詳細への遷移用
+  groupId: string | null
+}
+
 // バックエンドが返すエラーコードを画面表示用の日本語メッセージに変換する
 // （エラーコード自体は backend/src/routes/groups.ts 参照）
 const ERROR_MESSAGES: Record<string, string> = {
@@ -208,6 +218,14 @@ export function useGroups() {
     return await $fetch<Group>(`/api/groups/${id}/invite`, { method: 'POST' })
   }
 
+  // 招待リンクの表示用(Issue #312)。ログイン不要だが、ログイン中なら参加済みかも返るため
+  // SSR時にCookieを転送するrequestFetchを使う
+  async function fetchInvitePreview(inviteCode: string) {
+    return await requestFetch<InvitePreview>(
+      `/api/groups/invites/${encodeURIComponent(inviteCode)}`,
+    )
+  }
+
   async function joinGroup(inviteCode: string) {
     const group = await $fetch<Group>('/api/groups/join', { method: 'POST', body: { inviteCode } })
     // 既に一覧に無ければ追加する（退会後の再参加等で既に持っていた場合は上書き）
@@ -243,6 +261,7 @@ export function useGroups() {
     postComment,
     deleteComment,
     reissueInvite,
+    fetchInvitePreview,
     joinGroup,
     leaveGroup,
     deleteGroup,

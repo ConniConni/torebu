@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Phase4: 招待コードで参加する画面
+// Phase4: 招待コードで参加する画面。招待リンク(Issue #312)を丸ごと貼り付けてもコードを読み取る
 definePageMeta({ middleware: 'auth' })
 
 const { joinGroup } = useGroups()
@@ -9,7 +9,7 @@ const submitting = ref(false)
 const errorMessage = ref('')
 
 async function onJoin() {
-  const code = inviteCode.value.trim()
+  const code = extractInviteCode(inviteCode.value)
   if (!code) return
   submitting.value = true
   errorMessage.value = ''
@@ -35,7 +35,7 @@ async function onJoin() {
             <input
               v-model="inviteCode"
               type="text"
-              placeholder="オーナーから共有された招待コードを貼り付け"
+              placeholder="招待リンクまたは招待コードを貼り付け"
               class="rounded border border-gray-300 dark:border-border-dark px-3 py-2 text-sm bg-white dark:bg-panel text-gray-900 dark:text-ink"
             />
           </label>
