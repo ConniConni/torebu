@@ -847,6 +847,23 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   - **切り替え時にやること（Claude作業、[Issue #326](https://github.com/ConniConni/torebu/issues/326)）**：DNS設定とVercelへのドメイン追加、旧URL
     （`torebu-7gf1.vercel.app`）から新URLへの転送、`frontend/public/robots.txt`・`sitemap.xml`のURL更新、
     `frontend/app/utils/shareCardCanvas.ts`のシェア画像へのURL記載の再検討
+  - **切り替えの実績と分かったこと（2026-10-03〜04、Issue #326）**：
+    - Vercelのフロントプロジェクト（`torebu-7gf1`）にDomainsから`torebu.com`をProductionで追加。
+      追加時に出る「Redirect apex domains to www (recommended)」は**外した**（本番URLはwwwなしに統一するため。
+      `www`は未追加）。Vercelが示したDNSは**Aレコード1つ（ホスト名空欄、`216.198.79.1`）**。
+      旧来の`76.76.21.21`・`cname.vercel-dns.com`も動くが、新しい値が推奨されている
+    - **お名前.comでは、Aレコードを登録しただけでは反映されない**。DNSレコード設定は、ネームサーバーが
+      `01〜04.dnsv.jp`のときだけ使われる。取得直後は`dns1/dns2.onamae.com`のままなので、設定画面の
+      「DNSレコード設定用のネームサーバーに変更する」チェックを入れたまま確定する必要がある（外すとVercelが
+      Invalid Configurationのままになる）
+    - 設定中に出る「ドメインプロテクション」（年1,078円）と「`torebu.online`の無料ドメイン」（自動更新つき）の
+      案内は、どちらも断った。アカウント防御は、パスワードの使い回し回避・二段階認証で足りると判断
+    - **反映後も、スマホ（携帯回線）では古いDNSキャッシュのせいで、しばらくお名前.comのパーキング画面
+      （「このドメインはお名前.comから取得されました」）が出た**。機内モードの切り替えや回線の切り替え、時間経過で
+      直る。QRコード配布・Xでの発信は、切り替えの数時間後以降にするのが安全
+    - 旧URL（`torebu-7gf1.vercel.app`）は削除せず、Domainsの「Redirect to Another Domain」で**308**（永続・
+      メソッド保持）で`torebu.com`へ転送。Cookieはドメインごとに別なので、切り替えで全員ログアウトされる
+    - 新URLでログイン・記録表示ができること、旧URLからの転送（招待リンクのパスも保持）を確認済み
 - **公開ページの候補**（いずれも記録を使わない、サービスについての情報）：
   | 候補 | 内容 | 状態 |
   |---|---|---|
