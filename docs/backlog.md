@@ -850,7 +850,7 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   - **切り替えの実績と分かったこと（2026-10-03〜04、Issue #326）**：
     - Vercelのフロントプロジェクト（`torebu-7gf1`）にDomainsから`torebu.com`をProductionで追加。
       追加時に出る「Redirect apex domains to www (recommended)」は**外した**（本番URLはwwwなしに統一するため。
-      `www`は未追加）。Vercelが示したDNSは**Aレコード1つ（ホスト名空欄、`216.198.79.1`）**。
+      `www`は後から別に追加した。下記参照）。Vercelが示したDNSは**Aレコード1つ（ホスト名空欄、`216.198.79.1`）**。
       旧来の`76.76.21.21`・`cname.vercel-dns.com`も動くが、新しい値が推奨されている
     - **お名前.comでは、Aレコードを登録しただけでは反映されない**。DNSレコード設定は、ネームサーバーが
       `01〜04.dnsv.jp`のときだけ使われる。取得直後は`dns1/dns2.onamae.com`のままなので、設定画面の
@@ -864,6 +864,12 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
     - 旧URL（`torebu-7gf1.vercel.app`）は削除せず、Domainsの「Redirect to Another Domain」で**308**（永続・
       メソッド保持）で`torebu.com`へ転送。Cookieはドメインごとに別なので、切り替えで全員ログアウトされる
     - 新URLでログイン・記録表示ができること、旧URLからの転送（招待リンクのパスも保持）を確認済み
+    - **`www.torebu.com`も追加（2026-10-04）**：Domainsで「Include apex and www variants」を**外し**、
+      「Redirect to Another Domain」で**308→`torebu.com`**にした（apexを本命に保つため）。DNSは
+      **CNAMEレコード（ホスト名`www`、値はVercelが示すプロジェクト固有の`xxxx.vercel-dns-017.com`）**を、
+      お名前.comのDNSレコード設定に追加。値に`https://`は付けない。既存のA・NSレコードは触らない
+    - **Search Consoleの確認コードはプロパティごとに別の値**。`torebu.com`の新プロパティ用に`nuxt.config.ts`の
+      metaタグを差し替えた（マージ・本番デプロイ後に「確認」を押す。先に押すと失敗する）
 - **公開ページの候補**（いずれも記録を使わない、サービスについての情報）：
   | 候補 | 内容 | 状態 |
   |---|---|---|

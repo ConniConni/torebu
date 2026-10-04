@@ -209,8 +209,8 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   にしてクロール対象から外す。例外として`/invite`（招待リンクの受け口）は`auth`無しの公開ページだが、
   招待された人だけが開く前提のため`sitemap.xml`には載せず`Disallow`にしている（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）
 - Google Search Consoleの所有権確認用meta タグ（`google-site-verification`）は
-  [nuxt.config.ts](../frontend/nuxt.config.ts)に置く。Vercelの無料サブドメイン運用でDNS設定ができない
-  ため、HTMLタグ方式で確認している
+  [nuxt.config.ts](../frontend/nuxt.config.ts)に置く（HTMLタグ方式）。確認コードはプロパティごとに別の値で、
+  本番ドメイン`torebu.com`のプロパティ用の値が入っている（旧`torebu-7gf1.vercel.app`は308で転送のみ）
 
 **下部固定タブバー（Issue #174）**
 - 主ナビゲーション（ホーム／ルーティン／統計／グループを行き来する導線）は下部固定タブバーに

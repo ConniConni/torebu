@@ -16,9 +16,10 @@ export default defineNuxtConfig({
       // 未ログイン時のトップページはpages/index.vue側でuseSeoMetaによりサービス紹介用に上書きする
       title: 'トレ部',
       meta: [
-        // Google Search Consoleの所有権確認用（Issue #208）。Vercelの無料サブドメイン運用で
-        // DNS設定ができないため、HTMLタグ方式で確認している
-        { name: 'google-site-verification', content: 'n-x0E8rYMi2AYod2Vw8NeIn_gTK9dqd3iq-OsZ2pPmA' },
+        // Google Search Consoleの所有権確認用（Issue #208）。確認コードはプロパティごとに別の値で、
+        // 独自ドメイン（torebu.com）への切り替えに伴い新プロパティ用に差し替えた（旧URLはリダイレクト
+        // のみでHTMLを返さないため、旧コードは不要）。消すと所有権が外れることがあるので残す
+        { name: 'google-site-verification', content: 'QPps-MKh7_Asa5ZPRVBoD_MNy5Kmbrmcbn3UDjyYP44' },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
