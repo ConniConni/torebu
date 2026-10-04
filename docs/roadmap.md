@@ -164,7 +164,8 @@
     勧めてもらう。詳細は[backlog.md](./backlog.md)「ユーザー獲得：前提の見直し」節、
     [Issue #324](https://github.com/ConniConni/torebu/issues/324)）
   - [ ] 独自ドメイン（`torebu.com`）への切り替え（2026-10-03取得済み。[Issue #326](https://github.com/ConniConni/torebu/issues/326)。QRコード配布・Xでの発信より前に）
-  - [ ] 特設ページ（未ログイン時のトップの強化）— 検討中（やるかは未決定）
+  - [x] 特設ページ第1弾（未ログイン時のトップの強化、[Issue #332](https://github.com/ConniConni/torebu/issues/332)）
+  - [ ] 特設ページ第2弾（フィードカードの部品化→「応援が届く」画面の描画、og-image 1200×630版の要否確認）
   - [ ] 種目図鑑（部位ハイライト図を使った公開ページ）— 検討中（やるかは未決定）
 
 ## 並び順の考え方
