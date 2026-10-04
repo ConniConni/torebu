@@ -168,8 +168,8 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。下部バーには実画面のスクリーンショットで機能を紹介するオンボーディングスライド（5枚）への導線も置く（Issue #200・#318、下記参照）。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。ログイン後の全画面はIssue #241でダーク対応済み、backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・記録の画像カードシェア・グループ未所属時の案内・通知バッジ。シェアと案内は[Issue #314](https://github.com/ConniConni/torebu/issues/314)、下記参照） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /groups`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | 記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。上部にその日の合計負荷重量・セット数を表示する（Issue #320、§3-2参照）。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
-| `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない。各部位セクションの「＋種目を追加」は、押すと「今後の有料オプション」の案内ダイアログ（`PaidOptionNotice.vue`）を開くだけで、遷移も作成もしない（Issue #330） | `GET /exercises` | `auth` |
-| `/workouts/exercises-new` | ⑦ | 種目追加（**作成フォームは無く、「今後の有料オプション」の案内と④へ戻るリンクのみ**。④の「＋種目を追加」は遷移せず案内ダイアログを開くため、直リンクでのみ到達する。Issue #330） | なし | `auth` |
+| `/workouts/exercises` | ④ | 種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない。各部位セクションの「＋種目を追加」は、押すと「準備中／有料オプションで追加予定です。」の案内ダイアログ（`PaidOptionNotice.vue`）を開くだけで、遷移も作成もしない（Issue #330） | `GET /exercises` | `auth` |
+| `/workouts/exercises-new` | ⑦ | 種目追加（**作成フォームは無く、「準備中／有料オプションで追加予定です。」の案内と④へ戻るリンクのみ**。④の「＋種目を追加」は遷移せず案内ダイアログを開くため、直リンクでのみ到達する。Issue #330） | なし | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
 | `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
@@ -1020,7 +1020,7 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
    │                        │
    │                        ├─ 種目を選ぶ ──────────┐
    │                        │                          │
-   │                        └─「＋種目を追加」──> 「今後の有料オプション」の案内ダイアログを開くだけ
+   │                        └─「＋種目を追加」──> 「準備中／有料オプションで追加予定です。」の案内ダイアログを開くだけ
    │                                                   （遷移も作成もしない。Issue #330。
    │                                                   　⑦ /workouts/exercises-new は案内のみのページで、
    │                                                   　直リンクで開いても④へ戻るリンクしか無い）
