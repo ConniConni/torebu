@@ -82,6 +82,9 @@ const highlightExercise = ref<Exercise | null>(null)
 function canDelete(exercise: Exercise) {
   return exercise.createdBy !== null && exercise.createdBy === user.value?.id
 }
+// 種目の追加は今後の有料オプション（Issue #330）。「＋種目を追加」は遷移せず案内を開く
+const isPaidNoticeOpen = ref(false)
+
 const confirmingDeleteId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const deleteError = ref('')
@@ -135,15 +138,13 @@ async function onDeleteExercise(id: string) {
           >
             <div class="mb-2 flex items-center justify-between">
               <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">{{ section.label }}</h2>
-              <NuxtLink
-                :to="{
-                  path: '/workouts/exercises-new',
-                  query: { muscleGroup: section.group, returnTo },
-                }"
+              <button
+                type="button"
                 class="text-xs text-brand-600 dark:text-accent"
+                @click="isPaidNoticeOpen = true"
               >
                 ＋種目を追加
-              </NuxtLink>
+              </button>
             </div>
 
             <p v-if="section.exercises.length === 0" class="text-sm text-gray-500 dark:text-muted">
@@ -244,6 +245,8 @@ async function onDeleteExercise(id: string) {
         :gender="user?.gender"
         @close="highlightExercise = null"
       />
+
+      <PaidOptionNotice v-if="isPaidNoticeOpen" @close="isPaidNoticeOpen = false" />
     </div>
   </div>
 </template>
