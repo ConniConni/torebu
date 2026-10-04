@@ -18,12 +18,9 @@ const emit = defineEmits<{ close: [] }>()
   >
     <div class="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg dark:bg-panel">
       <h2 id="paid-option-notice-title" class="text-base font-semibold text-gray-900 dark:text-ink">
-        種目の追加は、今後の有料オプションです
+        準備中
       </h2>
-      <p class="mt-2 text-sm leading-relaxed text-gray-700 dark:text-muted">
-        オリジナルの種目の追加は、今後、有料オプションとして追加できるようになる予定です。
-        いま登録されている種目から選んで、これまでどおり記録できます。
-      </p>
+      <p class="mt-2 text-sm text-gray-700 dark:text-muted">有料オプションで追加予定です。</p>
       <button
         type="button"
         class="mt-4 w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white dark:bg-accent dark:text-surface"

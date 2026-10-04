@@ -22,13 +22,8 @@ const returnTo = computed(() =>
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
         <div class="rounded-lg bg-white p-4 shadow dark:bg-panel">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">
-            種目の追加は、今後の有料オプションです
-          </h2>
-          <p class="mt-2 text-sm leading-relaxed text-gray-700 dark:text-muted">
-            オリジナルの種目の追加は、今後、有料オプションとして追加できるようになる予定です。
-            いま登録されている種目から選んで、これまでどおり記録できます。
-          </p>
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">準備中</h2>
+          <p class="mt-2 text-sm text-gray-700 dark:text-muted">有料オプションで追加予定です。</p>
         </div>
         <NuxtLink
           :to="{ path: '/workouts/exercises', query: { returnTo } }"
