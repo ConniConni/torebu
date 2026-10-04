@@ -16,14 +16,14 @@ if (!user.value) {
 // og:imageはOpen Graphの仕様上、相対パスだとSNS側で読み込めないため絶対URLにする
 const ogImageUrl = new URL('/images/og-image.jpeg', useRequestURL().origin).href
 useSeoMeta({
-  title: user.value ? undefined : 'トレ部 | 仲間と筋トレを記録・応援しあうアプリ',
+  title: user.value ? undefined : 'トレ部 | 筋トレを記録して、仲間と応援しあうアプリ',
   description: user.value
     ? undefined
-    : 'トレ部は、部活・筋トレ仲間などクローズドなグループでトレーニング記録にリアクション・コメントし合いながらランキングで競い合える、交流特化のトレーニング記録アプリです。',
-  ogTitle: user.value ? undefined : 'トレ部 | 仲間と筋トレを記録・応援しあうアプリ',
+    : 'トレ部は、筋トレの記録に仲間がいいね・コメントしてくれる、クローズドなグループ向けのトレーニング記録アプリ。ランキングで競い合うこともできます。',
+  ogTitle: user.value ? undefined : 'トレ部 | 筋トレを記録して、仲間と応援しあうアプリ',
   ogDescription: user.value
     ? undefined
-    : '仲間と一緒に、あなたの筋トレをもっと楽しく。トレーニング記録にリアクション・コメントし合いながらランキングで競い合えるアプリです。',
+    : '記録すると、仲間が応援してくれる。招待した仲間にだけ見える、筋トレ記録アプリ。',
   ogImage: user.value ? undefined : ogImageUrl,
   twitterCard: user.value ? undefined : 'summary_large_image',
 })
