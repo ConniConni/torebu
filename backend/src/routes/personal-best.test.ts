@@ -115,8 +115,9 @@ async function addSet(
   agent: Awaited<ReturnType<typeof login>>,
   workoutId: string,
   weightKg?: number,
+  reps = 8,
 ) {
-  return agent.post(`/workouts/${workoutId}/sets`).send({ exerciseId, reps: 8, weightKg })
+  return agent.post(`/workouts/${workoutId}/sets`).send({ exerciseId, reps, weightKg })
 }
 
 async function shiftNotificationsToPast(minutes: number) {
@@ -153,6 +154,33 @@ describe('セット保存時の自己ベスト判定(本人への応答)', () =>
     expect(same.body.personalBest).toBeNull()
     expect(lower.body.personalBest).toBeNull()
     expect(await personalBestNotifications()).toHaveLength(0)
+  })
+
+  it('回数0(失敗した挑戦)のセットは対象外で、その重量は次の判定の比較対象にもならない', async () => {
+    await createPastWorkout('2026-09-01', [90])
+    const agent = await login(lifterEmail)
+    const workoutId = await startWorkout(agent)
+
+    const failed = await addSet(agent, workoutId, 100, 0)
+    const next = await addSet(agent, workoutId, 95)
+
+    expect(failed.status).toBe(201)
+    expect(failed.body.personalBest).toBeNull()
+    expect(next.body.personalBest).toEqual({ exerciseId, weightKg: 95, previousBestKg: 90 })
+    expect(await personalBestNotifications()).toHaveLength(1)
+  })
+
+  it('回数0のセットを1以上に直したときは判定する', async () => {
+    await createPastWorkout('2026-09-01', [90])
+    const agent = await login(lifterEmail)
+    const workoutId = await startWorkout(agent)
+    const failed = await addSet(agent, workoutId, 100, 0)
+
+    const res = await agent
+      .patch(`/workouts/${workoutId}/sets/${failed.body.id}`)
+      .send({ reps: 1 })
+
+    expect(res.body.personalBest).toEqual({ exerciseId, weightKg: 100, previousBestKg: 90 })
   })
 
   it('初めて記録した種目は対象外', async () => {

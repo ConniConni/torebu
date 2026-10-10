@@ -748,14 +748,14 @@ describe('PATCH /workouts/:id/sets/:setId', () => {
     expect(res.status).toBe(404)
   })
 
-  it('バリデーションエラー(repsが0以下)なら400を返す', async () => {
+  it('バリデーションエラー(repsが負の値)なら400を返す', async () => {
     const workout = await createWorkout(ownerId)
     const set = await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10 },
     })
 
     const agent = await loginAsOwner()
-    const res = await agent.patch(`/workouts/${workout.id}/sets/${set.id}`).send({ reps: 0 })
+    const res = await agent.patch(`/workouts/${workout.id}/sets/${set.id}`).send({ reps: -1 })
 
     expect(res.status).toBe(400)
   })

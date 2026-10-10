@@ -285,11 +285,13 @@ export const weightKgSchema = z
     message: '重量は0.5kg刻みで入力してください',
   })
 export const repsSchema = z.number().int().positive().max(999)
+// workout_setsの回数。0は「挑戦したが失敗した」記録(自己ベストの判定対象外)。ルーティンの目安セットはrepsSchema(1以上)
+const setRepsSchema = z.number().int().min(0).max(999)
 
 const createSetSchema = z.object({
   exerciseId: z.string().uuid(),
   weightKg: weightKgSchema.optional(),
-  reps: repsSchema,
+  reps: setRepsSchema,
 })
 
 // セットの追加(採番)・削除(詰め直し)の前に、対象workoutの行をトランザクション内でロックする。
@@ -352,6 +354,7 @@ async function maxOwnWeight(
     where: {
       exerciseId,
       workout: { userId, deletedAt: null },
+      reps: { gt: 0 }, // 回数0(失敗した挑戦)は過去のベストに数えない
       ...('setId' in exclude
         ? { id: { not: exclude.setId } }
         : { workoutId: { not: exclude.workoutId } }),
@@ -529,7 +532,7 @@ async function evaluatePersonalBest(
   set: WorkoutSetModel,
 ): Promise<PersonalBest | null> {
   const weightKg = toWeightNumber(set.weightKg)
-  if (weightKg === null) return null
+  if (weightKg === null || set.reps === 0) return null
 
   const [bestExceptThisSet, bestInOtherWorkouts] = await Promise.all([
     maxOwnWeight(userId, set.exerciseId, { setId: set.id }),
@@ -607,7 +610,7 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
 const updateSetSchema = z
   .object({
     weightKg: weightKgSchema.nullable().optional(),
-    reps: repsSchema.optional(),
+    reps: setRepsSchema.optional(),
   })
   // 空のPATCH({})は意味の無い更新なので、PATCH /workouts/:idと同様に最低1項目を要求する
   .refine((data) => data.weightKg !== undefined || data.reps !== undefined, {
@@ -640,7 +643,10 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
 
   // 自己ベストの判定は重量が変わったときだけ行う。③記録画面は回数欄のblurでも重量ごとPATCHするため、
   // 変わっていないときまで判定すると、同じ達成の表示が何度も出てしまう
-  const weightChanged = toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg)
+  // 回数が0から1以上に変わったときも、成功した記録になるので判定する
+  const weightChanged =
+    toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg) ||
+    (set.reps === 0 && updated.reps > 0)
   const personalBest = weightChanged ? await evaluatePersonalBest(userId, updated) : null
 
   res.status(200).json({ ...serializeSet(updated), personalBest })

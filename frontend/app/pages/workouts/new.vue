@@ -361,7 +361,7 @@ async function onSetFieldBlur(setId: string) {
   const inputs = setInputs[setId]
   if (!inputs) return
   const reps = Number(inputs.reps)
-  if (!Number.isInteger(reps) || reps <= 0) return
+  if (!Number.isInteger(reps) || reps < 0 || String(inputs.reps).trim() === '') return
   const weightRaw = String(inputs.weight).trim()
   const weightKg = weightRaw ? Number(weightRaw) : null
 
@@ -638,7 +638,7 @@ async function onGoToExercisePicker() {
                           <input
                             v-model="setInputs[set.id]!.reps"
                             type="number"
-                            min="1"
+                            min="0"
                             class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                             @blur="onSetFieldBlur(set.id)"
                           />
