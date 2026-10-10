@@ -133,7 +133,7 @@ async function resolvePersonalBestTargets(
     }),
     prisma.workoutSet.groupBy({
       by: ['workoutId', 'exerciseId'],
-      where: { workoutId: { in: workoutIds }, exerciseId: { in: exerciseIds } },
+      where: { workoutId: { in: workoutIds }, exerciseId: { in: exerciseIds }, reps: { gt: 0 } },
       _max: { weightKg: true },
     }),
     prisma.exercise.findMany({
