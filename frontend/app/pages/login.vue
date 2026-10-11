@@ -90,7 +90,7 @@ async function onSubmit() {
           :disabled="isSubmitting"
           class="w-full rounded bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-accent dark:text-surface dark:hover:bg-accent/90"
         >
-          ログイン
+          {{ isSubmitting ? 'ログイン中...' : 'ログイン' }}
         </button>
       </form>
 
