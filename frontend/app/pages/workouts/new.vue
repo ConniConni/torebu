@@ -470,12 +470,22 @@ if (initialPickedExerciseId) {
 // アンマウントと区別するために立てる（詳細はuseWorkoutSession.tsのfinishWorkoutのコメント参照）
 const isLeavingWorkout = ref(false)
 
+// 離脱前の待ち合わせ（ルーティン適用・セット保存など）中は画面が止まって見えるため、
+// 待っている間はヘッダーの戻るボタンと「＋種目を追加」にインジケータを出し、二重操作も防ぐ
+const isWaitingToLeave = ref(false)
+
 async function onLeaveWorkout() {
-  await pendingRoutineApply
-  await (pendingMemoSave ?? saveMemoIfChanged())
-  await Promise.all(pendingSetSaves.values())
-  isLeavingWorkout.value = true
-  await finishWorkout()
+  if (isWaitingToLeave.value) return
+  isWaitingToLeave.value = true
+  try {
+    await pendingRoutineApply
+    await (pendingMemoSave ?? saveMemoIfChanged())
+    await Promise.all(pendingSetSaves.values())
+    isLeavingWorkout.value = true
+    await finishWorkout()
+  } finally {
+    isWaitingToLeave.value = false
+  }
 }
 
 onUnmounted(() => {
@@ -490,18 +500,29 @@ onUnmounted(() => {
 // 「＋種目を追加」も④への画面遷移(離脱)を伴うため、onLeaveWorkoutと同じ理由で
 // 保存中のセット編集を待ってから遷移する
 async function onGoToExercisePicker() {
-  await pendingRoutineApply
-  await Promise.all(pendingSetSaves.values())
-  await navigateTo({
-    path: '/workouts/exercises',
-    query: { returnTo: `/workouts/new?date=${targetDate}` },
-  })
+  if (isWaitingToLeave.value) return
+  isWaitingToLeave.value = true
+  try {
+    await pendingRoutineApply
+    await Promise.all(pendingSetSaves.values())
+    await navigateTo({
+      path: '/workouts/exercises',
+      query: { returnTo: `/workouts/new?date=${targetDate}` },
+    })
+  } finally {
+    isWaitingToLeave.value = false
+  }
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-surface">
-    <PageHeader back-label="ホームに戻る" :title="`${targetDate}の記録`" @back="onLeaveWorkout" />
+    <PageHeader
+      back-label="ホームに戻る"
+      :title="`${targetDate}の記録`"
+      :busy="isWaitingToLeave"
+      @back="onLeaveWorkout"
+    />
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
         <!-- その日の合計（Issue #320）。モックで3案を比較し、メモの上に独立した2マスのカードを置く
@@ -779,10 +800,11 @@ async function onGoToExercisePicker() {
         <div class="flex gap-2">
           <button
             type="button"
-            class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent"
+            :disabled="isWaitingToLeave"
+            class="flex-1 rounded border border-brand-600 dark:border-accent py-2 text-sm font-semibold text-brand-600 dark:text-accent disabled:opacity-50"
             @click="onGoToExercisePicker"
           >
-            ＋種目を追加
+            {{ isWaitingToLeave ? '保存を待っています...' : '＋種目を追加' }}
           </button>
           <button
             type="button"
