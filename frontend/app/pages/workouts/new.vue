@@ -417,7 +417,12 @@ function addSetErrorMessage(error: unknown): string {
   return 'セットの記録に失敗しました。時間をおいて再度お試しください'
 }
 
+// 通信中の連打で同じセットが重複して追加されないよう、種目ごとに追加中を持つ（Issue #339）
+const addingSet = reactive<Record<string, boolean>>({})
+
 async function onAddSet(exerciseId: string) {
+  if (addingSet[exerciseId]) return
+  addingSet[exerciseId] = true
   addSetError.value = ''
   // この種目のセットがまさにblur保存中の場合、その保存を待ってからデフォルト値を決める
   // （defaultSetValuesForはPromiseではなく確定済みのsession.value.setsを見るため。上記参照）
@@ -438,6 +443,8 @@ async function onAddSet(exerciseId: string) {
     applyAchievements(achievements)
   } catch (error) {
     addSetError.value = addSetErrorMessage(error)
+  } finally {
+    addingSet[exerciseId] = false
   }
 }
 
@@ -607,10 +614,11 @@ async function onGoToExercisePicker() {
                   </span>
                   <button
                     type="button"
-                    class="text-xs text-brand-600 dark:text-accent"
+                    :disabled="addingSet[element.exerciseId]"
+                    class="text-xs text-brand-600 dark:text-accent disabled:opacity-50"
                     @click="onAddSet(element.exerciseId)"
                   >
-                    ＋セット追加
+                    {{ addingSet[element.exerciseId] ? '追加中...' : '＋セット追加' }}
                   </button>
                 </div>
                 <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
