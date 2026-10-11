@@ -106,6 +106,7 @@ async function onNameBlur() {
 // 種目0件のルーティンを表示から除外している(backend/src/routes/routines.ts参照)
 // なお「このルーティンを削除する」操作自体は⑤一覧画面（routines/index.vue）に移した
 // （Issue #93。詳細画面単体だと🗑️アイコンだけでは意味が伝わりにくいため、一覧の行内に統合）
+const loadingIndicator = useLoadingIndicator()
 onBeforeRouteLeave(async (to) => {
   if (!routine.value || routine.value.exercises.length > 0) {
     return true
@@ -116,10 +117,15 @@ onBeforeRouteLeave(async (to) => {
   if (to.path === '/workouts/exercises' && to.query.returnTo === `/routines/${routineId}`) {
     return true
   }
+  // ルートガード(beforeRouteLeave)の待ちはNuxtLoadingIndicatorの自動開始より前に走るため、
+  // 削除の待ち中に画面が止まって見えないよう明示的に進捗バーを出す（Issue #339）
+  loadingIndicator.start()
   try {
     await deleteRoutine(routineId)
   } catch {
     // 削除に失敗しても遷移自体はブロックしない。取りこぼしは一覧非表示の保険で吸収する
+  } finally {
+    loadingIndicator.finish()
   }
   return true
 })
