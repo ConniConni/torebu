@@ -9,6 +9,8 @@ onMounted(() => {
 <template>
   <div>
     <NuxtRouteAnnouncer />
+    <!-- 画面遷移中（ミドルウェア・ルートガードの待ち含む）に上部へ進捗バーを出す -->
+    <NuxtLoadingIndicator />
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
