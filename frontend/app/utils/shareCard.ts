@@ -6,7 +6,6 @@
 
 import {
   formatCardioSet,
-  formatDistance,
   formatDuration,
   sumDistanceKm,
   sumDurationSec,
