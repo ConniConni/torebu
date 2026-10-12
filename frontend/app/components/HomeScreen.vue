@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SpeedUnit } from '~/utils/cardio'
 import type { ShareCardData } from '~/utils/shareCard'
 
 // ②ホーム画面の中身。index.vue（`/`）はログイン中かどうかで表示を出し分けるため
@@ -9,12 +10,15 @@ interface WorkoutSetSummary {
   exerciseId: string
   setOrder: number
   weightKg: number | null
-  reps: number
+  reps: number | null // 有酸素（Issue #345）の行ではnull
+  distanceKm: number | null
+  durationSec: number | null
 }
 
 interface ExerciseGroup {
   exerciseId: string
   name: string
+  cardio: { speedUnit: SpeedUnit | null } | null // 有酸素の種目のときだけ入る
   sets: WorkoutSetSummary[]
 }
 
@@ -43,6 +47,12 @@ await fetchGroups()
 
 function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
+}
+
+// 有酸素の種目なら速さの単位を返す（筋トレはnull。Issue #345）
+function cardioInfoOf(exerciseId: string) {
+  const exercise = exercises.value?.find((e) => e.id === exerciseId)
+  return exercise?.muscleGroup === 'cardio' ? { speedUnit: exercise.speedUnit } : null
 }
 
 // カレンダーの印を「セットを1件以上記録した日」と「メモのみの日」で分ける（Issue #99）。
@@ -172,6 +182,7 @@ async function loadSummary(workoutId: string) {
       .map((e) => ({
         exerciseId: e.exerciseId,
         name: exerciseName(e.exerciseId),
+        cardio: cardioInfoOf(e.exerciseId),
         sets: [...byExercise.get(e.exerciseId)!].sort((a, b) => a.setOrder - b.setOrder),
       }))
   } catch {
@@ -554,7 +565,12 @@ async function onDeleteSelectedDate() {
                     <p class="mb-1 text-sm font-medium text-gray-900 dark:text-ink">
                       {{ group.name }}
                     </p>
-                    <div class="overflow-x-auto">
+                    <CardioSetsTable
+                      v-if="group.cardio"
+                      :sets="group.sets"
+                      :speed-unit="group.cardio.speedUnit"
+                    />
+                    <div v-else class="overflow-x-auto">
                       <div class="min-w-[15rem] overflow-hidden rounded-lg">
                         <div
                           class="grid grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3rem,0.85fr)] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1"

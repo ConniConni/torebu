@@ -18,6 +18,20 @@ const {
 } = useGroups()
 const { user } = useAuth()
 
+// 有酸素（Issue #345）の行はrepsがnull。速さの単位（ペース／時速）は種目マスタのspeedUnitで決める
+// （有酸素は公式種目のみのため、他のメンバーの記録でも自分の種目一覧から引ける）
+const { exercises, fetchExercises } = useExercises()
+if (!exercises.value) {
+  await fetchExercises()
+}
+
+function isCardioExercise(ex: { sets: { reps: number | null }[] }) {
+  return ex.sets.some((s) => s.reps === null)
+}
+function speedUnitOf(exerciseId: string) {
+  return exercises.value?.find((e) => e.id === exerciseId)?.speedUnit ?? null
+}
+
 function isOwnWorkout(workout: { userId: string }) {
   return workout.userId === user.value?.id
 }
@@ -300,7 +314,11 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                   :aria-expanded="isExerciseOpen(workout.id, ex.exerciseId)"
                   @click="toggleExercise(workout.id, ex.exerciseId)"
                 >
-                  {{ ex.name }}・{{ ex.sets.length }}セット
+                  {{
+                    isCardioExercise(ex)
+                      ? [ex.name, formatCardioTotal(ex.sets)].filter(Boolean).join('・')
+                      : `${ex.name}・${ex.sets.length}セット`
+                  }}
                   <span
                     class="text-[10px] transition-transform"
                     :class="isExerciseOpen(workout.id, ex.exerciseId) ? 'rotate-180' : ''"
@@ -311,7 +329,13 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
 
                 <!-- セット表示は②ホームの記録カードと同じグリッド表形式に揃える(frontend/app/pages/index.vue参照) -->
                 <div
-                  v-if="isExerciseOpen(workout.id, ex.exerciseId)"
+                  v-if="isExerciseOpen(workout.id, ex.exerciseId) && isCardioExercise(ex)"
+                  class="mt-1.5"
+                >
+                  <CardioSetsTable :sets="ex.sets" :speed-unit="speedUnitOf(ex.exerciseId)" />
+                </div>
+                <div
+                  v-else-if="isExerciseOpen(workout.id, ex.exerciseId)"
                   class="mt-1.5 overflow-x-auto"
                 >
                   <div class="min-w-[15rem] overflow-hidden rounded-lg">

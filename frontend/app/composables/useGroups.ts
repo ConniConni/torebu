@@ -27,7 +27,9 @@ interface GroupWorkoutSet {
   id: string
   setOrder: number
   weightKg: number | null
-  reps: number
+  reps: number | null // 有酸素（Issue #345）の行ではnull
+  distanceKm: number | null
+  durationSec: number | null
 }
 
 interface GroupWorkoutExercise {
