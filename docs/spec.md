@@ -634,7 +634,9 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   `/groups/[id]/workouts`画面
 - バックエンドは`GET /groups/:id/workouts`を追加。そのグループのアクティブなメンバー全員
   （本人含む）の記録（ソフトデリート除く）を`performedAt`降順で返す。各要素に種目ごとの
-  セット一覧（`exercises`：`exerciseId`/`name`/`sets`）を含める
+  セット一覧（`exercises`：`exerciseId`/`name`/`sets`）を含める。セットを全削除した種目は
+  `workout_exercises`の行だけ残るが、`exercises`にはセットが1件以上ある種目だけを含める
+  （含めると500になっていた。[Issue #341](https://github.com/ConniConni/torebu/issues/341)）
 - **カードの見せ方**は企画メモ（Artifact）で複数案を比較した上で決定した：
   - まずカード全体の構成は「SNSタイムライン型」（アバター＋名前＋日付のヘッダー、種目はチップ表示、
     下部にいいね・コメント欄の置き場を確保）を採用。「日にちごとに時系列で並べる」「種目ごとに

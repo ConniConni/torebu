@@ -238,7 +238,11 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
         setsByExercise.set(set.exerciseId, entry)
       }
       // 種目カードの並びはw.exercises(WorkoutExercise.sortOrder昇順)を正とする(Issue #228)
-      const orderedExerciseIds = w.exercises.map((e) => e.exerciseId)
+      // セットを全削除した種目はworkout_exercisesの行だけ残るため、セットのある種目に絞る(#341。
+      // 絞らないとsetsByExercise.getがundefinedになり、フィード全体が500になる)
+      const orderedExerciseIds = w.exercises
+        .map((e) => e.exerciseId)
+        .filter((exerciseId) => setsByExercise.has(exerciseId))
       return {
         id: w.id,
         userId: w.userId,
