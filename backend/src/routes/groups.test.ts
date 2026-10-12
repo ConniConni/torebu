@@ -231,6 +231,30 @@ describe('GET /groups/:id/workouts', () => {
     expect(res.status).toBe(404)
   })
 
+  it('セットが0件の種目カードが残っていても200で返し、その種目は含めない(#341)', async () => {
+    const group = await createGroup()
+    const workout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date('2026-01-10'), memo: 'メモあり' },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },
+    })
+    await prisma.workoutExercise.createMany({
+      data: [
+        { workoutId: workout.id, exerciseId, sortOrder: 1 },
+        { workoutId: workout.id, exerciseId: secondExerciseId, sortOrder: 2 },
+      ],
+    })
+
+    const agent = await loginAs(ownerEmail)
+    const res = await agent.get(`/groups/${group.id}/workouts`)
+
+    expect(res.status).toBe(200)
+    expect(res.body[0].exercises.map((e: { exerciseId: string }) => e.exerciseId)).toEqual([
+      exerciseId,
+    ])
+  })
+
   it('アクティブな全メンバー(本人含む)の記録を投稿者情報付きで新しい順に返す', async () => {
     const group = await createGroup()
     await addMember(group.id, memberId)
