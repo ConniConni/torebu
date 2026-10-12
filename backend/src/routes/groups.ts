@@ -599,6 +599,85 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
   res.status(200).json({ period: parsed.data.period, exerciseId: exerciseId ?? null, ranking })
 })
 
+const cardioRankingSchema = z.object({
+  period: z.enum(['week', 'month', 'all']).default('week'),
+  type: z.enum(['run', 'bike']),
+})
+
+// GET /groups/:id/ranking/cardio?period=week|month|all&type=run|bike  (Issue #348)
+// 有酸素の合計距離(km)ランキング。type=runはランニング+ウォーキング(speedUnit=pace)の合算、
+// type=bikeはエアロバイク(speedUnit=kmh)。種目名ではなくspeedUnitで判定する(isCardioと同じ方針)。
+// 記録が無いメンバーも0kmで含め、期間・同着の扱いは筋トレのランキングと同じ
+groupsRouter.get('/:id/ranking/cardio', requireAuth, async (req, res) => {
+  const userId = req.session.userId! // requireAuthを通過済みのため必ず存在
+  const groupId = req.params.id as string
+
+  const parsed = cardioRankingSchema.safeParse(req.query)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+
+  const membership = await findActiveMembership(userId, groupId)
+  if (!membership) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId, leftAt: null },
+    include: { user: { select: { displayName: true } } },
+  })
+  const memberIds = members.map((m) => m.userId)
+
+  const startDate = rankingStartDate(parsed.data.period)
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      workout: {
+        userId: { in: memberIds },
+        deletedAt: null,
+        ...(startDate ? { performedAt: { gte: startDate } } : {}),
+      },
+      exercise: {
+        createdBy: null,
+        muscleGroup: 'cardio',
+        speedUnit: parsed.data.type === 'run' ? 'pace' : 'kmh',
+      },
+    },
+    select: { distanceKm: true, workout: { select: { userId: true } } },
+  })
+
+  const distanceByUserId = new Map<string, number>(memberIds.map((id) => [id, 0]))
+  for (const set of sets) {
+    const uid = set.workout.userId
+    distanceByUserId.set(uid, (distanceByUserId.get(uid) ?? 0) + Number(set.distanceKm ?? 0))
+  }
+
+  const sorted = members
+    .map((m) => ({
+      userId: m.userId,
+      displayName: m.user.displayName,
+      // 小数の足し算の誤差(0.1+0.2等)を出さないよう小数第2位(DBの精度)に丸める
+      totalDistanceKm: Math.round((distanceByUserId.get(m.userId) ?? 0) * 100) / 100,
+    }))
+    .sort(
+      (a, b) => b.totalDistanceKm - a.totalDistanceKm || a.displayName.localeCompare(b.displayName),
+    )
+
+  // 同着は同順位、次の順位は人数分スキップする方式(例: 1,2,2,4)
+  let rank = 0
+  let prevDistanceKm: number | null = null
+  const ranking = sorted.map((entry, index) => {
+    if (entry.totalDistanceKm !== prevDistanceKm) {
+      rank = index + 1
+      prevDistanceKm = entry.totalDistanceKm
+    }
+    return { ...entry, rank }
+  })
+
+  res.status(200).json({ period: parsed.data.period, type: parsed.data.type, ranking })
+})
+
 // GET /groups/:id/ranking/default-exercise
 // 種目別ランキングを開いたときに最初に選択する種目を返す。グループのアクティブメンバー全員の
 // 直近28日間のセット数が最も多い公式種目(タイは種目一覧と同じ表示順→名前順で解決)。

@@ -520,6 +520,124 @@ describe('ランキングからの除外', () => {
   })
 })
 
+describe('GET /groups/:id/ranking/cardio（Issue #348）', () => {
+  let walkId: string
+  beforeEach(async () => {
+    const walk = await prisma.exercise.create({
+      data: { name: '有酸素テスト用ウォーク', muscleGroup: 'cardio', speedUnit: 'pace' },
+    })
+    walkId = walk.id
+  })
+  afterEach(async () => {
+    // 外側のafterEachがワークアウトを消した後に種目を消すと外部キーで失敗するため、
+    // ここではセットを先に消してから種目を消す
+    await prisma.workoutSet.deleteMany({ where: { exerciseId: walkId } })
+    await prisma.workoutExercise.deleteMany({ where: { exerciseId: walkId } })
+    await prisma.exercise.deleteMany({ where: { id: walkId } })
+  })
+
+  async function addSet(agent: Agent, exerciseId: string, distanceKm: number) {
+    const workoutId = await startWorkout(agent)
+    await agent
+      .post(`/workouts/${workoutId}/sets`)
+      .send({ exerciseId, distanceKm, durationSec: 600 })
+  }
+
+  it('type=runはラン・ウォークを合算し、バイクと筋トレは含めない。記録が無いメンバーは0km', async () => {
+    const me = await login(meEmail)
+    await addSet(me, runId, 5)
+    await addSet(me, walkId, 2.5)
+    await addSet(me, bikeId, 30)
+    const workoutId = await startWorkout(me)
+    await me
+      .post(`/workouts/${workoutId}/sets`)
+      .send({ exerciseId: strengthId, weightKg: 50, reps: 10 })
+
+    const res = await me.get(`/groups/${groupId}/ranking/cardio?period=all&type=run`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.type).toBe('run')
+    expect(res.body.ranking).toEqual([
+      expect.objectContaining({ userId: meId, totalDistanceKm: 7.5, rank: 1 }),
+      expect.objectContaining({ userId: mateId, totalDistanceKm: 0, rank: 2 }),
+    ])
+  })
+
+  it('type=bikeはバイクだけを集計する', async () => {
+    const me = await login(meEmail)
+    await addSet(me, runId, 5)
+    await addSet(me, bikeId, 30)
+    const mate = await login(mateEmail)
+    await addSet(mate, bikeId, 12.34)
+
+    const res = await me.get(`/groups/${groupId}/ranking/cardio?period=all&type=bike`)
+
+    expect(
+      res.body.ranking.map((r: { userId: string; totalDistanceKm: number }) => [
+        r.userId,
+        r.totalDistanceKm,
+      ]),
+    ).toEqual([
+      [meId, 30],
+      [mateId, 12.34],
+    ])
+  })
+
+  it('同着は同順位になり、小数の誤差が出ない', async () => {
+    const me = await login(meEmail)
+    await addSet(me, runId, 0.1)
+    await addSet(me, runId, 0.2)
+    const mate = await login(mateEmail)
+    await addSet(mate, runId, 0.3)
+
+    const res = await me.get(`/groups/${groupId}/ranking/cardio?period=all&type=run`)
+
+    expect(
+      res.body.ranking.map((r: { totalDistanceKm: number; rank: number }) => [
+        r.totalDistanceKm,
+        r.rank,
+      ]),
+    ).toEqual([
+      [0.3, 1],
+      [0.3, 1],
+    ])
+  })
+
+  it('期間で絞り込まれ、削除済みworkoutは除外される', async () => {
+    const me = await login(meEmail)
+    await addSet(me, runId, 5)
+    const old = await createPastCardioDay(meId, '2020-01-01') // runId, 5km
+    const deleted = await createPastCardioDay(meId, today)
+    await prisma.workout.update({ where: { id: deleted.id }, data: { deletedAt: new Date() } })
+
+    const week = await me.get(`/groups/${groupId}/ranking/cardio?period=week&type=run`)
+    const all = await me.get(`/groups/${groupId}/ranking/cardio?period=all&type=run`)
+
+    expect(old.id).toBeTruthy()
+    expect(week.body.ranking[0]).toMatchObject({ userId: meId, totalDistanceKm: 5 })
+    expect(all.body.ranking[0]).toMatchObject({ userId: meId, totalDistanceKm: 10 })
+  })
+
+  it('メンバー以外は404、typeが無い・不正だと400', async () => {
+    const outsiderEmail = 'cardio-outsider-test@example.com'
+    const passwordHash = await bcrypt.hash(testPassword, 12)
+    const outsider = await prisma.user.create({
+      data: { email: outsiderEmail, passwordHash, displayName: '部外者' },
+    })
+    try {
+      const agent = await login(outsiderEmail)
+      const res = await agent.get(`/groups/${groupId}/ranking/cardio?type=run`)
+      expect(res.status).toBe(404)
+    } finally {
+      await prisma.user.delete({ where: { id: outsider.id } })
+    }
+
+    const me = await login(meEmail)
+    expect((await me.get(`/groups/${groupId}/ranking/cardio`)).status).toBe(400)
+    expect((await me.get(`/groups/${groupId}/ranking/cardio?type=swim`)).status).toBe(400)
+  })
+})
+
 describe('自己ベスト・記録日数', () => {
   it('有酸素のセットでは自己ベスト判定が発生せず、通知も作られない', async () => {
     const agent = await login(meEmail)
