@@ -1,4 +1,14 @@
+import type { SpeedUnit } from '~/utils/cardio'
 import type { MuscleGroup } from '~/utils/muscleGroup'
+
+// 直近の実績セット。筋トレはweightKg・reps、有酸素はdistanceKm・durationSecに値が入る
+// (使わない側はnull。GET /exercisesの形そのまま。Issue #345)
+interface LastSet {
+  weightKg: number | null
+  reps: number | null
+  distanceKm: number | null
+  durationSec: number | null
+}
 
 interface Exercise {
   id: string
@@ -17,7 +27,9 @@ interface Exercise {
   // 種目選択・追加候補からはこのフィールドを見てフロント側で除外する
   deletedAt: string | null
   // 直近の実績セット(前回記録の自動反映用、Issue #116)。記録が無ければnull
-  lastSet: { weightKg: number | null; reps: number } | null
+  lastSet: LastSet | null
+  // 速さの表示単位(Issue #345)。有酸素のみ値を持ち、pace=ペース(分/km)・kmh=時速。筋トレはnull
+  speedUnit: SpeedUnit | null
 }
 
 interface CreateExercisePayload {
@@ -65,7 +77,7 @@ export function useExercises() {
   // セッション中ずっとキャッシュされ続ける(③に戻るたびの再取得はしない設計)ため、セットを
   // 保存しても放っておくとlastSetが古いまま残ってしまう。セット保存の成功直後に呼んで、
   // 次にこの種目を別の日で使うときの前回値をその場で最新化する
-  function patchLastSet(exerciseId: string, lastSet: { weightKg: number | null; reps: number }) {
+  function patchLastSet(exerciseId: string, lastSet: LastSet) {
     exercises.value = (exercises.value ?? []).map((e) =>
       e.id === exerciseId ? { ...e, lastSet } : e,
     )
@@ -74,4 +86,4 @@ export function useExercises() {
   return { exercises, pending, error, fetchExercises, createExercise, deleteExercise, patchLastSet }
 }
 
-export type { Exercise }
+export type { Exercise, LastSet }

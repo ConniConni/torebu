@@ -30,9 +30,12 @@ export function sumTotalVolume(points: { date: string; volumeKg: number }[]): nu
 
 // セットの一覧から合計負荷重量(kg)を求める。Σ weightKg × reps で、自重セット(weightKgがnull)は
 // 除外する（GET /stats/volumeと同じ定義）。③記録画面の日別サマリー（Issue #320）と
-// 画像カードシェア（shareCard.ts）で使う
-export function sumSetVolumeKg(sets: { weightKg: number | null; reps: number }[]): number {
-  return sets.reduce((sum, s) => sum + (s.weightKg === null ? 0 : s.weightKg * s.reps), 0)
+// 画像カードシェア（shareCard.ts）で使う。repsがnullのセット（有酸素、Issue #345）も除外する
+export function sumSetVolumeKg(sets: { weightKg: number | null; reps: number | null }[]): number {
+  return sets.reduce(
+    (sum, s) => sum + (s.weightKg === null || s.reps === null ? 0 : s.weightKg * s.reps),
+    0,
+  )
 }
 
 // 合計負荷重量をkg表記の文字列にする（3桁区切り。重量は0.5kg刻みのため、端数は小数第1位まで）。

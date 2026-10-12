@@ -42,13 +42,21 @@ function matchesEquipmentFilter(exercise: Exercise) {
   return category !== undefined && selectedEquipmentCategories.value.has(category)
 }
 
+// 有酸素セクション(Issue #345)は一番下に置き、器具の絞り込み中も常に表示する(絞り込みは筋トレ用の
+// 器具分類のため有酸素には適用しない)。ルーティンには有酸素を入れられない(API側でも400)ため、
+// ルーティン編集から開かれたとき(returnToが/routines/…)は出さない
+const showCardio = computed(() => !returnTo.value.startsWith('/routines'))
+
 const sections = computed(() =>
-  MUSCLE_GROUPS.map((group) => ({
+  [...MUSCLE_GROUPS, ...(showCardio.value ? (['cardio'] as const) : [])].map((group) => ({
     group,
     label: muscleGroupLabel(group),
     // 削除済み(ソフトデリート)の種目は新規の記録には選べないため一覧から除外する(Issue #113)
     exercises: (exercises.value ?? []).filter(
-      (e) => e.muscleGroup === group && !e.deletedAt && matchesEquipmentFilter(e),
+      (e) =>
+        e.muscleGroup === group &&
+        !e.deletedAt &&
+        (group === 'cardio' || matchesEquipmentFilter(e)),
     ),
   })),
 )
@@ -138,7 +146,9 @@ async function onDeleteExercise(id: string) {
           >
             <div class="mb-2 flex items-center justify-between">
               <h2 class="text-sm font-semibold text-gray-900 dark:text-ink">{{ section.label }}</h2>
+              <!-- 有酸素は公式種目のみ(カスタム種目は作れない)ため、追加の導線も出さない -->
               <button
+                v-if="section.group !== 'cardio'"
                 type="button"
                 class="text-xs text-brand-600 dark:text-accent"
                 @click="isPaidNoticeOpen = true"
@@ -196,6 +206,7 @@ async function onDeleteExercise(id: string) {
                     {{ exercise.name }}
                   </button>
                   <button
+                    v-if="exercise.muscleGroup !== 'cardio'"
                     type="button"
                     class="shrink-0 rounded-full p-1.5 text-gray-400 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-600 dark:hover:text-muted"
                     aria-label="この種目が効く部位を見る"

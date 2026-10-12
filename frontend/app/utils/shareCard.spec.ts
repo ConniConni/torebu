@@ -108,6 +108,85 @@ describe('buildShareCardData', () => {
   })
 })
 
+describe('buildShareCardData（有酸素）', () => {
+  const run = {
+    name: 'ランニング',
+    cardio: { speedUnit: 'pace' as const },
+    sets: [{ weightKg: null, reps: null, distanceKm: 5, durationSec: 1800 }],
+  }
+  const bench = {
+    name: 'ベンチプレス',
+    sets: [{ weightKg: 60, reps: 10 }],
+  }
+
+  it('筋トレだけの日のパネルは従来の3マス（合計負荷重量・種目・セット）のまま', () => {
+    const data = buildShareCardData('2026-10-03', [bench], ['2026-10-03'])
+    expect(data.summaryColumns.map((c) => [c.label, c.x])).toEqual([
+      ['合計負荷重量', 0],
+      ['種目', 0.55],
+      ['セット', 0.78],
+    ])
+  })
+
+  it('有酸素だけの日は0kgを出さず、距離と種目のパネルにする', () => {
+    const data = buildShareCardData('2026-10-03', [run], ['2026-10-03'])
+    expect(data.totalVolumeKg).toBe(0)
+    expect(data.setCount).toBe(0)
+    expect(data.summaryColumns.map((c) => [c.label, c.value, c.unit])).toEqual([
+      ['距離', '5', 'km'],
+      ['種目', '1', ''],
+    ])
+    expect(data.exercises).toEqual([
+      { name: 'ランニング', setsText: '5km・30:00・6:00/km', setCount: 1, countLabel: '1件' },
+    ])
+  })
+
+  it('距離が無ければ合計時間を出す', () => {
+    const data = buildShareCardData(
+      '2026-10-03',
+      [{ ...run, sets: [{ weightKg: null, reps: null, distanceKm: null, durationSec: 600 }] }],
+      ['2026-10-03'],
+    )
+    expect(data.summaryColumns[0]).toMatchObject({ label: '合計時間', value: '10:00', unit: '' })
+  })
+
+  it('筋トレもある日は合計負荷重量・セット（筋トレのみ）・距離の3マスにする', () => {
+    const data = buildShareCardData('2026-10-03', [bench, run], ['2026-10-03'])
+    expect(data.exerciseCount).toBe(2)
+    expect(data.setCount).toBe(1)
+    expect(data.totalVolumeKg).toBe(600)
+    expect(data.summaryColumns.map((c) => [c.label, c.value])).toEqual([
+      ['合計負荷重量', '600'],
+      ['セット', '1'],
+      ['距離', '5'],
+    ])
+  })
+
+  it('3マス版だけ数字を小さく描く（筋トレだけの日・有酸素だけの日は従来の大きさ）', () => {
+    const mixed = buildShareCardData('2026-10-03', [bench, run], ['2026-10-03'])
+    expect(mixed.summaryColumns.every((c) => c.compact)).toBe(true)
+    const strengthOnly = buildShareCardData('2026-10-03', [bench], ['2026-10-03'])
+    expect(strengthOnly.summaryColumns.some((c) => c.compact)).toBe(false)
+    const cardioOnly = buildShareCardData('2026-10-03', [run], ['2026-10-03'])
+    expect(cardioOnly.summaryColumns.some((c) => c.compact)).toBe(false)
+  })
+
+  it('エアロバイクはspeedUnitに従い時速で表示する', () => {
+    const data = buildShareCardData(
+      '2026-10-03',
+      [
+        {
+          name: 'エアロバイク',
+          cardio: { speedUnit: 'kmh' },
+          sets: [{ weightKg: null, reps: null, distanceKm: 10, durationSec: 1800 }],
+        },
+      ],
+      ['2026-10-03'],
+    )
+    expect(data.exercises[0]!.setsText).toBe('10km・30:00・20.0km/h')
+  })
+})
+
 describe('shareText', () => {
   it('通算日数とハッシュタグだけの短い本文にし、ハッシュタグは改行して1行にまとめる', () => {
     const data = buildShareCardData(
