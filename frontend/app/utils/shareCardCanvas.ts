@@ -143,24 +143,14 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, th
   ctx.textAlign = 'right'
   ctx.fillText(data.dateLabel, right, 145)
 
-  // サマリーパネル：合計負荷重量・種目数・セット数
+  // サマリーパネル：合計負荷重量・種目数・セット数（有酸素の日の組み合わせはbuildShareCardData参照）
   const panelTop = 195
   const panelHeight = 200
   ctx.fillStyle = colors.panel
   roundedRect(ctx, PADDING, panelTop, contentWidth, panelHeight, 28)
   ctx.fill()
 
-  const columns = [
-    {
-      label: '合計負荷重量',
-      value: Math.round(data.totalVolumeKg).toLocaleString('ja-JP'),
-      unit: 'kg',
-      x: 0,
-    },
-    { label: '種目', value: String(data.exerciseCount), unit: '', x: 0.55 },
-    { label: 'セット', value: String(data.setCount), unit: '', x: 0.78 },
-  ]
-  for (const column of columns) {
+  for (const column of data.summaryColumns) {
     const x = PADDING + 44 + (contentWidth - 44) * column.x
     ctx.textAlign = 'left'
     ctx.fillStyle = colors.muted
@@ -191,7 +181,7 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, th
     ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
     ctx.textAlign = 'right'
-    const setLabel = `${exercise.setCount}セット`
+    const setLabel = exercise.countLabel ?? `${exercise.setCount}セット`
     ctx.fillText(setLabel, right, nameBaseline)
     const setLabelWidth = ctx.measureText(setLabel).width
 
