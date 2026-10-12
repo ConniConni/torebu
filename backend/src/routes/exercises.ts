@@ -33,15 +33,26 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
   // groupByでは実際の値(weightKg/reps)までは取れないためfindManyしてJS側でreduceする
   const recentSets = await prisma.workoutSet.findMany({
     where: { workout: { userId, deletedAt: null } },
-    select: { exerciseId: true, weightKg: true, reps: true },
+    select: { exerciseId: true, weightKg: true, reps: true, distanceKm: true, durationSec: true },
     orderBy: [{ workout: { performedAt: 'desc' } }, { setOrder: 'desc' }],
   })
-  const lastSetByExerciseId = new Map<string, { weightKg: number | null; reps: number }>()
+  // 筋トレはweightKg・reps、有酸素はdistanceKm・durationSecに値が入る(使わない側はnull。Issue #345)
+  const lastSetByExerciseId = new Map<
+    string,
+    {
+      weightKg: number | null
+      reps: number | null
+      distanceKm: number | null
+      durationSec: number | null
+    }
+  >()
   for (const set of recentSets) {
     if (lastSetByExerciseId.has(set.exerciseId)) continue
     lastSetByExerciseId.set(set.exerciseId, {
       weightKg: set.weightKg === null ? null : Number(set.weightKg),
       reps: set.reps,
+      distanceKm: set.distanceKm === null ? null : Number(set.distanceKm),
+      durationSec: set.durationSec,
     })
   }
 
@@ -69,6 +80,8 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
       muscleGroup: exercise.muscleGroup,
       muscleDetail: exercise.muscleDetail,
       equipment: exercise.equipment,
+      // 有酸素種目の速さの表示単位(pace=分/km、kmh=km/h)。筋トレ・カスタム種目はnull
+      speedUnit: exercise.speedUnit,
       createdBy: exercise.createdBy,
       useCount: exercise.useCount,
       // 部位ハイライト用（Phase2、docs/muscle-highlight.md参照）。公式種目のみ値を持ち、
@@ -84,7 +97,10 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
 
 const createExerciseSchema = z.object({
   name: z.string().trim().min(1).max(50),
-  muscleGroup: z.enum(MuscleGroup),
+  // 有酸素(cardio)は公式種目のみ。カスタム種目としては作成できない(Issue #345)
+  muscleGroup: z.enum(MuscleGroup).refine((value) => value !== 'cardio', {
+    message: '有酸素の種目は作成できません',
+  }),
   muscleDetail: z.string().trim().min(1).max(50).optional(),
   equipment: z.string().trim().min(1).max(50).optional(),
 })
@@ -114,6 +130,7 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     muscleGroup: exercise.muscleGroup,
     muscleDetail: exercise.muscleDetail,
     equipment: exercise.equipment,
+    speedUnit: exercise.speedUnit,
     createdBy: exercise.createdBy,
     // カスタム種目は部位ハイライト非対応のため常にnull/空配列(docs/muscle-highlight.md参照)。
     // GET /exercisesと形を揃えるためレスポンスに含める
