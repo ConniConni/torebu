@@ -1,7 +1,7 @@
 // 公式種目（created_by = null）のシード投入スクリプト
 // 実行: npm run prisma:seed（内部では `prisma migrate dev` 等からも自動実行される。prisma7.config.ts参照）
 //
-// データソース: prisma/seed-data/official-exercises.json（77種目、docs/muscle-highlight.md参照）。
+// データソース: prisma/seed-data/official-exercises.json（78種目。当初の77種目はdocs/muscle-highlight.md参照）。
 // 別プロジェクト（筋トレ部位紐付け）での先行検討で確定した種目マスタを移植したもの。
 // main_body_part / source は移行元データの出典メタデータで、本番カラムには含めない
 // （docs/schema.mdの方針。実行時のアプリ機能はこれらを参照しない）。
