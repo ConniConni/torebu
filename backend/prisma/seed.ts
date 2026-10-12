@@ -1,7 +1,7 @@
 // 公式種目（created_by = null）のシード投入スクリプト
 // 実行: npm run prisma:seed（内部では `prisma migrate dev` 等からも自動実行される。prisma7.config.ts参照）
 //
-// データソース: prisma/seed-data/official-exercises.json（78種目。当初の77種目はdocs/muscle-highlight.md参照）。
+// データソース: prisma/seed-data/official-exercises.json（81種目。当初の77種目はdocs/muscle-highlight.md参照。有酸素3種目はIssue #345）。
 // 別プロジェクト（筋トレ部位紐付け）での先行検討で確定した種目マスタを移植したもの。
 // main_body_part / source は移行元データの出典メタデータで、本番カラムには含めない
 // （docs/schema.mdの方針。実行時のアプリ機能はこれらを参照しない）。
@@ -17,7 +17,7 @@
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
-import { MuscleGroup } from '../src/generated/prisma/enums.js'
+import { MuscleGroup, SpeedUnit } from '../src/generated/prisma/enums.js'
 import officialExercisesData from './seed-data/official-exercises.json' with { type: 'json' }
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
@@ -27,13 +27,16 @@ type OfficialExerciseSource = {
   main_body_part: string
   name_ja: string
   source: { dataset: string; exercise_id: string | null; note?: string }
-  main_muscle: string
+  // 有酸素種目（Issue #345）は部位ハイライトの対象外のためmain_muscle・equipmentがnull
+  main_muscle: string | null
   related_muscles: string[]
-  equipment: string
+  equipment: string | null
   main_zone?: string
+  // 有酸素種目のみ。速さの表示単位（ペース or 時速）
+  speed_unit?: SpeedUnit
 }
 
-// main_body_part（日本語）→ MuscleGroup（既存の7分類enum）の対応表
+// main_body_part（日本語）→ MuscleGroup（8分類enum）の対応表
 const BODY_PART_TO_MUSCLE_GROUP: Record<string, MuscleGroup> = {
   胸: 'chest',
   背中: 'back',
@@ -42,6 +45,7 @@ const BODY_PART_TO_MUSCLE_GROUP: Record<string, MuscleGroup> = {
   腕: 'arms',
   お尻: 'glutes',
   腹筋: 'abs',
+  有酸素: 'cardio',
 }
 
 const officialExercises = officialExercisesData as OfficialExerciseSource[]
@@ -79,6 +83,7 @@ async function upsertOfficialExercises() {
       mainMuscle: exercise.main_muscle,
       relatedMuscles: exercise.related_muscles,
       mainZone: exercise.main_zone ?? null,
+      speedUnit: exercise.speed_unit ?? null,
       // JSON内の並び順（部位ごとに「コンパウンド→バリエーション→アイソレーション」でキュレーション済み）を
       // そのままフォールバック順に転用する。使用実績が無いユーザーでも部位セクション内が定番順になる(Issue #167)
       defaultSortOrder: index,

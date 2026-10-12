@@ -1095,5 +1095,44 @@
       "腹直筋"
     ],
     "equipment": "マシン"
+  },
+  {
+    "main_body_part": "有酸素",
+    "name_ja": "ランニング",
+    "source": {
+      "dataset": "torebu",
+      "exercise_id": null,
+      "note": "Issue #345で追加した有酸素種目。部位ハイライトの対象外のため主働筋・関連筋は持たない"
+    },
+    "main_muscle": null,
+    "related_muscles": [],
+    "equipment": null,
+    "speed_unit": "pace"
+  },
+  {
+    "main_body_part": "有酸素",
+    "name_ja": "ウォーキング",
+    "source": {
+      "dataset": "torebu",
+      "exercise_id": null,
+      "note": "Issue #345で追加した有酸素種目。部位ハイライトの対象外のため主働筋・関連筋は持たない"
+    },
+    "main_muscle": null,
+    "related_muscles": [],
+    "equipment": null,
+    "speed_unit": "pace"
+  },
+  {
+    "main_body_part": "有酸素",
+    "name_ja": "エアロバイク",
+    "source": {
+      "dataset": "torebu",
+      "exercise_id": null,
+      "note": "Issue #345で追加した有酸素種目。速さは時速（km/h）で表示する"
+    },
+    "main_muscle": null,
+    "related_muscles": [],
+    "equipment": null,
+    "speed_unit": "kmh"
   }
 ]
