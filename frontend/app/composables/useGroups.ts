@@ -75,6 +75,22 @@ interface GroupRanking {
   ranking: GroupRankingEntry[]
 }
 
+// 有酸素の合計距離ランキング(Issue #348)。run=ランニング+ウォーキング、bike=エアロバイク
+type CardioRankingType = 'run' | 'bike'
+
+interface GroupCardioRankingEntry {
+  userId: string
+  displayName: string
+  totalDistanceKm: number
+  rank: number
+}
+
+interface GroupCardioRanking {
+  period: RankingPeriod
+  type: CardioRankingType
+  ranking: GroupCardioRankingEntry[]
+}
+
 interface GroupRankingDefaultExercise {
   exerciseId: string | null
 }
@@ -167,6 +183,17 @@ export function useGroups() {
     })
   }
 
+  // 有酸素の合計距離ランキング(Issue #348)
+  async function fetchGroupCardioRanking(
+    id: string,
+    period: RankingPeriod,
+    type: CardioRankingType,
+  ) {
+    return await requestFetch<GroupCardioRanking>(`/api/groups/${id}/ranking/cardio`, {
+      query: { period, type },
+    })
+  }
+
   // 種目別ランキングを開いたときに最初に選択する種目(グループ内で直近28日に最も使われている
   // 公式種目)。該当する記録が無ければexerciseId: nullが返る
   async function fetchGroupRankingDefaultExercise(id: string) {
@@ -255,6 +282,7 @@ export function useGroups() {
     fetchGroupDetail,
     fetchGroupWorkouts,
     fetchGroupRanking,
+    fetchGroupCardioRanking,
     fetchGroupRankingDefaultExercise,
     fetchGroupRankingExercises,
     likeWorkout,
@@ -279,6 +307,9 @@ export type {
   GroupWorkoutSet,
   GroupRanking,
   GroupRankingEntry,
+  CardioRankingType,
+  GroupCardioRanking,
+  GroupCardioRankingEntry,
   GroupRankingDefaultExercise,
   GroupRankingExercise,
   RankingPeriod,
