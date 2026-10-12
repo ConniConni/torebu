@@ -763,6 +763,20 @@
   },
   {
     "main_body_part": "腕",
+    "name_ja": "EZバーカール",
+    "source": {
+      "dataset": "hasaneyldrm/exercises-dataset",
+      "exercise_id": null,
+      "note": "2026-10-12にバーベルカールからリネームして追加（既存の記録はEZバーカール側に保持）。主働筋・関連筋・器具はバーベルカールと同一構成"
+    },
+    "main_muscle": "上腕二頭筋",
+    "related_muscles": [
+      "前腕"
+    ],
+    "equipment": "バーベル"
+  },
+  {
+    "main_body_part": "腕",
     "name_ja": "ハンマーカール",
     "source": {
       "dataset": "hasaneyldrm/exercises-dataset",
