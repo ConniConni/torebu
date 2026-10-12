@@ -591,20 +591,23 @@ async function onGoToExercisePicker() {
              数字の見た目はホームの期間別サマリーに揃える。セットが無い日は「まだ種目が追加されていません」と
              重複するため出さない。マスの構成は筋トレだけ=2マス、有酸素もある日=3マス（距離を追加）、
              有酸素だけ=距離のみ（Issue #345、buildDaySummaryCells参照） -->
+        <!-- 3マス（筋トレ＋有酸素）の日は、5桁のkgや12.75kmが入っても折り返さないよう、文字を一段小さくして
+             内容の幅で左右に振り分ける（2マスまでは従来どおり均等割りの大きい数字） -->
         <section
           v-if="daySummaryCells.length > 0"
-          class="grid gap-3 rounded-lg bg-white dark:bg-panel p-4 shadow"
+          class="gap-3 rounded-lg bg-white dark:bg-panel p-4 shadow"
           :class="
-            daySummaryCells.length === 1
-              ? 'grid-cols-1'
+            daySummaryCells.length === 3
+              ? 'flex justify-between'
               : daySummaryCells.length === 2
-                ? 'grid-cols-2'
-                : 'grid-cols-3'
+                ? 'grid grid-cols-2'
+                : 'grid grid-cols-1'
           "
         >
-          <div v-for="cell in daySummaryCells" :key="cell.key">
+          <div v-for="cell in daySummaryCells" :key="cell.key" class="whitespace-nowrap">
             <p
-              class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
+              class="font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
+              :class="daySummaryCells.length === 3 ? 'text-xl' : 'text-2xl'"
             >
               {{ cell.value }}
             </p>

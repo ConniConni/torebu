@@ -35,12 +35,15 @@ export interface ShareCardExercise {
   countLabel?: string
 }
 
-// サマリーパネルの1マス。xはパネル幅に対する左端の位置（0〜1）で、値の幅に合わせて組み合わせごとに変える
+// サマリーパネルの1マス。xはパネル幅に対する左端の位置（0〜1）で、値の幅に合わせて組み合わせごとに変える。
+// compactは数字を小さく描くフラグ（有酸素もある日の3マスは、合計負荷重量が5桁・距離が小数付きになると
+// 88pxの数字では隣のマスにぶつかるため。筋トレだけの日の見た目は変えない）
 export interface ShareCardSummaryColumn {
   label: string
   value: string
   unit: string
   x: number
+  compact?: boolean
 }
 
 export interface ShareCardData {
@@ -113,9 +116,9 @@ function buildSummaryColumns(
 
   if (cardioColumn && hasStrength) {
     return [
-      { ...volume, x: 0 },
-      { ...sets, x: 0.45 },
-      { ...cardioColumn, x: 0.68 },
+      { ...volume, x: 0, compact: true },
+      { ...sets, x: 0.45, compact: true },
+      { ...cardioColumn, x: 0.66, compact: true },
     ]
   }
   if (cardioColumn) {

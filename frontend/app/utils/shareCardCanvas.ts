@@ -105,10 +105,11 @@ function drawValueWithUnit(
   unit: string,
   x: number,
   y: number,
+  compact = false,
 ) {
   ctx.textAlign = 'left'
   ctx.fillStyle = colors.value
-  ctx.font = `800 88px ${FONT}`
+  ctx.font = `800 ${compact ? 70 : 88}px ${FONT}`
   ctx.fillText(value, x, y)
   const valueWidth = ctx.measureText(value).width
   ctx.fillStyle = colors.ink
@@ -156,7 +157,7 @@ export function drawShareCard(canvas: HTMLCanvasElement, data: ShareCardData, th
     ctx.fillStyle = colors.muted
     ctx.font = `600 30px ${FONT}`
     ctx.fillText(column.label, x, panelTop + 66)
-    drawValueWithUnit(ctx, colors, column.value, column.unit, x, panelTop + 160)
+    drawValueWithUnit(ctx, colors, column.value, column.unit, x, panelTop + 160, column.compact)
   }
 
   // 通算日数のバッジ

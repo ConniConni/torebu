@@ -162,6 +162,15 @@ describe('buildShareCardData（有酸素）', () => {
     ])
   })
 
+  it('3マス版だけ数字を小さく描く（筋トレだけの日・有酸素だけの日は従来の大きさ）', () => {
+    const mixed = buildShareCardData('2026-10-03', [bench, run], ['2026-10-03'])
+    expect(mixed.summaryColumns.every((c) => c.compact)).toBe(true)
+    const strengthOnly = buildShareCardData('2026-10-03', [bench], ['2026-10-03'])
+    expect(strengthOnly.summaryColumns.some((c) => c.compact)).toBe(false)
+    const cardioOnly = buildShareCardData('2026-10-03', [run], ['2026-10-03'])
+    expect(cardioOnly.summaryColumns.some((c) => c.compact)).toBe(false)
+  })
+
   it('エアロバイクはspeedUnitに従い時速で表示する', () => {
     const data = buildShareCardData(
       '2026-10-03',
