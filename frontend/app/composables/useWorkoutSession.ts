@@ -1,11 +1,27 @@
+import type { LastSet } from '~/composables/useExercises'
+
 interface WorkoutSetItem {
   id: string
   workoutId: string
   exerciseId: string
   setOrder: number
   weightKg: number | null
-  reps: number
+  // 有酸素(Issue #345)の行ではreps・weightKgがnullで、代わりにdistanceKm・durationSecに値が入る
+  reps: number | null
+  distanceKm: number | null
+  durationSec: number | null
 }
+
+// セット追加(POST)に送る内容。筋トレと有酸素で受け付ける項目が排他のため(取り違えは400)、
+// もう一方の項目はnullでも送らず、キーごと省かなければならない
+type NewSetInput =
+  | { kind: 'strength'; reps: number; weightKg?: number }
+  | { kind: 'cardio'; distanceKm?: number; durationSec?: number }
+
+// セット更新(PATCH)に送る内容。同様に種目の分類に合う項目だけを送る
+type UpdateSetInput =
+  | { kind: 'strength'; weightKg: number | null; reps: number }
+  | { kind: 'cardio'; distanceKm: number | null; durationSec: number | null }
 
 // 種目カード単位の並び順(Issue #228)。ルーティンのRoutineExerciseと同じ役割
 interface WorkoutExerciseItem {
@@ -30,6 +46,17 @@ interface PersonalBest {
 interface Achievements {
   milestoneDays: number | null
   comeback: boolean
+}
+
+// セットの値をGET /exercisesのlastSetと同じ形にする。バックエンドのlastSetは種目の直近のセットを
+// そのまま返す(有酸素で値が空のセットもnullのまま)ため、キャッシュも同じ値で更新する
+function lastSetOf(set: WorkoutSetItem): LastSet {
+  return {
+    weightKg: set.weightKg,
+    reps: set.reps,
+    distanceKm: set.distanceKm,
+    durationSec: set.durationSec,
+  }
 }
 
 interface SessionState {
@@ -141,7 +168,7 @@ export function useWorkoutSession() {
     session.value.memo = updated.memo
   }
 
-  async function addSet(exerciseId: string, reps: number, weightKg?: number) {
+  async function addSet(exerciseId: string, input: NewSetInput) {
     const workoutId = await ensureWorkout()
     const { workoutExercise, personalBest, achievements, ...set } = await $fetch<
       WorkoutSetItem & {
@@ -151,7 +178,10 @@ export function useWorkoutSession() {
       }
     >(`/api/workouts/${workoutId}/sets`, {
       method: 'POST',
-      body: { exerciseId, reps, weightKg },
+      body:
+        input.kind === 'strength'
+          ? { exerciseId, reps: input.reps, weightKg: input.weightKg }
+          : { exerciseId, distanceKm: input.distanceKm, durationSec: input.durationSec },
     })
     session.value.sets = [...session.value.sets, set]
     // この種目の1set目の場合のみ、種目カード(WorkoutExercise)がサーバー側で新しく作られている。
@@ -160,7 +190,7 @@ export function useWorkoutSession() {
       session.value.exercises = [...session.value.exercises, workoutExercise]
     }
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する。詳細はuseExercises.ts参照
-    patchLastSet(exerciseId, { weightKg: set.weightKg, reps: set.reps })
+    patchLastSet(exerciseId, lastSetOf(set))
     return { set, personalBest, achievements }
   }
 
@@ -188,13 +218,16 @@ export function useWorkoutSession() {
     await fetchSets()
   }
 
-  async function updateSet(setId: string, weightKg: number | null, reps: number) {
+  async function updateSet(setId: string, input: UpdateSetInput) {
     if (!session.value.workoutId) throw new Error('workoutが開始されていません')
     const { personalBest, ...updated } = await $fetch<
       WorkoutSetItem & { personalBest: PersonalBest | null }
     >(`/api/workouts/${session.value.workoutId}/sets/${setId}`, {
       method: 'PATCH',
-      body: { weightKg, reps },
+      body:
+        input.kind === 'strength'
+          ? { weightKg: input.weightKg, reps: input.reps }
+          : { distanceKm: input.distanceKm, durationSec: input.durationSec },
     })
     session.value.sets = session.value.sets.map((s) => (s.id === updated.id ? updated : s))
     // 前回記録の自動反映(Issue #116)用キャッシュをその場で最新化する（詳細はuseExercises.ts参照）。
@@ -205,7 +238,7 @@ export function useWorkoutSession() {
       .filter((s) => s.exerciseId === updated.exerciseId)
       .map((s) => s.setOrder)
     if (updated.setOrder === Math.max(...sameExerciseSetOrders)) {
-      patchLastSet(updated.exerciseId, { weightKg: updated.weightKg, reps: updated.reps })
+      patchLastSet(updated.exerciseId, lastSetOf(updated))
     }
     return { set: updated, personalBest }
   }
@@ -245,4 +278,11 @@ export function useWorkoutSession() {
   }
 }
 
-export type { WorkoutSetItem, WorkoutExerciseItem, PersonalBest, Achievements }
+export type {
+  NewSetInput,
+  UpdateSetInput,
+  WorkoutSetItem,
+  WorkoutExerciseItem,
+  PersonalBest,
+  Achievements,
+}

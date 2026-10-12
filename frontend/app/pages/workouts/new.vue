@@ -82,6 +82,15 @@ function exerciseName(exerciseId: string) {
   return exercises.value?.find((e) => e.id === exerciseId)?.name ?? '(不明な種目)'
 }
 
+// 有酸素(Issue #345)かどうか。記録するのは重量・回数ではなく距離・時間になり、速さも表示する。
+// 速さの単位は種目名ではなく種目の属性(speedUnit)で決める
+function isCardioExercise(exerciseId: string) {
+  return exercises.value?.find((e) => e.id === exerciseId)?.muscleGroup === 'cardio'
+}
+function speedUnitOf(exerciseId: string) {
+  return exercises.value?.find((e) => e.id === exerciseId)?.speedUnit ?? null
+}
+
 // 種目カードの並びはsession.exercises(WorkoutExercise.sortOrder順)を正とする(Issue #228)。
 // このworkoutで一度もセットが無くなった種目のカードはサーバー側に残り続ける設計のため
 // (useWorkoutSession.ts参照)、ここでセットが1件以上ある種目だけに絞り込んで表示する
@@ -95,14 +104,20 @@ const groupedSets = computed(() => {
     .map((e) => ({
       exerciseId: e.exerciseId,
       name: exerciseName(e.exerciseId),
+      isCardio: isCardioExercise(e.exerciseId),
+      speedUnit: speedUnitOf(e.exerciseId),
       sets: [...byExercise.get(e.exerciseId)!].sort((a, b) => a.setOrder - b.setOrder),
     }))
 })
 
-// その日の合計負荷重量・セット数（Issue #320）。session.setsから都度算出するため、
-// セットの追加・削除・編集・ルーティン適用にそのまま追従する（別途キャッシュは持たない）
-const dayVolumeKg = computed(() => sumSetVolumeKg(session.value.sets))
-const daySetCount = computed(() => session.value.sets.length)
+// その日の合計（Issue #320、有酸素はIssue #345）。session.setsから都度算出するため、
+// セットの追加・削除・編集・ルーティン適用にそのまま追従する（別途キャッシュは持たない）。
+// 表示するマスの組み立て(筋トレもある日は3マス等)はbuildDaySummaryCellsを参照
+const daySummaryCells = computed(() =>
+  buildDaySummaryCells(
+    session.value.sets.map((s) => ({ ...s, isCardio: isCardioExercise(s.exerciseId) })),
+  ),
+)
 
 function groupFor(exerciseId: string) {
   return groupedSets.value.find((g) => g.exerciseId === exerciseId)
@@ -228,11 +243,11 @@ async function applyRoutine(routineId: string) {
         continue
       }
       for (const target of e.targetSets) {
-        const { set, personalBest, achievements } = await addSet(
-          e.exerciseId,
-          target.reps,
-          target.weightKg ?? undefined,
-        )
+        const { set, personalBest, achievements } = await addSet(e.exerciseId, {
+          kind: 'strength',
+          reps: target.reps,
+          weightKg: target.weightKg ?? undefined,
+        })
         applyPersonalBest(set, personalBest)
         applyAchievements(achievements)
       }
@@ -252,7 +267,15 @@ async function applyRoutine(routineId: string) {
 // （他のセット追加・ルーティン適用のたびに入力中の値が巻き戻るのを防ぐため）
 // weightはtype="number"のv-modelがVue 3.4以降で有効な数値をNumberとして保持するため
 // string | numberで持つ（空欄=自重のときのみstringの''のまま）
-const setInputs = reactive<Record<string, { weight: string | number; reps: string | number }>>({})
+// 有酸素の行は距離(km)と時間(分・秒の2欄)を持つ(Issue #345)。使わない側は空文字のまま
+interface SetInput {
+  weight: string | number
+  reps: string | number
+  distance: string | number
+  minutes: string | number
+  seconds: string | number
+}
+const setInputs = reactive<Record<string, SetInput>>({})
 const setSaving = reactive<Record<string, boolean>>({})
 const setErrors = reactive<Record<string, string>>({})
 // 保存中のPromiseをsetIdごとに追跡する（onAddSetのデフォルト値決定用、Issue #116）。
@@ -326,11 +349,15 @@ watch(
   },
 )
 
-function ensureSetInput(set: { id: string; weightKg: number | null; reps: number }) {
+function ensureSetInput(set: WorkoutSetItem) {
   if (setInputs[set.id]) return
+  const duration = splitDuration(set.durationSec)
   setInputs[set.id] = {
     weight: set.weightKg === null ? '' : String(set.weightKg),
-    reps: String(set.reps),
+    reps: set.reps === null ? '' : String(set.reps),
+    distance: set.distanceKm === null ? '' : String(set.distanceKm),
+    minutes: duration.minutes,
+    seconds: duration.seconds,
   }
 }
 
@@ -360,14 +387,34 @@ async function onSetFieldBlur(setId: string) {
 
   const inputs = setInputs[setId]
   if (!inputs) return
-  const reps = Number(inputs.reps)
-  if (!Number.isInteger(reps) || reps < 0 || String(inputs.reps).trim() === '') return
-  const weightRaw = String(inputs.weight).trim()
-  const weightKg = weightRaw ? Number(weightRaw) : null
+  const target = session.value.sets.find((s) => s.id === setId)
+  if (!target) return
+
+  let input: UpdateSetInput
+  if (isCardioExercise(target.exerciseId)) {
+    // 有酸素：空欄はnull(クリア)で保存できる。不正な値は保存せず理由を表示する
+    const distance = parseDistanceInput(inputs.distance)
+    if (!distance.ok) {
+      setErrors[setId] = '距離は0より大きく999.99以下の、小数第2位までの数で入力してください'
+      return
+    }
+    const duration = parseDurationInput(inputs.minutes, inputs.seconds)
+    if (!duration.ok) {
+      setErrors[setId] = '時間は分（0〜999）と秒（0〜59）で、合計1秒以上で入力してください'
+      return
+    }
+    input = { kind: 'cardio', distanceKm: distance.value, durationSec: duration.value }
+  } else {
+    const reps = Number(inputs.reps)
+    if (!Number.isInteger(reps) || reps < 0 || String(inputs.reps).trim() === '') return
+    const weightRaw = String(inputs.weight).trim()
+    const weightKg = weightRaw ? Number(weightRaw) : null
+    input = { kind: 'strength', weightKg, reps }
+  }
 
   setSaving[setId] = true
   setErrors[setId] = ''
-  const promise = updateSet(setId, weightKg, reps)
+  const promise = updateSet(setId, input)
     .then(({ set, personalBest }) => applyPersonalBest(set, personalBest))
     .catch(() => {
       setErrors[setId] = 'セットの更新に失敗しました。時間をおいて再度お試しください'
@@ -392,19 +439,25 @@ const addSetError = ref('')
 //    古い前回記録より今回すでに入力した値の方が参考になる）
 // 2. 前回実際に記録したセット（`GET /exercises`の`lastSet`）
 // 3. どちらも無ければ従来どおり自重・10回
-function defaultSetValuesFor(exerciseId: string): { reps: number; weightKg?: number } {
+//
+// 有酸素(Issue #345)も同じ優先順位で、距離・時間を引き継ぐ。どちらも無ければ両方空の1行を即保存する
+// (筋トレの「自重・10回」と同じ扱い)
+function defaultSetValuesFor(exerciseId: string): NewSetInput {
   const existing = groupedSets.value.find((g) => g.exerciseId === exerciseId)
   const lastInThisWorkout = existing?.sets.at(-1)
-  if (lastInThisWorkout) {
-    return { reps: lastInThisWorkout.reps, weightKg: lastInThisWorkout.weightKg ?? undefined }
-  }
+  const lastSet = lastInThisWorkout ?? exercises.value?.find((e) => e.id === exerciseId)?.lastSet
 
-  const lastSet = exercises.value?.find((e) => e.id === exerciseId)?.lastSet
-  if (lastSet) {
-    return { reps: lastSet.reps, weightKg: lastSet.weightKg ?? undefined }
+  if (isCardioExercise(exerciseId)) {
+    return {
+      kind: 'cardio',
+      distanceKm: lastSet?.distanceKm ?? undefined,
+      durationSec: lastSet?.durationSec ?? undefined,
+    }
   }
-
-  return { reps: DEFAULT_SET_REPS }
+  if (lastSet && lastSet.reps !== null) {
+    return { kind: 'strength', reps: lastSet.reps, weightKg: lastSet.weightKg ?? undefined }
+  }
+  return { kind: 'strength', reps: DEFAULT_SET_REPS }
 }
 
 // invalid_exercise(削除済み種目への新規追加など)は「時間をおいて再度お試しください」と
@@ -436,8 +489,10 @@ async function onAddSet(exerciseId: string) {
     )
   }
   try {
-    const { reps, weightKg } = defaultSetValuesFor(exerciseId)
-    const { set, personalBest, achievements } = await addSet(exerciseId, reps, weightKg)
+    const { set, personalBest, achievements } = await addSet(
+      exerciseId,
+      defaultSetValuesFor(exerciseId),
+    )
     ensureSetInput(set)
     applyPersonalBest(set, personalBest)
     applyAchievements(achievements)
@@ -532,28 +587,28 @@ async function onGoToExercisePicker() {
     />
     <div class="px-4 pb-6">
       <div class="mx-auto flex max-w-sm flex-col gap-4">
-        <!-- その日の合計（Issue #320）。モックで3案を比較し、メモの上に独立した2マスのカードを置く
-             案に決めた。数字の見た目はホームの期間別サマリーに揃える。セットが無い日は
-             「まだ種目が追加されていません」と重複するため出さない -->
+        <!-- その日の合計（Issue #320）。モックで3案を比較し、メモの上に独立したカードを置く案に決めた。
+             数字の見た目はホームの期間別サマリーに揃える。セットが無い日は「まだ種目が追加されていません」と
+             重複するため出さない。マスの構成は筋トレだけ=2マス、有酸素もある日=3マス（距離を追加）、
+             有酸素だけ=距離のみ（Issue #345、buildDaySummaryCells参照） -->
         <section
-          v-if="daySetCount > 0"
-          class="grid grid-cols-2 gap-3 rounded-lg bg-white dark:bg-panel p-4 shadow"
+          v-if="daySummaryCells.length > 0"
+          class="grid gap-3 rounded-lg bg-white dark:bg-panel p-4 shadow"
+          :class="
+            daySummaryCells.length === 1
+              ? 'grid-cols-1'
+              : daySummaryCells.length === 2
+                ? 'grid-cols-2'
+                : 'grid-cols-3'
+          "
         >
-          <div>
+          <div v-for="cell in daySummaryCells" :key="cell.key">
             <p
               class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
             >
-              {{ formatKg(dayVolumeKg) }}
+              {{ cell.value }}
             </p>
-            <p class="mt-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
-          </div>
-          <div>
-            <p
-              class="text-2xl font-extrabold leading-none tabular-nums text-brand-700 dark:text-accent"
-            >
-              {{ daySetCount }}セット
-            </p>
-            <p class="mt-1 text-xs font-semibold text-gray-500 dark:text-muted">セット数</p>
+            <p class="mt-1 text-xs font-semibold text-gray-500 dark:text-muted">{{ cell.label }}</p>
           </div>
         </section>
 
@@ -618,7 +673,13 @@ async function onGoToExercisePicker() {
                     class="text-xs text-brand-600 dark:text-accent disabled:opacity-50"
                     @click="onAddSet(element.exerciseId)"
                   >
-                    {{ addingSet[element.exerciseId] ? '追加中...' : '＋セット追加' }}
+                    {{
+                      addingSet[element.exerciseId]
+                        ? '追加中...'
+                        : groupFor(element.exerciseId)!.isCardio
+                          ? '＋記録追加'
+                          : '＋セット追加'
+                    }}
                   </button>
                 </div>
                 <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
@@ -629,7 +690,95 @@ async function onGoToExercisePicker() {
                    「10」が見切れて「1」に見えてしまう不具合を防ぐため（ユーザー報告、2026-09-05）。
                    下限を割り込むほど狭い場合は個別にoverflow-x-autoで横スクロールさせ、他の要素を
                    巻き込んで崩れないようにする -->
-                <div class="overflow-x-auto">
+                <!-- 有酸素（Issue #345）：距離(km)と時間(分・秒の2欄。スマホの数字キーボードには「:」が
+                     無いため1欄の「分:秒」入力にはしない)を入力し、距離・時間がそろったら行の下に速さ
+                     （ペース／時速。単位は種目のspeedUnit）を表示する。保存の仕組みは筋トレと同じ
+                     （常時入力欄＋blur自動保存） -->
+                <div v-if="groupFor(element.exerciseId)!.isCardio" class="overflow-x-auto">
+                  <div class="min-w-[19rem] overflow-hidden rounded-lg">
+                    <div
+                      class="grid grid-cols-[2rem_minmax(4.5rem,1fr)_minmax(8rem,1.4fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                    >
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">No.</span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">距離</span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">時間</span>
+                      <span></span>
+                    </div>
+                    <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
+                      <div
+                        v-if="setInputs[set.id]"
+                        :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                      >
+                        <div
+                          class="grid grid-cols-[2rem_minmax(4.5rem,1fr)_minmax(8rem,1.4fr)_2.25rem] items-center gap-x-2.5 px-3 pt-1.5"
+                        >
+                          <span
+                            class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                            >{{ set.setOrder }}</span
+                          >
+                          <span class="flex min-w-0 items-baseline gap-1.5">
+                            <input
+                              v-model="setInputs[set.id]!.distance"
+                              type="number"
+                              inputmode="decimal"
+                              step="0.01"
+                              min="0"
+                              aria-label="距離（km）"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              @blur="onSetFieldBlur(set.id)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">km</span>
+                          </span>
+                          <span class="flex min-w-0 items-baseline gap-1">
+                            <input
+                              v-model="setInputs[set.id]!.minutes"
+                              type="number"
+                              inputmode="numeric"
+                              min="0"
+                              aria-label="時間（分）"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              @blur="onSetFieldBlur(set.id)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">分</span>
+                            <input
+                              v-model="setInputs[set.id]!.seconds"
+                              type="number"
+                              inputmode="numeric"
+                              min="0"
+                              max="59"
+                              aria-label="時間（秒）"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              @blur="onSetFieldBlur(set.id)"
+                            />
+                            <span class="shrink-0 text-xs text-gray-500 dark:text-muted">秒</span>
+                          </span>
+                          <span class="flex justify-center">
+                            <button
+                              type="button"
+                              :disabled="setDeleting[set.id]"
+                              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 before:absolute before:-inset-1.5 before:content-[''] disabled:opacity-50"
+                              aria-label="この記録を削除"
+                              @click="onDeleteSet(set.id)"
+                            >
+                              <TrashIcon class="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        </div>
+                        <p
+                          v-if="formatSpeed(set, groupFor(element.exerciseId)!.speedUnit)"
+                          class="px-3 pb-1.5 pt-0.5 text-right text-xs tabular-nums text-gray-500 dark:text-muted"
+                        >
+                          {{ speedLabel(groupFor(element.exerciseId)!.speedUnit) }}
+                          <span class="font-semibold text-gray-900 dark:text-ink">{{
+                            formatSpeed(set, groupFor(element.exerciseId)!.speedUnit)
+                          }}</span>
+                        </p>
+                        <div v-else class="pb-1.5"></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div v-else class="overflow-x-auto">
                   <div class="min-w-[17rem] overflow-hidden rounded-lg">
                     <div
                       class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
@@ -690,7 +839,8 @@ async function onGoToExercisePicker() {
                 </div>
                 <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
                   <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
-                    {{ set.setOrder }}セット目を保存中...
+                    {{ set.setOrder
+                    }}{{ groupFor(element.exerciseId)!.isCardio ? '件目' : 'セット目' }}を保存中...
                   </p>
                   <p v-if="setErrors[set.id]" class="mt-1 text-xs text-red-600 dark:text-red-400">
                     {{ setErrors[set.id] }}
