@@ -111,7 +111,7 @@
    - 重量を省略したら**自重種目**扱い（`null`）
 5. **`findOwnWorkout`（認可）**。自分のworkoutでなければ **`403` ではなく `404`** を返す
    - `403`（権限がない）だと「そのIDのデータは存在する」と教えてしまう。`404` なら存在自体を隠せる
-6. `isExerciseVisible`。公式種目か自分のカスタム種目でなければ `400 invalid_exercise`
+6. `findVisibleExercise`。公式種目か自分のカスタム種目でなければ `400 invalid_exercise`
 7. **`nextSetOrder`（採番）**。「同じworkout・同じ種目の中で、既存の最大 `setOrder` + 1」をサーバーが決める
    - クライアントに番号を決めさせると、連続で押したときに同じ番号がぶつかる。だからサーバーが決める
    - 7〜8は1つのトランザクションの中で、先に**対象workoutの行ロック（`SELECT ... FOR UPDATE`）**を取ってから行う。
@@ -1240,8 +1240,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
-| GET | `/exercises` | 要 | 種目一覧。削除済み（後述）のカスタム種目も含む。各種目に前回の実績セット（`lastSet`）を含む |
-| POST | `/exercises` | 要 | カスタム種目を追加する（**フロントの導線は止めてあるが、APIは有効のまま**。課金の実装時に止める。Issue #330） |
+| GET | `/exercises` | 要 | 種目一覧。削除済み（後述）のカスタム種目も含む。各種目に前回の実績セット（`lastSet`）と、有酸素種目の速さの単位（`speedUnit`）を含む |
+| POST | `/exercises` | 要 | カスタム種目を追加する（**フロントの導線は止めてあるが、APIは有効のまま**。課金の実装時に止める。Issue #330）。`muscleGroup: 'cardio'`（有酸素）は`400`（有酸素は公式種目のみ。Issue #345） |
 | DELETE | `/exercises/:id` | 要 | カスタム種目を削除する（**ソフトデリート**）。作成者本人のみ。公式種目・他人の種目・削除済みは`404` |
 
 ### トレーニング記録 — [workouts.ts](../backend/src/routes/workouts.ts)
@@ -1253,8 +1253,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | GET | `/workouts/:id` | 要 | workout1件＋そのセット一覧（`sets`。`setOrder`昇順、同値内は`createdAt`昇順。`setOrder`は種目ごとに1からリセットされる連番のため異なる種目間で頻繁に同値になり、tie-breakが無いと同じ種目内のセットの表示順が更新のたびに崩れる。Issue #226）＋種目カード一覧（`exercises`。`WorkoutExercise`を`sortOrder`昇順で返す。種目カード自体の並び順はこちらが正。Issue #228） |
 | PATCH | `/workouts/:id` | 要 | メモを更新する（記録日は編集不可。決めたこと#10参照）。レスポンスに`deleted`（真偽値）を含む（下記「4-2」参照） |
 | DELETE | `/workouts/:id` | 要 | **ソフトデリート**（`deletedAt` を立てる） |
-| POST | `/workouts/:id/sets` | 要 | セットを1件追加する。その種目の`WorkoutExercise`（種目カード）がまだ無ければ、末尾の`sortOrder`で自動的に作る（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。レスポンスにはセット本体に加え、対応する`workoutExercise`（`id`/`sortOrder`）と、自己ベスト更新の達成内容`personalBest`（`{ exerciseId, weightKg, previousBestKg }`または`null`、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、通算の節目・久しぶりの復帰の達成内容`achievements`（`{ milestoneDays: number \| null, comeback: boolean }`、その日付の最初のセット追加のときだけ判定。[Issue #255](https://github.com/ConniConni/torebu/issues/255)）を含む。達成したときは仲間への`personal_best`／`milestone`／`comeback`通知も作る（下記「4-2」参照） |
-| PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する。レスポンスはセット本体に`personalBest`を加えたもの（重量が変わった更新のときだけ判定し、それ以外は`null`。[Issue #253](https://github.com/ConniConni/torebu/issues/253)） |
+| POST | `/workouts/:id/sets` | 要 | セットを1件追加する。**受け付ける項目は種目の分類で変わる**（筋トレ＝`weightKg`・`reps`、有酸素＝`distanceKm`・`durationSec`。取り違えは`400 invalid_request`。下記「4-2」参照。[Issue #345](https://github.com/ConniConni/torebu/issues/345)）。その種目の`WorkoutExercise`（種目カード）がまだ無ければ、末尾の`sortOrder`で自動的に作る（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。レスポンスにはセット本体に加え、対応する`workoutExercise`（`id`/`sortOrder`）と、自己ベスト更新の達成内容`personalBest`（`{ exerciseId, weightKg, previousBestKg }`または`null`、[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、通算の節目・久しぶりの復帰の達成内容`achievements`（`{ milestoneDays: number \| null, comeback: boolean }`、その日付の最初のセット追加のときだけ判定。[Issue #255](https://github.com/ConniConni/torebu/issues/255)）を含む。達成したときは仲間への`personal_best`／`milestone`／`comeback`通知も作る（下記「4-2」参照） |
+| PATCH | `/workouts/:id/sets/:setId` | 要 | セットを1件更新する。レスポンスはセット本体に`personalBest`を加えたもの（重量が変わった更新のときだけ判定し、それ以外は`null`。有酸素は常に`null`。[Issue #253](https://github.com/ConniConni/torebu/issues/253)）。項目の切り替えは`POST`と同じ（有酸素の`distanceKm`・`durationSec`は`null`でその項目をクリアできる） |
 | DELETE | `/workouts/:id/sets/:setId` | 要 | セットを1件削除する（こちらは物理削除）。種目カード（`WorkoutExercise`）自体は削除しない（最後の1件を消しても残る。再度同じ種目のセットを追加すると同じカードが復元される）。レスポンスは`204`ではなく`{ deleted: boolean }`（下記「4-2」参照） |
 | PATCH | `/workouts/:id/exercises/:workoutExerciseId` | 要 | 種目カードの並び順（`sortOrder`）を変更する（[Issue #228](https://github.com/ConniConni/torebu/issues/228)。ルーティンの`PATCH /routines/:id/exercises/:routineExerciseId`と同じ方針） |
 | POST | `/workouts/:id/reactions` | 要 | いいねする（Phase4、[Issue #140](https://github.com/ConniConni/torebu/issues/140)）。**いずれかのアクティブなグループで同席しているメンバーの記録のみ**（`404`で存在を隠す）。**自分の記録には不可**（`400 cannot_react_to_own_workout`、[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）。冪等（`upsert`。既にいいね済みでも`200`） |
@@ -1272,7 +1272,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | GET | `/routines/:id` | 要 | ルーティン1件＋種目一覧 |
 | PATCH | `/routines/:id` | 要 | 名前を変更する |
 | DELETE | `/routines/:id` | 要 | 削除する（**物理削除**。中の種目はDB側のCascadeで一緒に消える） |
-| POST | `/routines/:id/exercises` | 要 | ルーティンに種目を追加する（目安セットも任意で指定可） |
+| POST | `/routines/:id/exercises` | 要 | ルーティンに種目を追加する（目安セットも任意で指定可）。有酸素の種目は`400 invalid_exercise`（[Issue #345](https://github.com/ConniConni/torebu/issues/345)） |
 | PATCH | `/routines/:id/exercises/:routineExerciseId` | 要 | 並び順・目安セットを変更する（どちらか一方、または両方） |
 | DELETE | `/routines/:id/exercises/:routineExerciseId` | 要 | ルーティンから種目を外す |
 
@@ -1290,7 +1290,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | POST | `/groups` | 要 | グループを作成する。作成者は自動的に`role: owner`として参加する |
 | GET | `/groups` | 要 | 自分が所属する（退会済みを除く）グループ一覧。各要素に自分の`role`、現在の所属人数`memberCount`（退会済みを除く。⑨マイページの所属グループ一覧で使用、[Issue #237](https://github.com/ConniConni/torebu/issues/237)）を含む |
 | GET | `/groups/:id` | 要 | グループ詳細＋アクティブなメンバー一覧。**所属メンバーのみ**閲覧可（`404`で存在を隠す） |
-| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`）。`exercises`の並びは`WorkoutExercise.sortOrder`昇順（③記録作成でのカード並び替えと同じ並び順。[Issue #228](https://github.com/ConniConni/torebu/issues/228)）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
+| GET | `/groups/:id/workouts` | 要 | グループのアクティブな全メンバー（本人含む）の記録を`performedAt`降順（同日内は`createdAt`降順。Issue #222）で返す。**所属メンバーのみ**閲覧可（`404`で存在を隠す）。各要素に投稿者情報（`userId`/`displayName`）、種目ごとのセット一覧（`exercises`：`exerciseId`/`name`/`sets`（`id`/`setOrder`/`weightKg`/`reps`/`distanceKm`/`durationSec`。有酸素の行は`reps`が`null`）。`exercises`の並びは`WorkoutExercise.sortOrder`昇順（③記録作成でのカード並び替えと同じ並び順。[Issue #228](https://github.com/ConniConni/torebu/issues/228)）)、いいね情報（`reactionCount`/`reactedByMe`/`reactorNames`：いいねした人の表示名の配列、いいねした順。[Issue #149](https://github.com/ConniConni/torebu/issues/149)で追加）、コメント件数（`commentCount`）を含む |
 | POST | `/groups/:id/invite` | 要 | 招待コードを再発行する。**オーナー限定**（オーナー以外は`403`） |
 | GET | `/groups/invites/:code` | **不要** | 招待リンクの表示用に、招待コードからグループの概要（`name`・`memberCount`〈退会済みを除く〉・`memberLimit`・`isMember`・`groupId`）を返す（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。`isMember`はログイン中かつアクティブなメンバーのときだけ`true`で、そのときだけ`groupId`を返す（それ以外は`null`）。メンバー名は返さない。存在しない・削除済みは`404 invalid_invite_code`、期限切れは`400 invite_expired`（`POST /groups/join`と同じ） |
 | POST | `/groups/join` | 要 | 招待コードで参加する。`member_limit`到達時は`400 member_limit_exceeded`、期限切れは`400 invite_expired`。退会済みメンバーの再参加は既存`group_members`行のUPDATE。参加（再参加含む）したときは他のアクティブなメンバー宛に`member_joined`通知を作る（[Issue #249](https://github.com/ConniConni/torebu/issues/249)） |
@@ -1324,11 +1324,13 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | どこ | 押さえること |
 |---|---|
 | `GET /exercises` | 返すのは**公式種目（`createdBy` が null）＋自分が作ったカスタム種目**だけ。表示順は**「自分の使用回数の多い順 → `default_sort_order`昇順 → 名前順」の3段階**（Issue #167で3段階に変更。公式種目には種目マスタ元データの並び順＝部位ごとに「コンパウンド→バリエーション→アイソレーション」を`default_sort_order`として`seed.ts`で投入済み。カスタム種目は`default_sort_order`がnullのままのため、同じ使用回数の公式種目より後ろに来る）。各種目に `useCount`（自分の使用回数）が付いてくる。**削除済み（`deletedAt`有り）のカスタム種目もレスポンスには含める**（過去の記録・ルーティンがこのレスポンスをキャッシュして種目名を解決しているため、除外すると過去記録の表示が壊れる）。新規の記録・ルーティンへの追加候補からの除外は、`deletedAt`を見てフロント側（④種目選択・⑦種目追加の重複サジェスト）で行う |
-| `GET /exercises` の `lastSet`（[Issue #116](https://github.com/ConniConni/torebu/issues/116)） | `{ weightKg, reps } \| null`。自分の削除されていない（`deletedAt: null`の）workoutの中で、その種目を一番新しく記録したセット1件（`performedAt`降順→`setOrder`降順で先頭）。記録が無ければ`null`。③記録作成でのセット追加のデフォルト値決定に使う（§3-2「＋セット追加」参照） |
-| `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`isExerciseVisible`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`isExerciseVisible`を呼ばないため削除済みでも編集できる） |
+| `GET /exercises` の `lastSet`（[Issue #116](https://github.com/ConniConni/torebu/issues/116)） | `{ weightKg, reps, distanceKm, durationSec } \| null`。筋トレは`weightKg`・`reps`、有酸素は`distanceKm`・`durationSec`に値が入り、使わない側は`null`（`reps`は有酸素で`null`になりうる。[Issue #345](https://github.com/ConniConni/torebu/issues/345)）。自分の削除されていない（`deletedAt: null`の）workoutの中で、その種目を一番新しく記録したセット1件（`performedAt`降順→`setOrder`降順で先頭）。記録が無ければ`null`。③記録作成でのセット追加のデフォルト値決定に使う（§3-2「＋セット追加」参照） |
+| `POST /workouts/:id/sets`<br>`POST /routines/:id/exercises` | 種目の指定は`findVisibleExercise`（公式 or 自分のカスタム）で検証するが、**削除済みのカスタム種目は弾く**（`400 invalid_exercise`）。ただし`POST /workouts/:id/sets`は例外で、**そのworkoutに既にその種目のセットがある場合は削除済みでも追加できる**（新規の種目選択を伴わない、既存カードへの追加＝編集の延長とみなすため。Issue #113）。`POST /routines/:id/exercises`は常にルーティンへ新しい種目を紐付ける操作のためこの例外は無い（既存`routine_exercise`の目安セット編集は`PATCH`が別に担い、こちらは`findVisibleExercise`を呼ばないため削除済みでも編集できる） |
 | `POST /workouts/:id/sets` | `setOrder` は**リクエストで指定できない**。サーバーが「同一workout・同一種目内の最大 + 1」で採番する。削除で欠番が出ても採番はズレない。採番〜作成はトランザクション内で対象workoutの行ロック（`FOR UPDATE`）を取ってから行い、同時に追加しても番号が重複しない（[Issue #322](https://github.com/ConniConni/torebu/issues/322)）。ロック取得時点でworkoutがソフトデリート済み（並行した最後のセット削除による）なら`404` |
 | `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。追加と同じworkoutの行ロックを取ってから削除・詰め直しを行うため、追加と並行しても連番が崩れない（Issue #322）。ロック待ちの間に同じセットが別リクエストで削除済みなら`404`。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
 | `DELETE /workouts/:id/sets/:setId`<br>`PATCH /workouts/:id` の`deleted` | セットを削除、またはメモをクリアした結果、そのworkoutが**セット0件・メモ無し**（中身が空）になった場合、workout自体もソフトデリートする（Issue #234）。中身の無いworkoutを放置すると、②ホームの「記録がありません」判定（`GET /workouts`一覧の件数のみで判定）が中身の無い行を「記録あり」と誤判定し、実在しない記録の削除ボタンが機能してしまう不具合につながるため。レスポンスの`deleted: true`でこれをフロントに伝え、`useWorkoutSession.ts`の`removeSet`/`updateMemo`は`session.workoutId`を`null`に戻す（削除済みのworkoutIdを使い回して後続の保存操作が404になるのを防ぐため）。逆に、セットが無くてもメモがあれば（またはその逆）削除しない |
+| 有酸素のセット（[Issue #345](https://github.com/ConniConni/torebu/issues/345)） | 有酸素かどうかは`exercises.muscle_group = 'cardio'`で判定する（`backend/src/lib/exercise.ts`の`isCardio`）。`POST`/`PATCH /workouts/:id/sets`は種目の分類で受け付ける項目を切り替える：**有酸素**は`distanceKm`（0より大きく999.99以下・小数第2位まで）・`durationSec`（1〜59999の整数＝分:秒入力で最大999分59秒）のみ。どちらも`null`可で、`POST`は**両方省略しても空の1行として保存できる**（「＋記録追加」の初期値。前回値はフロントが送る）。`PATCH`は4項目のうち最低1つが必要で、`null`を送るとその項目をクリア。`weightKg`・`reps`を送ると`400`。**筋トレ**は従来どおり（`POST`は`reps`必須、`PATCH`で`reps: null`は`400`）で、`distanceKm`・`durationSec`を送ると`400`。エラー形式は`{ error: 'invalid_request', details }`。有酸素の行は`reps`・`weightKg`が`null`で返る |
+| 有酸素の扱い（集計・ランキング・ルーティン・自己ベスト・記録日数） | **対象外**：ランキング（合計・種目別・初期種目・種目一覧。`exerciseId`に有酸素を指定すると`404`）、統計（`weightKg`が`null`のため従来から外れる）、ルーティン（`POST /routines/:id/exercises`が`400`）、自己ベスト判定（`personalBest`は常に`null`）、カスタム種目（`POST /exercises`が`400`）。**記録日数には数える**：有酸素だけの日も「セットがある日」なので、トレ日数・節目通知・久しぶり通知・ランキングの継続スタンプ（`daysTrained`）に入る。有酸素だけのメンバーのランキングの合計は0kg |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`workout_sets`の`reps` は0以上の整数・999以下（0は失敗した挑戦）。ルーティンの目安セットの`reps`は正の整数 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
 | `PATCH /workouts/:id` の `memo` | 空文字列・`null`を送るとメモを**クリア**（`null`化）できる。省略時のみ「変更しない」 |
@@ -1361,9 +1363,9 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | テーブル | 役割 | 押さえること |
 |---|---|---|
 | `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_token`にはトークンの生の値ではなくSHA-256ハッシュを保存する（DB漏洩時の悪用対策）。`password_reset_expires_at`は発行から1時間後、使用後または期限切れで`null`に戻る（Issue #213）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない。`signup_ref`（nullable）は登録のきっかけで、画像カードシェアの共有URL経由で登録した場合だけ`share`が入る（効果測定用、アプリの動作には使わない。[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
-| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order`は公式種目のみ設定（種目マスタ元データの並び順。使用実績が無いユーザーの初期並び順に使う、Issue #167）、カスタム種目は常にnull。公式種目78件（部位ハイライト用データ付き）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
+| `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order`は公式種目のみ設定（種目マスタ元データの並び順。使用実績が無いユーザーの初期並び順に使う、Issue #167）、カスタム種目は常にnull。公式種目81件（筋トレ78件は部位ハイライト用データ付き。有酸素3件〔ランニング・ウォーキング・エアロバイク、[Issue #345](https://github.com/ConniConni/torebu/issues/345)〕は`main_muscle`等がnull／空配列で部位ハイライトの対象外）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。`speed_unit`（enum `SpeedUnit`：`pace`＝ペース〔分/km〕／`kmh`＝時速〔km/h〕、nullable）は**有酸素の公式種目だけ**に値を持つ速さの表示単位で、ランニング・ウォーキングが`pace`、エアロバイクが`kmh`。筋トレ・カスタム種目はnull。速さの単位は種目名ではこの列で判定する（速さ自体は保存せず表示時に計算する）。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
 | `workouts` | 1日1回分のトレーニング | `deleted_at` を持つ（ソフトデリート） |
-| `workout_sets` | セット1件（重量・回数） | `weight_kg` は **nullable = 自重種目**。`set_order` は種目ごとに1からリセットされる連番でサーバー採番（種目カード自体の並び順は`workout_exercises`が持つ） |
+| `workout_sets` | セット1件（筋トレ＝重量・回数、有酸素＝距離・時間） | `weight_kg` は **nullable = 自重種目**。`reps`は**nullable**（筋トレはAPIで必須、有酸素はnull）。`distance_km`（`Decimal(6,2)`、km）・`duration_sec`（整数、秒）は有酸素の行だけが持つ（筋トレはnull。[Issue #345](https://github.com/ConniConni/torebu/issues/345)）。`set_order` は種目ごとに1からリセットされる連番でサーバー採番（種目カード自体の並び順は`workout_exercises`が持つ） |
 | `workout_exercises` | workout内の種目カードと並び順 | `routine_exercises`と同じ役割（[Issue #228](https://github.com/ConniConni/torebu/issues/228)）。`(workout_id, exercise_id)`に`UNIQUE`制約。`POST /workouts/:id/sets`でその種目の1セット目を追加した際、無ければ末尾の`sort_order`で自動的に作る。セット側と異なり、その種目の最後の1セットを消しても**この行自体は削除しない**（同じ種目に再度セットを追加したとき、同じカードの位置に復元されるようにするため） |
 | `routines` | 「胸の日」等のテンプレート | 物理削除 |
 | `routine_exercises` | ルーティンに入っている種目と並び順 | `target_sets`（jsonb、nullable）に目安セット（重量・回数の配列）を持てる。未設定は`null`（APIレスポンスでは`[]`に正規化。§4-2参照） |
@@ -1378,8 +1380,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 （[session.ts](../backend/src/session.ts) の `createTableIfMissing: true`）。
 そのため `schema.prisma` には書かれていない。
 
-**部位（`MuscleGroup`）の7分類**：`chest` 胸 / `back` 背中 / `legs` 脚 / `shoulders` 肩 / `arms` 腕 /
-`glutes` お尻 / `abs` 腹筋。日本語ラベルの対応は [muscleGroup.ts](../frontend/app/utils/muscleGroup.ts)
+**部位（`MuscleGroup`）の8分類**：`chest` 胸 / `back` 背中 / `legs` 脚 / `shoulders` 肩 / `arms` 腕 /
+`glutes` お尻 / `abs` 腹筋 / `cardio` 有酸素（[Issue #345](https://github.com/ConniConni/torebu/issues/345)）。日本語ラベルの対応は [muscleGroup.ts](../frontend/app/utils/muscleGroup.ts)
 （Prismaの生成物をフロントで直接importしないため、値を複製して持っている）。
 
 ---

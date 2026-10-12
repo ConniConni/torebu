@@ -3,7 +3,9 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { shiftDateString, todayInJst } from '../lib/date.js'
+import { isCardio } from '../lib/exercise.js'
 import type { Prisma } from '../generated/prisma/client.js'
+import type { MuscleGroup } from '../generated/prisma/enums.js'
 import type {
   WorkoutModel,
   WorkoutSetModel,
@@ -31,7 +33,11 @@ function serializeSet(set: WorkoutSetModel) {
     exerciseId: set.exerciseId,
     setOrder: set.setOrder,
     weightKg: set.weightKg === null ? null : Number(set.weightKg),
+    // 有酸素の行ではnull(Issue #345)
     reps: set.reps,
+    // 有酸素のみ値を持つ。筋トレの行ではnull
+    distanceKm: set.distanceKm === null ? null : Number(set.distanceKm),
+    durationSec: set.durationSec,
   }
 }
 
@@ -136,16 +142,17 @@ function serializeComment(
 // では選べない。一方、このworkoutに既にその種目のセットがある場合(=このカードは削除前から
 // 既に開かれている)への追加は、新規の種目選択を伴わない「既存カードの編集の延長」とみなし、
 // PATCH /workouts/:id/sets/:setId(重量・回数編集)と同じ扱いで許可する(Issue #113)
-async function isExerciseVisible(userId: string, exerciseId: string, workoutId?: string) {
+// 使ってよい場合は種目を返す(記録項目の切り替えに分類が必要なため)。使えない場合はnull
+async function findVisibleExercise(userId: string, exerciseId: string, workoutId?: string) {
   const exercise = await prisma.exercise.findFirst({
     where: { id: exerciseId, OR: [{ createdBy: null }, { createdBy: userId }] },
   })
-  if (!exercise) return false
-  if (exercise.deletedAt === null) return true
-  if (!workoutId) return false
+  if (!exercise) return null
+  if (exercise.deletedAt === null) return exercise
+  if (!workoutId) return null
 
   const existingSet = await prisma.workoutSet.findFirst({ where: { workoutId, exerciseId } })
-  return existingSet !== null
+  return existingSet !== null ? exercise : null
 }
 
 // workouts.memoと同じ上限(1〜500文字)に揃える
@@ -288,11 +295,58 @@ export const repsSchema = z.number().int().positive().max(999)
 // workout_setsの回数。0は「挑戦したが失敗した」記録(自己ベストの判定対象外)。ルーティンの目安セットはrepsSchema(1以上)
 const setRepsSchema = z.number().int().min(0).max(999)
 
+// 有酸素の距離(km)。0より大きく999.99以下、小数第2位まで(DBはDecimal(6,2))
+const distanceKmSchema = z
+  .number()
+  .positive()
+  .max(999.99, { message: '距離は999.99km以下で入力してください' })
+  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, {
+    message: '距離は小数第2位までで入力してください',
+  })
+// 有酸素の時間(秒)。分:秒入力で最大999分59秒(=59999秒)
+const durationSecSchema = z.number().int().min(1).max(59999)
+
+// セットの入力項目は種目の分類で変わる(筋トレ=重量・回数、有酸素=距離・時間。Issue #345)。
+// zodでは項目ごとの形式だけを検証し、分類との組み合わせは種目を引いた後にvalidateSetFieldsで検証する
 const createSetSchema = z.object({
   exerciseId: z.string().uuid(),
   weightKg: weightKgSchema.optional(),
-  reps: setRepsSchema,
+  reps: setRepsSchema.optional(),
+  distanceKm: distanceKmSchema.nullable().optional(),
+  durationSec: durationSecSchema.nullable().optional(),
 })
+
+// 種目の分類と入力項目の組み合わせを検証する。問題があれば400用のメッセージを返す(問題なしはnull)。
+// - 有酸素：weightKg・repsは受け付けない
+// - 筋トレ：distanceKm・durationSecは受け付けない。POSTではrepsが必須
+function validateSetFields(
+  exercise: { muscleGroup: MuscleGroup },
+  fields: {
+    weightKg?: number | null
+    reps?: number
+    distanceKm?: number | null
+    durationSec?: number | null
+  },
+  mode: 'create' | 'update',
+) {
+  if (isCardio(exercise)) {
+    if (fields.weightKg !== undefined || fields.reps !== undefined) {
+      return '有酸素の種目には重量・回数を指定できません'
+    }
+    return null
+  }
+  if (fields.distanceKm !== undefined || fields.durationSec !== undefined) {
+    return '筋トレの種目には距離・時間を指定できません'
+  }
+  if (mode === 'create' && fields.reps === undefined) {
+    return '回数を指定してください'
+  }
+  return null
+}
+
+function invalidSetFieldsResponse(message: string) {
+  return { error: 'invalid_request', details: { errors: [message] } }
+}
 
 // セットの追加(採番)・削除(詰め直し)の前に、対象workoutの行をトランザクション内でロックする。
 // 「最大setOrderを読む→作成する」の間に別リクエストが割り込むと、同じsetOrderが2つできてしまうため
@@ -532,7 +586,7 @@ async function evaluatePersonalBest(
   set: WorkoutSetModel,
 ): Promise<PersonalBest | null> {
   const weightKg = toWeightNumber(set.weightKg)
-  if (weightKg === null || set.reps === 0) return null
+  if (weightKg === null || set.reps === null || set.reps === 0) return null
 
   const [bestExceptThisSet, bestInOtherWorkouts] = await Promise.all([
     maxOwnWeight(userId, set.exerciseId, { setId: set.id }),
@@ -560,9 +614,14 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
     return
   }
 
-  const visible = await isExerciseVisible(userId, parsed.data.exerciseId, workout.id)
-  if (!visible) {
+  const exercise = await findVisibleExercise(userId, parsed.data.exerciseId, workout.id)
+  if (!exercise) {
     res.status(400).json({ error: 'invalid_exercise' })
+    return
+  }
+  const fieldsError = validateSetFields(exercise, parsed.data, 'create')
+  if (fieldsError) {
+    res.status(400).json(invalidSetFieldsResponse(fieldsError))
     return
   }
 
@@ -585,6 +644,8 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
         setOrder,
         weightKg: parsed.data.weightKg,
         reps: parsed.data.reps,
+        distanceKm: parsed.data.distanceKm,
+        durationSec: parsed.data.durationSec,
       },
     })
     return { workoutExercise, isFirstSetOfWorkout, set }
@@ -596,7 +657,8 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   }
   const { workoutExercise, isFirstSetOfWorkout, set } = created
 
-  const personalBest = await evaluatePersonalBest(userId, set)
+  // 有酸素は自己ベストの判定対象外(Issue #345)
+  const personalBest = isCardio(exercise) ? null : await evaluatePersonalBest(userId, set)
   const achievements = await evaluateAchievements(userId, workout, isFirstSetOfWorkout)
 
   res.status(201).json({
@@ -611,16 +673,27 @@ const updateSetSchema = z
   .object({
     weightKg: weightKgSchema.nullable().optional(),
     reps: setRepsSchema.optional(),
+    // 有酸素の項目。nullを送るとその項目をクリアする
+    distanceKm: distanceKmSchema.nullable().optional(),
+    durationSec: durationSecSchema.nullable().optional(),
   })
   // 空のPATCH({})は意味の無い更新なので、PATCH /workouts/:idと同様に最低1項目を要求する
-  .refine((data) => data.weightKg !== undefined || data.reps !== undefined, {
-    message: 'weightKg・repsのいずれかを指定してください',
-  })
+  .refine(
+    (data) =>
+      data.weightKg !== undefined ||
+      data.reps !== undefined ||
+      data.distanceKm !== undefined ||
+      data.durationSec !== undefined,
+    { message: 'weightKg・reps・distanceKm・durationSecのいずれかを指定してください' },
+  )
 
 async function findOwnSet(userId: string, workoutId: string, setId: string) {
   const workout = await findOwnWorkout(userId, workoutId)
   if (!workout) return null
-  return prisma.workoutSet.findFirst({ where: { id: setId, workoutId: workout.id } })
+  return prisma.workoutSet.findFirst({
+    where: { id: setId, workoutId: workout.id },
+    include: { exercise: { select: { muscleGroup: true } } },
+  })
 }
 
 workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
@@ -636,6 +709,12 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
     return
   }
 
+  const fieldsError = validateSetFields(set.exercise, parsed.data, 'update')
+  if (fieldsError) {
+    res.status(400).json(invalidSetFieldsResponse(fieldsError))
+    return
+  }
+
   const updated = await prisma.workoutSet.update({
     where: { id: set.id },
     data: parsed.data,
@@ -646,8 +725,10 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
   // 回数が0から1以上に変わったときも、成功した記録になるので判定する
   const weightChanged =
     toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg) ||
-    (set.reps === 0 && updated.reps > 0)
-  const personalBest = weightChanged ? await evaluatePersonalBest(userId, updated) : null
+    (set.reps === 0 && (updated.reps ?? 0) > 0)
+  // 有酸素は自己ベストの判定対象外(Issue #345)
+  const personalBest =
+    weightChanged && !isCardio(set.exercise) ? await evaluatePersonalBest(userId, updated) : null
 
   res.status(200).json({ ...serializeSet(updated), personalBest })
 })

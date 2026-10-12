@@ -39,6 +39,14 @@ enum MuscleGroup {
   arms // 腕
   glutes // お尻
   abs // 腹筋
+  cardio // 有酸素（Issue #345。距離・時間で記録し、集計・ランキング・ルーティンの対象外）
+}
+
+// 有酸素種目の速さの表示単位（Issue #345）。有酸素種目だけに値を入れ、筋トレ種目はnull。
+// 種目名ではなくこの列で分岐する
+enum SpeedUnit {
+  pace // ペース（分/km）
+  kmh // 時速（km/h）
 }
 
 model User {
@@ -89,6 +97,7 @@ model Exercise {
   // mainMuscleとセットで初めて意味が確定する（同じ値でも部位によって指すものが違う）。対応表はdocs/muscle-highlight.md参照
   mainZone         String?     @map("main_zone")
   equipment        String?
+  speedUnit        SpeedUnit?  @map("speed_unit") // 有酸素種目のみ。筋トレ・カスタム種目はnull
   createdBy        String?     @map("created_by") // null=公式、値ありならカスタム種目
   defaultSortOrder Int?        @map("default_sort_order") // 運営が定番種目に設定。使用履歴が無い時のフォールバック順
   deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(3) // ソフトデリート。カスタム種目のみ、作成者本人が削除可能（公式種目は対象外）
@@ -141,14 +150,17 @@ model WorkoutExercise {
 }
 
 model WorkoutSet {
-  id         String   @id @default(uuid())
-  workoutId  String   @map("workout_id")
-  exerciseId String   @map("exercise_id")
-  setOrder   Int      @map("set_order")
-  weightKg   Decimal? @map("weight_kg") // 自重種目はnull
-  reps       Int
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id          String   @id @default(uuid())
+  workoutId   String   @map("workout_id")
+  exerciseId  String   @map("exercise_id")
+  setOrder    Int      @map("set_order")
+  weightKg    Decimal? @map("weight_kg") // 自重種目はnull
+  reps        Int? // 筋トレは必須（APIで保証）。有酸素はnull
+  // 有酸素のみ（Issue #345）。筋トレはnull
+  distanceKm  Decimal? @map("distance_km") @db.Decimal(6, 2) // km
+  durationSec Int?     @map("duration_sec") // 秒
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
