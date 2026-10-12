@@ -197,7 +197,7 @@ Phase4着手前の設計セッションで詰めた論点。画面単位の詳�
 - **編集され得るテーブルには`updated_at`を付与**。過去の変更履歴を全部残すバージョン管理は今の規模では不要と判断
 - **退会後の同じグループへの再参加は可能**。実装は新規INSERTではなく、既存の`group_members`行をUPDATEして`left_at`をNULLに戻す形
 - **筋肉イラスト可視化**は`react-native-body-highlighter`のSVG・筋肉スラッグデータを流用（Reactコンポーネント自体ではなくSVGデータのみ、ライセンスはMIT想定だが実装時に要確認）。出典はExRx.net中心＋free-exercise-db等で補完
-- **有酸素運動は今回のmuscle_groupには含めない**。記録項目の設計とセットで将来の拡張機能として追加する
+- **有酸素運動は`muscle_group`に`cardio`として追加済み**（Issue #345）。記録項目は`workout_sets`に相乗りして`distance_km`・`duration_sec`を持たせ、`reps`をnullable化した。速さの表示単位は`exercises.speed_unit`で持つ。詳細は`docs/spec.md`§4-2・§5
 - **種目一覧の表示順**は「自分の使用回数 DESC → `default_sort_order` ASC → 名前順」の3段階。
   当初`default_sort_order`は全件null運用でソート条件から省略していたが、④種目選択画面の見やすさ改善
   （Issue #167、2026-09-10）で、公式種目に種目マスタ元データの並び順を投入して使うよう変更した
