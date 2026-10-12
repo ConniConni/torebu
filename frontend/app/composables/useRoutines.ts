@@ -53,10 +53,7 @@ export function useRoutines() {
   }
 
   async function renameRoutine(id: string, name: string) {
-    const updated = await $fetch<Routine>(`/api/routines/${id}`, {
-      method: 'PATCH',
-      body: { name },
-    })
+    const updated = await $fetch<Routine>(`/api/routines/${id}`, { method: 'PATCH', body: { name } })
     routines.value = (routines.value ?? []).map((r) => (r.id === id ? updated : r))
     return updated
   }
