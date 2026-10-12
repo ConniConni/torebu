@@ -179,7 +179,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]` | - | グループ詳細（Phase4）。メンバー一覧・招待リンク／招待コードの表示とコピー・共有、再発行〈オーナー限定〉・退会・削除〈オーナー限定〉 | `GET /groups/:id`, `POST /groups/:id/invite`, `POST /groups/:id/leave`, `DELETE /groups/:id` | `auth` |
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、仲間の通算の節目・久しぶりの復帰（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
-| `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。「合計／種目別／継続／有酸素」の4タブ（[Issue #258](https://github.com/ConniConni/torebu/issues/258)、有酸素タブは[Issue #348](https://github.com/ConniConni/torebu/issues/348)、下記「有酸素のランキング」参照）。合計・種目別は週間/月間/通算のタブで挙上重量の順位を表示する。種目別の種目セレクタは、グループの誰かが記録したことのある公式種目だけに絞り込む。継続は順位を持たず、各メンバーを名前順（あいうえお順）に並べ、直近28日の参加・継続の可視化スタンプ（none/bronze/silver/gold）だけを表示する | `GET /groups/:id/ranking`, `GET /groups/:id/ranking/default-exercise`, `GET /groups/:id/ranking/exercises` | `auth` |
+| `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。「合計／種目別／有酸素／継続」の4タブ（[Issue #258](https://github.com/ConniConni/torebu/issues/258)、有酸素タブは[Issue #348](https://github.com/ConniConni/torebu/issues/348)、下記「有酸素のランキング」参照）。合計・種目別は週間/月間/通算のタブで挙上重量の順位を表示する。種目別の種目セレクタは、グループの誰かが記録したことのある公式種目だけに絞り込む。継続は順位を持たず、各メンバーを名前順（あいうえお順）に並べ、直近28日の参加・継続の可視化スタンプ（none/bronze/silver/gold）だけを表示する | `GET /groups/:id/ranking`, `GET /groups/:id/ranking/default-exercise`, `GET /groups/:id/ranking/exercises` | `auth` |
 | `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アカウント（「パスワードを変更」から`/mypage/password`へ、Issue #247）・アプリの見た目（ダークモードの切替UI自体）は非活性の「準備中」表示のみ
 （配色自体はIssue #241で全画面対応済み。切替UIはStripe連携着手Issueで追加予定）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモードの実処理はStripe連携着手Issueで追加予定（下記参照）。ファイルは`pages/mypage/index.vue`（配下に`password.vue`を置くため、Issue #247で`pages/mypage.vue`から移動） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
 | `/mypage/password` | ⑨ | パスワード変更（Issue #247）。ログイン中に現在のパスワード・新しいパスワード（確認付き）を入力して変更する。成功時は同じ画面で完了表示に切り替わり、「マイページに戻る」で⑨へ戻る。変更後もログイン状態は維持される。現在のパスワードを忘れた場合の案内は文言のみ（`/password-reset`は`guest`ミドルウェア付きでログイン中は開けないため、リンクにしていない） | `POST /auth/password-changes` | `auth` |
@@ -824,7 +824,7 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
 - 有酸素は距離で競うため、合計挙上重量のランキングとは別エンドポイント`GET /groups/:id/ranking/cardio`にした
   （`GET /groups/:id/ranking`は従来どおり有酸素を含めない）。見せ方はモックで3案（4つ目のタブ／種目別セレクタに追加／
   縦積み）を比較し、4つ目のタブに決定
-- フロントは`/groups/[id]/ranking`の4つ目のタブ「有酸素」。タブ内で「ラン・ウォーク／バイク」を切り替え、
+- フロントは`/groups/[id]/ranking`の4つ目のタブ「有酸素」（並びは合計／種目別／有酸素／継続。順位を持つタブを前にまとめ、順位の無い継続を最後にした）。タブ内で「ラン・ウォーク／バイク」を切り替え、
   期間タブ（週間／月間／通算）は他タブと共通。**表彰台は無く一覧のみ**（順位バッジ・自分の行の強調は合計と同じ）。
   結果は他タブの`ranking`とは形が違う（`totalDistanceKm`）ため別のref（`cardioRanking`）で持ち、
   他タブに戻っても直前の表示を壊さない。単位はkm、記録が無いメンバーは0km

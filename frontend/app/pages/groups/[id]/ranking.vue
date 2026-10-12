@@ -247,18 +247,6 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
             type="button"
             class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
             :class="
-              metric === 'attendance'
-                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
-                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
-            "
-            @click="onSelectMetric('attendance')"
-          >
-            継続
-          </button>
-          <button
-            type="button"
-            class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
-            :class="
               metric === 'cardio'
                 ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
                 : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
@@ -266,6 +254,18 @@ function attendanceLabel(entry: { attendanceStamp: AttendanceStamp; daysTrained:
             @click="onSelectMetric('cardio')"
           >
             有酸素
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded-lg border border-brand-600 dark:border-accent py-1.5 text-sm font-semibold"
+            :class="
+              metric === 'attendance'
+                ? 'bg-brand-600 text-white dark:bg-accent dark:text-surface'
+                : 'bg-white dark:bg-panel text-brand-600 dark:text-accent hover:bg-brand-50 dark:hover:bg-accent/10'
+            "
+            @click="onSelectMetric('attendance')"
+          >
+            継続
           </button>
         </div>
 
