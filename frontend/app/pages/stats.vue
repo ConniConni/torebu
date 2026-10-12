@@ -38,9 +38,13 @@ if (!exercises.value) {
   await fetchExercises()
 }
 
-// 集計対象は公式種目のみ（backend/src/routes/stats.ts参照）。カスタム種目・削除済みは選択肢に出さない
+// 集計対象は公式種目のみ（backend/src/routes/stats.ts参照）。カスタム種目・削除済みは選択肢に出さない。
+// 有酸素は重量×回数の推移に載らないため除外する（有酸素の推移は別Issue。Issue #345）
 const officialExercises = computed(
-  () => exercises.value?.filter((e) => e.createdBy === null && !e.deletedAt) ?? [],
+  () =>
+    exercises.value?.filter(
+      (e) => e.createdBy === null && !e.deletedAt && e.muscleGroup !== 'cardio',
+    ) ?? [],
 )
 
 const range = ref<StatsRange>('3m')

@@ -1,8 +1,11 @@
 // backend/src/generated/prisma/enums.ts の MuscleGroup と対応する値。
 // フロント側でPrisma生成物を直接importしないため、値をここに複製して持つ
+//
+// MUSCLE_GROUPSは④種目選択のセクションに使う筋トレ7部位の固定リスト。有酸素('cardio'、Issue #345)は
+// 型(MuscleGroup)には含めるが、このリストには含めない(④に有酸素セクションを出すのは別PRの作業)
 export const MUSCLE_GROUPS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'abs'] as const
 
-export type MuscleGroup = (typeof MUSCLE_GROUPS)[number]
+export type MuscleGroup = (typeof MUSCLE_GROUPS)[number] | 'cardio'
 
 const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   chest: '胸',
@@ -12,6 +15,7 @@ const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   arms: '腕',
   glutes: 'お尻',
   abs: '腹筋',
+  cardio: '有酸素',
 }
 
 export function muscleGroupLabel(muscleGroup: MuscleGroup): string {

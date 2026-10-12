@@ -267,6 +267,8 @@ groupsRouter.get('/:id/workouts', requireAuth, async (req, res) => {
                 setOrder: s.setOrder,
                 weightKg: s.weightKg === null ? null : Number(s.weightKg),
                 reps: s.reps,
+                distanceKm: s.distanceKm === null ? null : Number(s.distanceKm),
+                durationSec: s.durationSec,
               })),
           }
         }),
@@ -424,8 +426,10 @@ groupsRouter.delete('/:id', requireAuth, async (req, res) => {
   res.status(204).send()
 })
 
-// 集計対象は公式種目のみ(createdBy IS NULL)。stats.ts(Phase3-C)と同じ方針
-const RANKING_OFFICIAL_EXERCISE_FILTER = { createdBy: null }
+// 集計対象は公式種目のみ(createdBy IS NULL)。stats.ts(Phase3-C)と同じ方針。
+// 有酸素は重量×回数で測れないため除外する(有酸素のランキングは別Issue。Issue #345)。
+// ただし参加・継続のスタンプ(attendanceStamp)は種目に関係なくセットがある日を数えるので、有酸素の日も入る
+const RANKING_OFFICIAL_EXERCISE_FILTER = { createdBy: null, muscleGroup: { not: 'cardio' as const } }
 
 // 種目別ランキングのデフォルト種目選定に使う「直近」の窓。②ホーム・⑨マイページの期間別サマリー
 // (直近28日、spec.md「記録日数」実装メモ参照)と同じ定義に揃え、アプリ内で「直近」の意味を統一する
@@ -544,7 +548,7 @@ groupsRouter.get('/:id/ranking', requireAuth, async (req, res) => {
   for (const set of sets) {
     const weightKg = set.weightKg === null ? 0 : Number(set.weightKg)
     const uid = set.workout.userId
-    volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * set.reps)
+    volumeByUserId.set(uid, (volumeByUserId.get(uid) ?? 0) + weightKg * (set.reps ?? 0))
   }
 
   // 参加・継続の可視化用に、種目・期間タブとは独立して「直近28日にセットがある日数」を集計する

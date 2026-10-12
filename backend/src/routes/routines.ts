@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { weightKgSchema, repsSchema } from './workouts.js'
+import { isCardio } from '../lib/exercise.js'
 import type { RoutineModel, RoutineExerciseModel, ExerciseModel } from '../generated/prisma/models.js'
 
 export const routinesRouter = Router()
@@ -60,11 +61,11 @@ async function findOwnRoutine(userId: string, routineId: string) {
 
 // GET /exercisesと同じ基準(公式 or 自分のカスタム)で、ルーティンに使ってよい種目かを確認する
 // 削除済み(ソフトデリート済み)のカスタム種目は新規のルーティンには使えない(Issue #113)
-async function isExerciseVisible(userId: string, exerciseId: string) {
-  const exercise = await prisma.exercise.findFirst({
+// 使ってよい場合は種目を返す(有酸素かどうかの判定に分類が必要なため)。使えない場合はnull
+async function findVisibleExercise(userId: string, exerciseId: string) {
+  return prisma.exercise.findFirst({
     where: { id: exerciseId, deletedAt: null, OR: [{ createdBy: null }, { createdBy: userId }] },
   })
-  return exercise !== null
 }
 
 const createRoutineSchema = z.object({
@@ -178,8 +179,13 @@ routinesRouter.post('/:id/exercises', requireAuth, async (req, res) => {
     return
   }
 
-  const visible = await isExerciseVisible(userId, parsed.data.exerciseId)
-  if (!visible) {
+  const exercise = await findVisibleExercise(userId, parsed.data.exerciseId)
+  if (!exercise) {
+    res.status(400).json({ error: 'invalid_exercise' })
+    return
+  }
+  // 有酸素はルーティンに追加できない(目安セットが重量・回数前提のため。Issue #345)
+  if (isCardio(exercise)) {
     res.status(400).json({ error: 'invalid_exercise' })
     return
   }

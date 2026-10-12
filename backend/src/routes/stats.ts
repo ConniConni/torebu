@@ -64,7 +64,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
     // whereで絞っているためweightKgはnullではないが、型上はDecimal | nullのまま
     const weightKg = Number(set.weightKg)
     const dateKey = toDateKey(set.workout.performedAt)
-    volumeByDate.set(dateKey, (volumeByDate.get(dateKey) ?? 0) + weightKg * set.reps)
+    volumeByDate.set(dateKey, (volumeByDate.get(dateKey) ?? 0) + weightKg * (set.reps ?? 0))
   }
 
   const result = Array.from(volumeByDate.entries())
@@ -114,7 +114,7 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     const weightKg = Number(set.weightKg)
     const dateKey = toDateKey(set.workout.performedAt)
     const existing = byDate.get(dateKey)
-    const volumeKg = weightKg * set.reps
+    const volumeKg = weightKg * (set.reps ?? 0)
     if (existing) {
       existing.maxWeightKg = Math.max(existing.maxWeightKg, weightKg)
       existing.volumeKg += volumeKg
