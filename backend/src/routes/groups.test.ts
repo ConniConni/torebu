@@ -297,7 +297,16 @@ describe('GET /groups/:id/workouts', () => {
           {
             exerciseId,
             name: 'ベンチプレス',
-            sets: [{ id: ownerSet.id, setOrder: 1, weightKg: 60, reps: 10 }],
+            sets: [
+              {
+                id: ownerSet.id,
+                setOrder: 1,
+                weightKg: 60,
+                reps: 10,
+                distanceKm: null,
+                durationSec: null,
+              },
+            ],
           },
         ],
       }),

@@ -265,6 +265,7 @@ describe('POST /exercises', () => {
       muscleGroup: 'chest',
       muscleDetail: null,
       equipment: 'ダンベル',
+      speedUnit: null,
       createdBy: ownerId,
       mainMuscle: null,
       relatedMuscles: [],
