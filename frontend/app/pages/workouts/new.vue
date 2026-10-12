@@ -697,7 +697,7 @@ async function onGoToExercisePicker() {
                 <div v-if="groupFor(element.exerciseId)!.isCardio" class="overflow-x-auto">
                   <div class="min-w-[19rem] overflow-hidden rounded-lg">
                     <div
-                      class="grid grid-cols-[2rem_minmax(4.5rem,1fr)_minmax(8rem,1.4fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                      class="grid grid-cols-[2rem_minmax(5.25rem,1.3fr)_minmax(7.5rem,1.2fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">No.</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">距離</span>
@@ -710,7 +710,7 @@ async function onGoToExercisePicker() {
                         :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                       >
                         <div
-                          class="grid grid-cols-[2rem_minmax(4.5rem,1fr)_minmax(8rem,1.4fr)_2.25rem] items-center gap-x-2.5 px-3 pt-1.5"
+                          class="grid grid-cols-[2rem_minmax(5.25rem,1.3fr)_minmax(7.5rem,1.2fr)_2.25rem] items-center gap-x-2.5 px-3 pt-1.5"
                         >
                           <span
                             class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
@@ -724,7 +724,7 @@ async function onGoToExercisePicker() {
                               step="0.01"
                               min="0"
                               aria-label="距離（km）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">km</span>
@@ -736,7 +736,7 @@ async function onGoToExercisePicker() {
                               inputmode="numeric"
                               min="0"
                               aria-label="時間（分）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">分</span>
@@ -747,7 +747,7 @@ async function onGoToExercisePicker() {
                               min="0"
                               max="59"
                               aria-label="時間（秒）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">秒</span>
