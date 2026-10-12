@@ -727,7 +727,8 @@ workoutsRouter.patch('/:id/sets/:setId', requireAuth, async (req, res) => {
     toWeightNumber(set.weightKg) !== toWeightNumber(updated.weightKg) ||
     (set.reps === 0 && (updated.reps ?? 0) > 0)
   // 有酸素は自己ベストの判定対象外(Issue #345)
-  const personalBest = weightChanged && !isCardio(set.exercise) ? await evaluatePersonalBest(userId, updated) : null
+  const personalBest =
+    weightChanged && !isCardio(set.exercise) ? await evaluatePersonalBest(userId, updated) : null
 
   res.status(200).json({ ...serializeSet(updated), personalBest })
 })

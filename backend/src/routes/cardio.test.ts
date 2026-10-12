@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt'
 import { app } from '../index.js'
 import { prisma } from '../prisma.js'
 import { todayInJst } from '../lib/date.js'
+import officialExercises from '../../prisma/seed-data/official-exercises.json' with { type: 'json' }
 
 // 有酸素運動の記録(Issue #345 PR1)。セットAPIの項目の切り替え、レスポンス、
 // ランキング・ルーティン・自己ベストからの除外、記録日数への算入のテスト
@@ -92,7 +93,13 @@ async function createPastCardioDay(userId: string, performedAt: string) {
     data: { userId, performedAt: new Date(`${performedAt}T00:00:00Z`) },
   })
   await prisma.workoutSet.create({
-    data: { workoutId: workout.id, exerciseId: runId, setOrder: 1, distanceKm: 5, durationSec: 1800 },
+    data: {
+      workoutId: workout.id,
+      exerciseId: runId,
+      setOrder: 1,
+      distanceKm: 5,
+      durationSec: 1800,
+    },
   })
   return workout
 }
@@ -218,7 +225,9 @@ describe('PATCH /workouts/:id/sets/:setId（有酸素）', () => {
     const agent = await login(meEmail)
     const { workoutId, setId } = await createRunSet(agent)
 
-    const res = await agent.patch(`/workouts/${workoutId}/sets/${setId}`).send({ durationSec: null })
+    const res = await agent
+      .patch(`/workouts/${workoutId}/sets/${setId}`)
+      .send({ durationSec: null })
 
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ distanceKm: 5, durationSec: null })
@@ -394,16 +403,18 @@ describe('GET /exercises', () => {
     expect(byId(strengthId).speedUnit).toBeNull()
   })
 
-  it('seedの公式有酸素3種目（ランニング・ウォーキング・エアロバイク）の速さの単位が正しい', async () => {
-    const agent = await login(meEmail)
+  // DBのseed状態に依存しないよう、seedのデータソース(JSON)を直接検証する
+  it('seedの公式有酸素3種目（ランニング・ウォーキング・エアロバイク）の速さの単位が正しい', () => {
+    const cardio = (
+      officialExercises as { main_body_part: string; name_ja: string; speed_unit?: string }[]
+    ).filter((e) => e.main_body_part === '有酸素')
 
-    const res = await agent.get('/exercises')
-
-    const official = (name: string) =>
-      res.body.find((e: { name: string; createdBy: string | null }) => e.name === name && !e.createdBy)
-    expect(official('ランニング')).toMatchObject({ muscleGroup: 'cardio', speedUnit: 'pace' })
-    expect(official('ウォーキング')).toMatchObject({ muscleGroup: 'cardio', speedUnit: 'pace' })
-    expect(official('エアロバイク')).toMatchObject({ muscleGroup: 'cardio', speedUnit: 'kmh' })
+    expect(cardio.map((e) => [e.name_ja, e.speed_unit])).toEqual([
+      ['ランニング', 'pace'],
+      ['ウォーキング', 'pace'],
+      ['エアロバイク', 'kmh'],
+    ])
+    expect(officialExercises).toHaveLength(81)
   })
 
   it('lastSetに有酸素の前回の距離・時間を返す', async () => {
@@ -583,8 +594,12 @@ describe('ルーティン・カスタム種目での拒否', () => {
   it('POST /exercises で muscleGroup: cardio のカスタム種目は作れない', async () => {
     const agent = await login(meEmail)
 
-    const cardio = await agent.post('/exercises').send({ name: '自作の有酸素', muscleGroup: 'cardio' })
-    const strength = await agent.post('/exercises').send({ name: '自作の筋トレ', muscleGroup: 'abs' })
+    const cardio = await agent
+      .post('/exercises')
+      .send({ name: '自作の有酸素', muscleGroup: 'cardio' })
+    const strength = await agent
+      .post('/exercises')
+      .send({ name: '自作の筋トレ', muscleGroup: 'abs' })
 
     expect(cardio.status).toBe(400)
     expect(strength.status).toBe(201)

@@ -429,7 +429,10 @@ groupsRouter.delete('/:id', requireAuth, async (req, res) => {
 // 集計対象は公式種目のみ(createdBy IS NULL)。stats.ts(Phase3-C)と同じ方針。
 // 有酸素は重量×回数で測れないため除外する(有酸素のランキングは別Issue。Issue #345)。
 // ただし参加・継続のスタンプ(attendanceStamp)は種目に関係なくセットがある日を数えるので、有酸素の日も入る
-const RANKING_OFFICIAL_EXERCISE_FILTER = { createdBy: null, muscleGroup: { not: 'cardio' as const } }
+const RANKING_OFFICIAL_EXERCISE_FILTER = {
+  createdBy: null,
+  muscleGroup: { not: 'cardio' as const },
+}
 
 // 種目別ランキングのデフォルト種目選定に使う「直近」の窓。②ホーム・⑨マイページの期間別サマリー
 // (直近28日、spec.md「記録日数」実装メモ参照)と同じ定義に揃え、アプリ内で「直近」の意味を統一する
