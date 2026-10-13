@@ -746,6 +746,16 @@ async function onGoToExercisePicker() {
                     }}
                   </button>
                 </div>
+                <!-- 前回の内容（Issue #354）。筋トレ種目で前回がある場合だけ薄く1行で出す -->
+                <p
+                  v-if="
+                    !groupFor(element.exerciseId)!.isCardio &&
+                    previousSessionFor(element.exerciseId)
+                  "
+                  class="mb-2 text-xs text-gray-400 dark:text-muted"
+                >
+                  {{ formatPreviousSession(previousSessionFor(element.exerciseId)!, targetDate) }}
+                </p>
                 <!-- セット数が増えると縦に伸びて見づらいため、種目単位でヘッダー帯を1回だけ出し、
                    各セットは1行のコンパクトな表形式にする（ユーザー指摘、2026-09-05）。重量・回数の列は
                    frで種目カードの幅いっぱいまで伸ばし、右端に余白が余らないようにしている。それぞれの
@@ -758,16 +768,6 @@ async function onGoToExercisePicker() {
                      無いため1欄の「分:秒」入力にはしない)を入力し、距離・時間がそろったら行の下に速さ
                      （ペース／時速。単位は種目のspeedUnit）を表示する。保存の仕組みは筋トレと同じ
                      （常時入力欄＋blur自動保存） -->
-                <!-- 前回の内容（Issue #354）。筋トレ種目で前回がある場合だけ薄く1行で出す -->
-                <p
-                  v-if="
-                    !groupFor(element.exerciseId)!.isCardio &&
-                    previousSessionFor(element.exerciseId)
-                  "
-                  class="mb-2 text-xs text-gray-400 dark:text-muted"
-                >
-                  {{ formatPreviousSession(previousSessionFor(element.exerciseId)!, targetDate) }}
-                </p>
                 <div v-if="groupFor(element.exerciseId)!.isCardio" class="overflow-x-auto">
                   <div class="min-w-[19rem] overflow-hidden rounded-lg">
                     <div
@@ -879,12 +879,14 @@ async function onGoToExercisePicker() {
                           <span
                             v-if="setComparisonFor(element.exerciseId, i) === 'up'"
                             class="text-sm font-bold text-brand-600 dark:text-accent"
+                            role="img"
                             aria-label="前回より伸びた"
                             >↑</span
                           >
                           <span
                             v-else-if="setComparisonFor(element.exerciseId, i) === 'same'"
                             class="text-sm font-bold text-gray-400 dark:text-muted"
+                            role="img"
                             aria-label="前回と同じ"
                             >＝</span
                           >
