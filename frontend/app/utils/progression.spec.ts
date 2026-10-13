@@ -1,35 +1,71 @@
 import { describe, expect, it } from 'vitest'
-import { beatsPrevious, compareSet, formatPreviousSession } from './progression'
+import { beatsPrevious, beatsTopSet, findTopSet, formatPreviousSession } from './progression'
 
-describe('compareSet', () => {
-  it('重量が上なら回数が減っていても↑', () => {
-    expect(compareSet({ weightKg: 62.5, reps: 6 }, { weightKg: 60, reps: 8 })).toBe('up')
+describe('findTopSet', () => {
+  it('加重セットのうち最も重いセット、同じ重量なら回数が多いセット', () => {
+    expect(
+      findTopSet([
+        { weightKg: 40, reps: 10 },
+        { weightKg: 60, reps: 7 },
+        { weightKg: 60, reps: 8 },
+        { weightKg: 50, reps: 12 },
+      ]),
+    ).toEqual({ weightKg: 60, reps: 8 })
   })
-  it('同じ重量で回数が上なら↑', () => {
-    expect(compareSet({ weightKg: 60, reps: 9 }, { weightKg: 60, reps: 8 })).toBe('up')
+  it('自重セットが混ざっていても加重セットから選ぶ', () => {
+    expect(
+      findTopSet([
+        { weightKg: null, reps: 20 },
+        { weightKg: 5, reps: 8 },
+      ]),
+    ).toEqual({ weightKg: 5, reps: 8 })
   })
-  it('重量・回数とも同じなら＝', () => {
-    expect(compareSet({ weightKg: 60, reps: 8 }, { weightKg: 60, reps: 8 })).toBe('same')
+  it('全セット自重なら回数が最も多いセット', () => {
+    expect(
+      findTopSet([
+        { weightKg: null, reps: 10 },
+        { weightKg: null, reps: 12 },
+      ]),
+    ).toEqual({ weightKg: null, reps: 12 })
   })
-  it('下がった場合は印なし', () => {
-    expect(compareSet({ weightKg: 57.5, reps: 10 }, { weightKg: 60, reps: 8 })).toBeNull()
-    expect(compareSet({ weightKg: 60, reps: 7 }, { weightKg: 60, reps: 8 })).toBeNull()
+  it('回数0（失敗した挑戦）はトップにしない。候補が無ければnull', () => {
+    expect(
+      findTopSet([
+        { weightKg: 70, reps: 0 },
+        { weightKg: 60, reps: 8 },
+      ]),
+    ).toEqual({ weightKg: 60, reps: 8 })
+    expect(findTopSet([{ weightKg: 70, reps: 0 }])).toBeNull()
+    expect(findTopSet([])).toBeNull()
   })
-  it('両方とも自重なら回数だけで比べる', () => {
-    expect(compareSet({ weightKg: null, reps: 12 }, { weightKg: null, reps: 10 })).toBe('up')
-    expect(compareSet({ weightKg: null, reps: 10 }, { weightKg: null, reps: 10 })).toBe('same')
-    expect(compareSet({ weightKg: null, reps: 9 }, { weightKg: null, reps: 10 })).toBeNull()
+})
+
+describe('beatsTopSet', () => {
+  const top = { weightKg: 60, reps: 8 }
+  it('重量が上なら回数が減っていてもtrue', () => {
+    expect(beatsTopSet({ weightKg: 62.5, reps: 6 }, top)).toBe(true)
   })
-  it('自重と加重が混ざっていれば印なし', () => {
-    expect(compareSet({ weightKg: 10, reps: 10 }, { weightKg: null, reps: 10 })).toBeNull()
-    expect(compareSet({ weightKg: null, reps: 20 }, { weightKg: 10, reps: 10 })).toBeNull()
+  it('同じ重量で回数が上ならtrue', () => {
+    expect(beatsTopSet({ weightKg: 60, reps: 9 }, top)).toBe(true)
   })
-  it('どちらかの回数が0（失敗した挑戦）なら印なし', () => {
-    expect(compareSet({ weightKg: 70, reps: 0 }, { weightKg: 60, reps: 8 })).toBeNull()
-    expect(compareSet({ weightKg: 60, reps: 8 }, { weightKg: 70, reps: 0 })).toBeNull()
+  it('同じ・下がった場合はfalse（＝や下がった印は出さない）', () => {
+    expect(beatsTopSet({ weightKg: 60, reps: 8 }, top)).toBe(false)
+    expect(beatsTopSet({ weightKg: 60, reps: 7 }, top)).toBe(false)
+    expect(beatsTopSet({ weightKg: 57.5, reps: 12 }, top)).toBe(false)
   })
-  it('前回に同じ番目のセットが無ければ印なし', () => {
-    expect(compareSet({ weightKg: 60, reps: 8 }, undefined)).toBeNull()
+  it('ウォームアップ（トップより軽いセット）は回数が多くてもfalse', () => {
+    expect(beatsTopSet({ weightKg: 40, reps: 15 }, top)).toBe(false)
+  })
+  it('トップが自重なら、今回も自重のときだけ回数で比べる', () => {
+    const bodyweightTop = { weightKg: null, reps: 10 }
+    expect(beatsTopSet({ weightKg: null, reps: 11 }, bodyweightTop)).toBe(true)
+    expect(beatsTopSet({ weightKg: null, reps: 10 }, bodyweightTop)).toBe(false)
+    expect(beatsTopSet({ weightKg: 5, reps: 10 }, bodyweightTop)).toBe(false)
+    expect(beatsTopSet({ weightKg: null, reps: 30 }, top)).toBe(false)
+  })
+  it('今回の回数が0、またはトップが無ければfalse', () => {
+    expect(beatsTopSet({ weightKg: 70, reps: 0 }, top)).toBe(false)
+    expect(beatsTopSet({ weightKg: 60, reps: 8 }, null)).toBe(false)
   })
 })
 

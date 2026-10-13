@@ -14,30 +14,38 @@ export interface PreviousSession {
   sets: StrengthSetValues[]
 }
 
-// 今回のセットと、前回の「並び順で同じ番目」のセットとの比較結果。
-// 'up'＝伸びた（↑）、'same'＝同じ（＝）、null＝印なし。下がったことは表示しない方針（ユーザー判断）のため
-// 「下がった」は区別せずnullにまとめる
-export type SetComparison = 'up' | 'same' | null
-
-export function compareSet(
-  current: StrengthSetValues,
-  previous: StrengthSetValues | undefined,
-): SetComparison {
-  if (!previous || current.reps === null || previous.reps === null) return null
-  // 回数0は失敗した挑戦の記録のため、比べても意味が無い
-  if (current.reps === 0 || previous.reps === 0) return null
-
-  // 両方とも自重なら回数だけで比べる。自重と加重が混ざっている場合は比べようが無いので印なし
-  if (current.weightKg === null || previous.weightKg === null) {
-    if (current.weightKg !== null || previous.weightKg !== null) return null
-    if (current.reps > previous.reps) return 'up'
-    return current.reps === previous.reps ? 'same' : null
+// 前回のトップセット。各セットはこれと比べる（並び順の位置では比べない。ウォームアップの本数が日によって
+// 違うと位置がずれ、意図しない↑が出るため。ユーザー判断）。
+// 加重セットがあれば最も重いセット（同じ重量なら回数が多い方）、全セット自重なら回数が最も多いセット。
+// 回数0（失敗した挑戦）はトップにしない。候補が無ければnull
+export function findTopSet(sets: StrengthSetValues[]): StrengthSetValues | null {
+  const candidates = sets.filter((s) => s.reps !== null && s.reps > 0)
+  const weighted = candidates.filter((s) => s.weightKg !== null)
+  const pool = weighted.length > 0 ? weighted : candidates
+  let top: StrengthSetValues | null = null
+  for (const set of pool) {
+    if (
+      !top ||
+      (set.weightKg ?? 0) > (top.weightKg ?? 0) ||
+      ((set.weightKg ?? 0) === (top.weightKg ?? 0) && set.reps! > top.reps!)
+    ) {
+      top = set
+    }
   }
+  return top
+}
 
-  if (current.weightKg > previous.weightKg) return 'up'
-  if (current.weightKg < previous.weightKg) return null
-  if (current.reps > previous.reps) return 'up'
-  return current.reps === previous.reps ? 'same' : null
+// 今回のセットが前回のトップセットを上回ったか（↑を出すか）。重量が上、または同じ重量で回数が上ならtrue。
+// トップが自重（前回が全セット自重）なら、今回も自重のときだけ回数で比べる。自重と加重が混ざっている・
+// 今回の回数が0・前回のトップが無い場合はfalse。同じ・下がった場合も印は出さない（ユーザー判断）
+export function beatsTopSet(current: StrengthSetValues, top: StrengthSetValues | null): boolean {
+  if (!top || top.reps === null || current.reps === null || current.reps === 0) return false
+  if (current.weightKg === null || top.weightKg === null) {
+    if (current.weightKg !== null || top.weightKg !== null) return false
+    return current.reps > top.reps
+  }
+  if (current.weightKg !== top.weightKg) return current.weightKg > top.weightKg
+  return current.reps > top.reps
 }
 
 function sumReps(sets: StrengthSetValues[]): number {

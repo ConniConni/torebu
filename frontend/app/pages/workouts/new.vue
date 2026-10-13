@@ -330,7 +330,7 @@ function personalBestFor(exerciseId: string) {
 }
 
 // --- 前回比（Issue #354） ---
-// 筋トレ種目カードに、前回（対象日より前でその種目のセットがある直近の日付）の内容・各セットの↑／＝・
+// 筋トレ種目カードに、前回（対象日より前でその種目のセットがある直近の日付）の内容・前回のトップセットを上回ったセットの↑・
 // 「前回超え！」を出す。前回はGET /exercisesのlastSet（1セット分のみ・useStateでセッション中キャッシュ）
 // ではなく専用APIで種目ごとに取り、このページのローカル状態として持つ（useStateには載せない）。
 // 対象日はページを開いた時点で決まり、別の日の③へは②ホームを経由して遷移する（ページが作り直される）
@@ -374,13 +374,15 @@ function previousSessionFor(exerciseId: string) {
   return previous && previous.sets.length > 0 ? previous : null
 }
 
-// 比べるのは保存済みの値（session.value.sets）で、入力途中の値ではない（blur保存のたびに更新される）。
-// 前回の「並び順でindex番目」のセットと比べる（setOrderの値ではなく位置で対応させる）
-function setComparisonFor(exerciseId: string, index: number): SetComparison {
+// 前回のトップセット（findTopSet参照）。各セットはこれと比べる
+function previousTopSetFor(exerciseId: string) {
   const previous = previousSessionFor(exerciseId)
-  const current = groupFor(exerciseId)?.sets[index]
-  if (!previous || !current) return null
-  return compareSet(current, previous.sets[index])
+  return previous ? findTopSet(previous.sets) : null
+}
+
+// 比べるのは保存済みの値（session.value.sets）で、入力途中の値ではない（blur保存のたびに更新される）
+function isSetUpFromPrevious(set: WorkoutSetItem) {
+  return beatsTopSet(set, previousTopSetFor(set.exerciseId))
 }
 
 function beatsPreviousFor(exerciseId: string) {
@@ -870,25 +872,19 @@ async function onGoToExercisePicker() {
                         class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
                         :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                       >
-                        <!-- 前回の同じ番目のセットとの比較（Issue #354）。下がった場合は何も出さない -->
-                        <span class="flex items-baseline justify-center gap-0.5">
+                        <!-- 前回のトップセットを上回ったら↑（Issue #354）。同じ・下がった場合は何も出さない。
+                             ↑は数字の右に絶対配置で添え、↑の有無で数字の中央位置がずれないようにする -->
+                        <span class="flex justify-center">
                           <span
-                            class="text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                            >{{ set.setOrder }}</span
-                          >
-                          <span
-                            v-if="setComparisonFor(element.exerciseId, i) === 'up'"
-                            class="text-sm font-bold text-brand-600 dark:text-accent"
-                            role="img"
-                            aria-label="前回より伸びた"
-                            >↑</span
-                          >
-                          <span
-                            v-else-if="setComparisonFor(element.exerciseId, i) === 'same'"
-                            class="text-sm font-bold text-gray-400 dark:text-muted"
-                            role="img"
-                            aria-label="前回と同じ"
-                            >＝</span
+                            class="relative text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                            >{{ set.setOrder
+                            }}<span
+                              v-if="isSetUpFromPrevious(set)"
+                              role="img"
+                              class="absolute left-full top-1/2 ml-0.5 -translate-y-1/2 text-sm leading-none text-brand-600 dark:text-accent"
+                              aria-label="前回のトップセットより伸びた"
+                              >↑</span
+                            ></span
                           >
                         </span>
                         <span class="flex min-w-0 items-baseline gap-1.5">
