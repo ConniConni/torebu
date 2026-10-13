@@ -177,13 +177,25 @@ describe('GET /exercises', () => {
       data: { userId: ownerId, performedAt: new Date('2026-08-01') },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: olderWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 40, reps: 10 },
+      data: {
+        workoutId: olderWorkout.id,
+        exerciseId: exercise.id,
+        setOrder: 1,
+        weightKg: 40,
+        reps: 10,
+      },
     })
     const newerWorkout = await prisma.workout.create({
       data: { userId: ownerId, performedAt: new Date('2026-09-01') },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: newerWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 50, reps: 8 },
+      data: {
+        workoutId: newerWorkout.id,
+        exerciseId: exercise.id,
+        setOrder: 1,
+        weightKg: 50,
+        reps: 8,
+      },
     })
     await prisma.workoutSet.create({
       data: { workoutId: newerWorkout.id, exerciseId: exercise.id, setOrder: 2, reps: 12 },
@@ -206,7 +218,13 @@ describe('GET /exercises', () => {
       data: { userId: ownerId, performedAt: new Date('2026-09-01'), deletedAt: new Date() },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: deletedWorkout.id, exerciseId: exercise.id, setOrder: 1, weightKg: 99, reps: 1 },
+      data: {
+        workoutId: deletedWorkout.id,
+        exerciseId: exercise.id,
+        setOrder: 1,
+        weightKg: 99,
+        reps: 1,
+      },
     })
 
     const agent = await loginAsOwner()
@@ -360,5 +378,194 @@ describe('DELETE /exercises/:id', () => {
     const res = await agent.delete(`/exercises/${exercise.id}`)
 
     expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /exercises/:exerciseId/previous-session', () => {
+  async function createWorkoutWithSets(
+    userId: string,
+    exerciseId: string,
+    performedAt: string,
+    sets: Array<{ weightKg?: number; reps: number }>,
+    extra: { createdAt?: Date; deletedAt?: Date } = {},
+  ) {
+    const workout = await prisma.workout.create({
+      data: { userId, performedAt: new Date(performedAt), ...extra },
+    })
+    for (const [index, set] of sets.entries()) {
+      await prisma.workoutSet.create({
+        data: { workoutId: workout.id, exerciseId, setOrder: index + 1, ...set },
+      })
+    }
+    return workout
+  }
+
+  it('未ログインなら401を返す', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+
+    const res = await request(app).get(
+      `/exercises/${exercise.id}/previous-session?before=2026-10-14`,
+    )
+
+    expect(res.status).toBe(401)
+  })
+
+  it('beforeが無い・不正な日付なら400を返す', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+    const agent = await loginAsOwner()
+
+    for (const query of ['', '?before=2026/10/14', '?before=2026-02-30']) {
+      const res = await agent.get(`/exercises/${exercise.id}/previous-session${query}`)
+      expect(res.status).toBe(400)
+      expect(res.body).toMatchObject({ error: 'invalid_request' })
+    }
+  })
+
+  it('対象日より前の直近の日付の全セットを並び順どおりに返す(他人のworkoutは混ざらない)', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-01', [{ weightKg: 50, reps: 10 }])
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-10', [
+      { weightKg: 60, reps: 8 },
+      { weightKg: 60, reps: 8 },
+      { weightKg: 57.5, reps: 7 },
+    ])
+    // 他人の記録の方が対象日に近くても見ない
+    await createWorkoutWithSets(otherId, exercise.id, '2026-10-12', [{ weightKg: 100, reps: 1 }])
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      performedAt: '2026-10-10',
+      sets: [
+        { weightKg: 60, reps: 8 },
+        { weightKg: 60, reps: 8 },
+        { weightKg: 57.5, reps: 7 },
+      ],
+    })
+  })
+
+  it('対象日当日のセットは含めない', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-10', [{ weightKg: 60, reps: 8 }])
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-14', [{ weightKg: 70, reps: 5 }])
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.body).toEqual({ performedAt: '2026-10-10', sets: [{ weightKg: 60, reps: 8 }] })
+  })
+
+  it('削除済みのworkoutは見ない', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-05', [{ weightKg: 55, reps: 10 }])
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-10', [{ weightKg: 99, reps: 1 }], {
+      deletedAt: new Date(),
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.body).toEqual({ performedAt: '2026-10-05', sets: [{ weightKg: 55, reps: 10 }] })
+  })
+
+  it('同じ日に複数のworkoutがあれば、workoutの作成順→setOrder順に連結する', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+    // 挿入順・setOrderの値に頼らず作成日時で並ぶことを確かめるため、後から作られた方を先に登録する
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-10', [{ weightKg: 40, reps: 12 }], {
+      createdAt: new Date('2026-10-10T12:00:00Z'),
+    })
+    await createWorkoutWithSets(
+      ownerId,
+      exercise.id,
+      '2026-10-10',
+      [{ weightKg: 60, reps: 8 }, { reps: 15 }],
+      { createdAt: new Date('2026-10-10T09:00:00Z') },
+    )
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.body).toEqual({
+      performedAt: '2026-10-10',
+      sets: [
+        { weightKg: 60, reps: 8 },
+        { weightKg: null, reps: 15 },
+        { weightKg: 40, reps: 12 },
+      ],
+    })
+  })
+
+  it('前回が無ければnullを返す', async () => {
+    const exercise = await createExercise({
+      data: { name: '前回テスト種目', muscleGroup: 'chest' },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('null')
+  })
+
+  it('自分のカスタム種目は削除済みでも引ける', async () => {
+    const exercise = await createExercise({
+      data: {
+        name: '削除済み自作種目',
+        muscleGroup: 'arms',
+        createdBy: ownerId,
+        deletedAt: new Date(),
+      },
+    })
+    await createWorkoutWithSets(ownerId, exercise.id, '2026-10-10', [{ weightKg: 20, reps: 10 }])
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${exercise.id}/previous-session?before=2026-10-14`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ performedAt: '2026-10-10', sets: [{ weightKg: 20, reps: 10 }] })
+  })
+
+  it('他人のカスタム種目・存在しない種目は404', async () => {
+    const othersExercise = await createExercise({
+      data: { name: '他人の自作種目', muscleGroup: 'arms', createdBy: otherId },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(
+      `/exercises/${othersExercise.id}/previous-session?before=2026-10-14`,
+    )
+    const missing = await agent.get(
+      '/exercises/00000000-0000-0000-0000-000000000000/previous-session?before=2026-10-14',
+    )
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'not_found' })
+    expect(missing.status).toBe(404)
+  })
+
+  it('有酸素の種目は400 invalid_exercise', async () => {
+    const cardio = await createExercise({
+      data: { name: 'ランニング(前回テスト)', muscleGroup: 'cardio', speedUnit: 'pace' },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/exercises/${cardio.id}/previous-session?before=2026-10-14`)
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'invalid_exercise' })
   })
 })

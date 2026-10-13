@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { MuscleGroup } from '../generated/prisma/enums.js'
+import { isCardio } from '../lib/exercise.js'
 
 export const exercisesRouter = Router()
 
@@ -140,6 +141,84 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     deletedAt: exercise.deletedAt,
     // 作成直後なので実績はまだ無い。GET /exercisesとレスポンスの形を揃えるため含める
     lastSet: null,
+  })
+})
+
+const previousSessionQuerySchema = z.object({
+  // 対象日(③で開いている日)。実在しない暦日(2026-02-30等)はDateにすると翌月へ繰り上がるため、
+  // 文字列に戻して一致するかで弾く
+  before: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+      const date = new Date(value)
+      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    }),
+})
+
+// GET /exercises/:exerciseId/previous-session?before=YYYY-MM-DD
+// ③記録作成の前回比(Issue #354)用。対象日より前の日付のうち、その種目のセットがある直近の日付の
+// 全セットを返す。「前回」はworkout単位ではなく日付単位で決めるため、対象日のworkoutがまだ無い
+// (③を開いただけ)状態でも引ける。workoutsには日付の一意制約が無いため、同じ日に複数のworkoutが
+// あれば作成順(createdAt)→setOrder順に連結する。削除済みのworkoutは見ない。
+// GET /exercisesのlastSet(1セット分のみ・useStateでキャッシュ)では過去日を開いたときに
+// 「その日から見た前回」にならないため、別のAPIにした
+exercisesRouter.get('/:exerciseId/previous-session', requireAuth, async (req, res) => {
+  const parsed = previousSessionQuerySchema.safeParse(req.query)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const userId = req.session.userId
+  const exerciseId = req.params.exerciseId as string
+
+  // 見える種目はGET /exercisesと同じ「公式 or 自分のカスタム」。削除済みのカスタム種目も過去記録の
+  // 比較には使えるため含める(workouts.ts/routines.tsのfindVisibleExerciseは新規追加用で、削除済みの
+  // 扱いが異なるため使わない)。有酸素かどうかの判定より先に見えるかを確かめ、他人の種目の存在を隠す
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: exerciseId, OR: [{ createdBy: null }, { createdBy: userId }] },
+  })
+  if (!exercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  // 前回比は重量・回数の比較のため、有酸素は対象外(POST /routines/:id/exercisesと同じ扱い)
+  if (isCardio(exercise)) {
+    res.status(400).json({ error: 'invalid_exercise' })
+    return
+  }
+
+  // performedAtは@db.Date(時刻なし)のため、UTCの0時として比較すれば日付の比較になる
+  const workoutFilter = { userId, deletedAt: null }
+  const latest = await prisma.workoutSet.findFirst({
+    where: {
+      exerciseId,
+      workout: { ...workoutFilter, performedAt: { lt: new Date(parsed.data.before) } },
+    },
+    select: { workout: { select: { performedAt: true } } },
+    orderBy: { workout: { performedAt: 'desc' } },
+  })
+  if (!latest) {
+    res.status(200).json(null)
+    return
+  }
+
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      exerciseId,
+      workout: { ...workoutFilter, performedAt: latest.workout.performedAt },
+    },
+    select: { weightKg: true, reps: true },
+    // createdAtが同時刻のworkoutでセットが入り混じらないよう、workoutIdでも区切る
+    orderBy: [{ workout: { createdAt: 'asc' } }, { workoutId: 'asc' }, { setOrder: 'asc' }],
+  })
+
+  res.status(200).json({
+    performedAt: latest.workout.performedAt.toISOString().slice(0, 10),
+    sets: sets.map((set) => ({
+      weightKg: set.weightKg === null ? null : Number(set.weightKg),
+      reps: set.reps,
+    })),
   })
 })
 
