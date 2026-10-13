@@ -420,11 +420,12 @@ async function maxOwnWeight(
 
 // 行為者(actorId)が現在所属するアクティブな全グループの、行為者以外のアクティブなメンバーのID
 // (受信者ごとに重複排除)。①自己ベスト・C1通算の節目・C2久しぶりの復帰で共通の宛先ロジック(Issue #253, #255)
-async function activeGroupRecipientIds(actorId: string) {
+async function activeGroupRecipientIds(actorId: string, opts?: { onlyOptedInRecorded?: boolean }) {
   const recipients = await prisma.groupMember.findMany({
     where: {
       leftAt: null,
       userId: { not: actorId },
+      ...(opts?.onlyOptedInRecorded ? { user: { notifyWorkoutRecorded: true } } : {}),
       group: { deletedAt: null, members: { some: { userId: actorId, leftAt: null } } },
     },
     distinct: ['userId'],
@@ -521,6 +522,36 @@ async function notifyComeback(actorId: string, workoutId: string) {
       recipientId,
       actorId,
       type: 'comeback' as const,
+      targetType: 'workout' as const,
+      targetId: workoutId,
+    })),
+  })
+}
+
+// 仲間への「記録した」通知(Issue #350)。その日付の最初のセットのときだけ呼ぶ。宛先は「記録の通知を
+// 受け取る」設定がオンの仲間のみ(作成時に絞る)。同じ記録について節目・復帰・自己ベスト・記録した
+// のいずれかの通知が既にあれば作らない(達成系のほうが情報が多く、同じ操作で重複して届くのを避ける。
+// 節目が通知済みで作られなかった場合などは通知が無いので、「記録した」が出る。セットを全部消して
+// 入れ直したときの重複もここで防ぐ)
+async function notifyWorkoutRecorded(actorId: string, workoutId: string) {
+  const existing = await prisma.notification.findFirst({
+    where: {
+      actorId,
+      targetId: workoutId,
+      type: { in: ['workout_recorded', 'personal_best', 'milestone', 'comeback'] },
+    },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const recipientIds = await activeGroupRecipientIds(actorId, { onlyOptedInRecorded: true })
+  if (recipientIds.length === 0) return
+
+  await prisma.notification.createMany({
+    data: recipientIds.map((recipientId) => ({
+      recipientId,
+      actorId,
+      type: 'workout_recorded' as const,
       targetType: 'workout' as const,
       targetId: workoutId,
     })),
@@ -660,6 +691,8 @@ workoutsRouter.post('/:id/sets', requireAuth, async (req, res) => {
   // 有酸素は自己ベストの判定対象外(Issue #345)
   const personalBest = isCardio(exercise) ? null : await evaluatePersonalBest(userId, set)
   const achievements = await evaluateAchievements(userId, workout, isFirstSetOfWorkout)
+  // 達成系の通知を作った後に呼ぶ(作られていれば「記録した」は作らない)
+  if (isFirstSetOfWorkout) await notifyWorkoutRecorded(userId, workout.id)
 
   res.status(201).json({
     ...serializeSet(set),

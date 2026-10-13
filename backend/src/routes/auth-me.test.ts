@@ -43,6 +43,7 @@ describe('GET /auth/me', () => {
       email: testEmail,
       displayName: 'meテストユーザー',
       gender: null,
+      notifyWorkoutRecorded: true,
     })
   })
 })
