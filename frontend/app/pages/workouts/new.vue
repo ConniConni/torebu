@@ -329,6 +329,67 @@ function personalBestFor(exerciseId: string) {
   return personalBest
 }
 
+// --- 前回比（Issue #354） ---
+// 筋トレ種目カードに、前回（対象日より前でその種目のセットがある直近の日付）の内容・各セットの↑／＝・
+// 「前回超え！」を出す。前回はGET /exercisesのlastSet（1セット分のみ・useStateでセッション中キャッシュ）
+// ではなく専用APIで種目ごとに取り、このページのローカル状態として持つ（useStateには載せない）。
+// 対象日はページを開いた時点で決まり、別の日の③へは②ホームを経由して遷移する（ページが作り直される）
+// ため、対象日が変わると自然に取り直しになる。値がnullなら前回なし。未取得（取得中・失敗）はキー無し
+const previousSessions = reactive(new Map<string, PreviousSession | null>())
+const fetchingPreviousSessions = new Set<string>()
+
+async function fetchPreviousSession(exerciseId: string) {
+  if (previousSessions.has(exerciseId) || fetchingPreviousSessions.has(exerciseId)) return
+  fetchingPreviousSessions.add(exerciseId)
+  try {
+    const previous = await $fetch<PreviousSession | null>(
+      `/api/exercises/${exerciseId}/previous-session`,
+      { query: { before: targetDate } },
+    )
+    previousSessions.set(exerciseId, previous)
+  } catch {
+    // 補助的な表示のため、取得に失敗しても何も出さない（次にカードが増減したときに取り直す）
+  } finally {
+    fetchingPreviousSessions.delete(exerciseId)
+  }
+}
+
+// 有酸素は前回比の対象外のため取りに行かない（APIも400を返す）
+const strengthExerciseIds = computed(() =>
+  groupedSets.value.filter((g) => !g.isCardio).map((g) => g.exerciseId),
+)
+// カードはClientOnlyの中にあり、SSR中に取りに行く必要は無いためマウント後から監視する
+onMounted(() => {
+  watch(
+    strengthExerciseIds,
+    (ids) => {
+      for (const id of ids) fetchPreviousSession(id)
+    },
+    { immediate: true },
+  )
+})
+
+function previousSessionFor(exerciseId: string) {
+  const previous = previousSessions.get(exerciseId)
+  return previous && previous.sets.length > 0 ? previous : null
+}
+
+// 比べるのは保存済みの値（session.value.sets）で、入力途中の値ではない（blur保存のたびに更新される）。
+// 前回の「並び順でindex番目」のセットと比べる（setOrderの値ではなく位置で対応させる）
+function setComparisonFor(exerciseId: string, index: number): SetComparison {
+  const previous = previousSessionFor(exerciseId)
+  const current = groupFor(exerciseId)?.sets[index]
+  if (!previous || !current) return null
+  return compareSet(current, previous.sets[index])
+}
+
+function beatsPreviousFor(exerciseId: string) {
+  const previous = previousSessionFor(exerciseId)
+  const current = groupFor(exerciseId)
+  if (!previous || !current) return false
+  return beatsPrevious(current.sets, previous.sets)
+}
+
 // --- 通算の節目（C1）・久しぶりの復帰（C2）のその場の表示（Issue #255） ---
 // 自己ベストと違い種目単位ではなくworkout（この日の記録）単位の達成のため、種目カードの中ではなく
 // ページ上部にまとめて表示する。personalBestsと同じくこのページのローカル状態のため、画面を
@@ -697,6 +758,16 @@ async function onGoToExercisePicker() {
                      無いため1欄の「分:秒」入力にはしない)を入力し、距離・時間がそろったら行の下に速さ
                      （ペース／時速。単位は種目のspeedUnit）を表示する。保存の仕組みは筋トレと同じ
                      （常時入力欄＋blur自動保存） -->
+                <!-- 前回の内容（Issue #354）。筋トレ種目で前回がある場合だけ薄く1行で出す -->
+                <p
+                  v-if="
+                    !groupFor(element.exerciseId)!.isCardio &&
+                    previousSessionFor(element.exerciseId)
+                  "
+                  class="mb-2 text-xs text-gray-400 dark:text-muted"
+                >
+                  {{ formatPreviousSession(previousSessionFor(element.exerciseId)!, targetDate) }}
+                </p>
                 <div v-if="groupFor(element.exerciseId)!.isCardio" class="overflow-x-auto">
                   <div class="min-w-[19rem] overflow-hidden rounded-lg">
                     <div
@@ -799,10 +870,25 @@ async function onGoToExercisePicker() {
                         class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
                         :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                       >
-                        <span
-                          class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
-                          >{{ set.setOrder }}</span
-                        >
+                        <!-- 前回の同じ番目のセットとの比較（Issue #354）。下がった場合は何も出さない -->
+                        <span class="flex items-baseline justify-center gap-0.5">
+                          <span
+                            class="text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
+                            >{{ set.setOrder }}</span
+                          >
+                          <span
+                            v-if="setComparisonFor(element.exerciseId, i) === 'up'"
+                            class="text-sm font-bold text-brand-600 dark:text-accent"
+                            aria-label="前回より伸びた"
+                            >↑</span
+                          >
+                          <span
+                            v-else-if="setComparisonFor(element.exerciseId, i) === 'same'"
+                            class="text-sm font-bold text-gray-400 dark:text-muted"
+                            aria-label="前回と同じ"
+                            >＝</span
+                          >
+                        </span>
                         <span class="flex min-w-0 items-baseline gap-1.5">
                           <input
                             v-model="setInputs[set.id]!.weight"
@@ -855,6 +941,15 @@ async function onGoToExercisePicker() {
                     {{ setDeleteErrors[set.id] }}
                   </p>
                 </template>
+                <!-- 前回超え（Issue #354）。自己ベストとは独立していて、両方そろえば並んで出る -->
+                <p
+                  v-if="
+                    !groupFor(element.exerciseId)!.isCardio && beatsPreviousFor(element.exerciseId)
+                  "
+                  class="mt-2 rounded-lg border border-brand-100 dark:border-accent/30 bg-brand-50 dark:bg-accent/10 px-3 py-2 text-sm font-semibold text-brand-700 dark:text-accent"
+                >
+                  ↑ 前回超え！
+                </p>
                 <p
                   v-if="personalBestFor(element.exerciseId)"
                   class="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
