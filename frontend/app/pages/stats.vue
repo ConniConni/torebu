@@ -10,8 +10,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
-import type { StatsRange } from '~/composables/useStats'
-import type { CardioHistoryPoint, ExerciseHistoryPoint } from '~/composables/useStats'
+import type { CardioHistoryPoint, ExerciseHistoryPoint, StatsRange } from '~/composables/useStats'
 import { formatPaceTick, type LineChartData } from '~/utils/statsChart'
 
 definePageMeta({ middleware: 'auth', layout: 'tabbar' })
