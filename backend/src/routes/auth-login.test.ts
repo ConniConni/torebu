@@ -37,6 +37,7 @@ describe('POST /auth/login', () => {
       email: testEmail,
       displayName: 'ログインテストユーザー',
       gender: null,
+      notifyWorkoutRecorded: true,
     })
     expect(res.headers['set-cookie']).toBeDefined()
   })

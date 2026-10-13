@@ -151,6 +151,7 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
     email: user.email,
     displayName: user.displayName,
     gender: user.gender,
+    notifyWorkoutRecorded: user.notifyWorkoutRecorded,
   })
 })
 
@@ -168,7 +169,29 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     email: user.email,
     displayName: user.displayName,
     gender: user.gender,
+    notifyWorkoutRecorded: user.notifyWorkoutRecorded,
   })
+})
+
+// 通知の受信設定(Issue #350)。今は「仲間の記録した通知を受け取るか」のみ。
+// 指定した項目だけを更新する(空のボディは弾く)
+const settingsSchema = z
+  .object({ notifyWorkoutRecorded: z.boolean().optional() })
+  .refine((data) => data.notifyWorkoutRecorded !== undefined, {
+    message: 'notifyWorkoutRecordedを指定してください',
+  })
+
+authRouter.patch('/me/settings', requireAuth, async (req, res) => {
+  const parsed = settingsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: z.treeifyError(parsed.error) })
+    return
+  }
+  const user = await prisma.user.update({
+    where: { id: req.session.userId! }, // requireAuthを通過済みのため必ず存在
+    data: { notifyWorkoutRecorded: parsed.data.notifyWorkoutRecorded },
+  })
+  res.status(200).json({ notifyWorkoutRecorded: user.notifyWorkoutRecorded })
 })
 
 // パスワード再設定トークンの有効期限

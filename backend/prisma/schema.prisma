@@ -66,6 +66,8 @@ model User {
   // 登録のきっかけ（Issue #314）。画像カードシェアの共有URL（/?ref=share）経由で来て登録した場合だけ
   // "share"が入る。効果測定用で、アプリの動作には使わない。値はPOST /auth/registerで許可リスト方式
   signupRef              String?     @map("signup_ref")
+  // 仲間の「記録した」通知(workout_recorded)を受け取るか(Issue #350)。既定はオン
+  notifyWorkoutRecorded  Boolean     @default(true) @map("notify_workout_recorded")
   createdAt              DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -297,6 +299,7 @@ enum NotificationType {
   personal_best // 種目ごとの最大重量の自己ベスト更新。宛先は行為者が所属するアクティブな全グループのメンバー(Issue #253)
   milestone // 通算の記録日数(セットがある日)が節目(10・30・50・100日、以降100日ごと、365日)に到達。宛先はpersonal_bestと同じ(Issue #255)
   comeback // 14日以上ぶりの記録(初回記録は除く)。宛先はpersonal_bestと同じ(Issue #255)
+  workout_recorded // 仲間がその日の最初のセットを記録した(筋トレ・有酸素とも)。宛先は設定がオンの仲間のみ(Issue #350)
 }
 
 enum NotificationTargetType {
