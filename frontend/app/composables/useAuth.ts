@@ -4,6 +4,8 @@ interface AuthUser {
   displayName: string
   // Issue #158より前に登録したユーザーはnullのままの場合がある
   gender: 'male' | 'female' | 'other' | 'no_answer' | null
+  // 仲間の「記録した」通知を受け取るか（Issue #350）。既定はオン
+  notifyWorkoutRecorded: boolean
 }
 
 interface RegisterPayload {
@@ -109,6 +111,16 @@ export function useAuth() {
     })
   }
 
+  // 通知の受信設定の変更（Issue #350）。成功したらuserにも反映する
+  async function updateNotifyWorkoutRecorded(value: boolean) {
+    const res = await $fetch<{ notifyWorkoutRecorded: boolean }>('/api/auth/me/settings', {
+      method: 'PATCH',
+      body: { notifyWorkoutRecorded: value },
+    })
+    if (user.value) user.value = { ...user.value, notifyWorkoutRecorded: res.notifyWorkoutRecorded }
+    return res.notifyWorkoutRecorded
+  }
+
   return {
     user,
     fetchMe,
@@ -118,5 +130,6 @@ export function useAuth() {
     requestPasswordReset,
     resetPassword,
     changePassword,
+    updateNotifyWorkoutRecorded,
   }
 }

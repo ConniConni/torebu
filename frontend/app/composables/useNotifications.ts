@@ -51,6 +51,17 @@ interface ComebackNotificationTarget {
   performedAt: string
 }
 
+// 仲間の「記録した」(workout_recorded)の対象(Issue #350)。personal_bestと同様、行為者と自分が
+// 今も同席しているグループがある場合のみAPIが返すため、groupIdは常にある。種目名は先頭1件
+interface WorkoutRecordedNotificationTarget {
+  type: 'workout_recorded'
+  workoutId: string
+  groupId: string
+  performedAt: string
+  exerciseName: string
+  exerciseCount: number
+}
+
 // 型名`Notification`はブラウザ標準のWeb Notifications APIとグローバルに衝突するため`AppNotification`にする
 export interface AppNotification {
   id: string
@@ -60,6 +71,8 @@ export interface AppNotification {
   // personal_best: 同じグループの仲間が種目の自己ベスト(最大重量)を更新したときの通知(#253)。5分遅延はmember_joinedと同じ
   // milestone: 同じグループの仲間が通算の記録日数の節目に到達したときの通知(#255)。5分遅延は同上
   // comeback: 同じグループの仲間が久しぶりに記録したときの通知(#255)。5分遅延は同上
+  // workout_recorded: 同じグループの仲間がその日の最初のセットを記録したときの通知(#350)。5分遅延は同上。
+  //   受け取る設定がオンの人にだけ作られ、未読バッジの件数には含まれない
   type:
     | 'reaction'
     | 'comment'
@@ -68,6 +81,7 @@ export interface AppNotification {
     | 'personal_best'
     | 'milestone'
     | 'comeback'
+    | 'workout_recorded'
   isRead: boolean
   createdAt: string
   actor: NotificationActor | null
@@ -77,6 +91,7 @@ export interface AppNotification {
     | PersonalBestNotificationTarget
     | MilestoneNotificationTarget
     | ComebackNotificationTarget
+    | WorkoutRecordedNotificationTarget
 }
 
 // Phase4: 通知(#144)。ポーリングはせず、画面遷移・読み込み時にAPIを叩くだけの方式

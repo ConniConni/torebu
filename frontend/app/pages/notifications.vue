@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Phase4: 通知一覧（#144）。自分の記録への「いいね」「コメント」、グループへの新メンバー参加（#249）、
-// 仲間の自己ベスト更新（#253）の通知を表示する。種類ごとの文面・アイコン・遷移先は下の関数で出し分ける。
+// 仲間の自己ベスト更新（#253）、仲間の「記録した」（#350）の通知を表示する。種類ごとの文面・アイコン・遷移先は下の関数で出し分ける。
 // 開いた時点で自動的に全件既読にする（個別の既読トグルは設けない。docs/spec.mdの実装メモ参照）
 definePageMeta({ middleware: 'auth' })
 
@@ -9,6 +9,15 @@ const { fetchNotifications, markAllAsRead } = useNotifications()
 const notifications = ref<AppNotification[] | null>(null)
 const pending = ref(true)
 const loadError = ref(false)
+
+// 「記録した」(workout_recorded)は反応・達成より控えめに、別セクションの軽量な1行で出す（Issue #350）。
+// 見出しは両方のセクションがあるときだけ出す（記録通知が無ければ従来どおりの見た目）
+const mainNotifications = computed(() =>
+  (notifications.value ?? []).filter((n) => n.type !== 'workout_recorded'),
+)
+const recordedNotifications = computed(() =>
+  (notifications.value ?? []).filter((n) => n.type === 'workout_recorded'),
+)
 
 async function load() {
   pending.value = true
@@ -32,6 +41,7 @@ function notificationText(n: AppNotification) {
     return `${actorName}さんが${n.target.exerciseName}で自己ベスト更新！`
   if (n.target.type === 'milestone')
     return `${actorName}さんが通算${n.target.days}日目のトレーニング！`
+  if (n.target.type === 'workout_recorded') return `${actorName}さんが記録しました`
   if (n.target.type === 'comeback') return `${actorName}さん、久しぶりのトレーニング！`
   if (n.type === 'member_joined') return `${actorName}さんがグループに参加しました`
   if (n.type === 'reaction') return `${actorName}さんがあなたの記録にいいねしました`
@@ -46,6 +56,10 @@ function targetSummary(n: AppNotification) {
   if (n.target.type === 'group') return n.target.groupName
   if (n.target.type === 'personal_best')
     return `${n.target.performedAt}の記録・${n.target.weightKg}kg`
+  if (n.target.type === 'workout_recorded') {
+    const rest = n.target.exerciseCount - 1
+    return rest > 0 ? `${n.target.exerciseName} 他${rest}種目` : n.target.exerciseName
+  }
   if (n.target.type === 'milestone' || n.target.type === 'comeback')
     return `${n.target.performedAt}の記録`
   const { performedAt, exerciseName, exerciseCount } = n.target
@@ -66,6 +80,7 @@ function targetLink(n: AppNotification) {
     n.target.type === 'personal_best' ||
     n.target.type === 'milestone' ||
     n.target.type === 'comeback' ||
+    n.target.type === 'workout_recorded' ||
     n.target.groupId
   ) {
     return `/groups/${n.target.groupId}/workouts?workout=${n.target.workoutId}`
@@ -90,82 +105,123 @@ function targetLink(n: AppNotification) {
           通知はまだありません
         </p>
 
-        <ul v-else class="flex flex-col gap-2">
-          <li v-for="n in notifications" :key="n.id">
-            <NuxtLink
-              :to="targetLink(n)"
-              class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
-              :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-accent/10'"
-            >
-              <span
-                v-if="!n.isRead"
-                class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-accent"
-              />
-              <span
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
+        <template v-else>
+          <p
+            v-if="recordedNotifications.length > 0 && mainNotifications.length > 0"
+            class="-mb-2 px-1 text-xs font-semibold text-gray-500 dark:text-muted"
+          >
+            あなたへ・仲間の達成
+          </p>
+          <ul v-if="mainNotifications.length > 0" class="flex flex-col gap-2">
+            <li v-for="n in mainNotifications" :key="n.id">
+              <NuxtLink
+                :to="targetLink(n)"
+                class="relative flex items-start gap-2.5 rounded-lg p-3 shadow"
+                :class="n.isRead ? 'bg-white dark:bg-panel' : 'bg-brand-50 dark:bg-accent/10'"
               >
-                {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
-              </span>
-              <HeartIcon
-                v-if="n.type === 'reaction'"
-                filled
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <TrophyIcon
-                v-else-if="n.type === 'personal_best'"
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <FlagIcon
-                v-else-if="n.type === 'milestone'"
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <ArrowPathIcon
-                v-else-if="n.type === 'comeback'"
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <GroupIcon
-                v-else-if="n.type === 'member_joined'"
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <CommentIcon
-                v-else
-                class="mt-0.5 h-4.5 w-4.5 shrink-0"
-                :class="
-                  n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
-                "
-              />
-              <div class="min-w-0 flex-1">
-                <p
-                  class="text-sm leading-relaxed"
-                  :class="n.isRead ? 'text-gray-700 dark:text-ink' : 'text-gray-900 dark:text-ink'"
+                <span
+                  v-if="!n.isRead"
+                  class="absolute top-3.5 right-3 h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-accent"
+                />
+                <span
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-accent/15 text-xs font-semibold text-brand-700 dark:text-accent"
                 >
-                  {{ notificationText(n) }}
-                </p>
-                <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
-                  {{ targetSummary(n) }}
-                </p>
-                <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
-                  {{ formatRelativeTime(n.createdAt) }}
-                </p>
-              </div>
-            </NuxtLink>
-          </li>
-        </ul>
+                  {{ (n.actor?.displayName ?? '?').slice(0, 1) }}
+                </span>
+                <HeartIcon
+                  v-if="n.type === 'reaction'"
+                  filled
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <TrophyIcon
+                  v-else-if="n.type === 'personal_best'"
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <FlagIcon
+                  v-else-if="n.type === 'milestone'"
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <ArrowPathIcon
+                  v-else-if="n.type === 'comeback'"
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <GroupIcon
+                  v-else-if="n.type === 'member_joined'"
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <CommentIcon
+                  v-else
+                  class="mt-0.5 h-4.5 w-4.5 shrink-0"
+                  :class="
+                    n.isRead ? 'text-gray-400 dark:text-muted' : 'text-brand-600 dark:text-accent'
+                  "
+                />
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="text-sm leading-relaxed"
+                    :class="
+                      n.isRead ? 'text-gray-700 dark:text-ink' : 'text-gray-900 dark:text-ink'
+                    "
+                  >
+                    {{ notificationText(n) }}
+                  </p>
+                  <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-muted">
+                    {{ targetSummary(n) }}
+                  </p>
+                  <p class="mt-1 text-[11px] text-gray-400 dark:text-muted">
+                    {{ formatRelativeTime(n.createdAt) }}
+                  </p>
+                </div>
+              </NuxtLink>
+            </li>
+          </ul>
+
+          <template v-if="recordedNotifications.length > 0">
+            <p
+              v-if="mainNotifications.length > 0"
+              class="-mb-2 px-1 text-xs font-semibold text-gray-500 dark:text-muted"
+            >
+              みんなの記録
+            </p>
+            <ul class="flex flex-col">
+              <li v-for="n in recordedNotifications" :key="n.id">
+                <NuxtLink
+                  :to="targetLink(n)"
+                  class="flex items-center gap-2 border-b border-gray-100 dark:border-white/5 px-1 py-2 text-xs text-gray-600 dark:text-muted hover:text-brand-700 dark:hover:text-accent"
+                >
+                  <span class="min-w-0 flex-1 truncate">
+                    {{ notificationText(n) }}・{{ targetSummary(n) }}
+                  </span>
+                  <span class="shrink-0 text-[11px] text-gray-400 dark:text-muted">
+                    {{ formatRelativeTime(n.createdAt) }}
+                  </span>
+                </NuxtLink>
+              </li>
+            </ul>
+          </template>
+        </template>
+
+        <p class="text-center text-xs text-gray-500 dark:text-muted">
+          仲間の「記録しました」の通知は、
+          <NuxtLink to="/mypage" class="text-brand-600 dark:text-accent underline"
+            >マイページ</NuxtLink
+          >でオフにできます
+        </p>
       </div>
     </div>
   </div>

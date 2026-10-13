@@ -6,7 +6,7 @@
 // 「マイページ（⑨）の新設・設計」参照）
 definePageMeta({ middleware: 'auth' })
 
-const { user, logout } = useAuth()
+const { user, logout, updateNotifyWorkoutRecorded } = useAuth()
 const { groups, pending: groupsPending, error: groupsError, fetchGroups } = useGroups()
 const { workouts, fetchWorkouts } = useWorkouts()
 const { fetchVolume } = useStats()
@@ -45,6 +45,22 @@ async function loadSummary() {
 await loadSummary()
 
 const ROLE_LABEL: Record<'owner' | 'member', string> = { owner: 'オーナー', member: 'メンバー' }
+
+// 通知の受信設定（Issue #350）。切り替えは即時にAPIへ保存し、失敗したら元に戻してメッセージを出す
+const notifySaving = ref(false)
+const notifyError = ref(false)
+async function onToggleNotifyWorkoutRecorded() {
+  if (notifySaving.value || !user.value) return
+  notifySaving.value = true
+  notifyError.value = false
+  try {
+    await updateNotifyWorkoutRecorded(!user.value.notifyWorkoutRecorded)
+  } catch {
+    notifyError.value = true
+  } finally {
+    notifySaving.value = false
+  }
+}
 
 // /loginへの遷移はlogout()内でフルリロードにより行う（Issue #245、useAuth.ts参照）
 async function onLogout() {
@@ -157,6 +173,41 @@ async function onLogout() {
               >準備中</span
             >
           </div>
+        </div>
+
+        <!-- 通知の設定（Issue #350） -->
+        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">通知</p>
+          <div class="flex items-center gap-3 py-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-gray-700 dark:text-ink">仲間の記録の通知</p>
+              <p class="text-xs text-gray-500 dark:text-muted">
+                グループの仲間がその日の最初の記録をしたときに通知します
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="user?.notifyWorkoutRecorded ?? true"
+              aria-label="仲間の記録の通知"
+              :disabled="notifySaving"
+              class="relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60"
+              :class="
+                (user?.notifyWorkoutRecorded ?? true)
+                  ? 'bg-brand-600 dark:bg-accent'
+                  : 'bg-gray-300 dark:bg-white/20'
+              "
+              @click="onToggleNotifyWorkoutRecorded"
+            >
+              <span
+                class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                :class="(user?.notifyWorkoutRecorded ?? true) ? 'translate-x-5' : ''"
+              />
+            </button>
+          </div>
+          <p v-if="notifyError" class="mt-1 text-xs text-red-600 dark:text-red-400">
+            設定を保存できませんでした。時間をおいて再度お試しください
+          </p>
         </div>
 
         <!-- アカウント（パスワード変更、Issue #247） -->
