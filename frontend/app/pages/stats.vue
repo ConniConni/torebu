@@ -11,7 +11,8 @@ import {
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 import type { StatsRange } from '~/composables/useStats'
-import type { LineChartData } from '~/utils/statsChart'
+import type { CardioHistoryPoint, ExerciseHistoryPoint } from '~/composables/useStats'
+import { formatPaceTick, type LineChartData } from '~/utils/statsChart'
 
 definePageMeta({ middleware: 'auth', layout: 'tabbar' })
 
@@ -39,19 +40,28 @@ if (!exercises.value) {
 }
 
 // 集計対象は公式種目のみ（backend/src/routes/stats.ts参照）。カスタム種目・削除済みは選択肢に出さない。
-// 有酸素は重量×回数の推移に載らないため除外する（有酸素の推移は別Issue。Issue #345）
+// 有酸素は重量×回数ではなく距離・ペース（バイクは時速）の推移を出す（Issue #352）
 const officialExercises = computed(
-  () =>
-    exercises.value?.filter(
-      (e) => e.createdBy === null && !e.deletedAt && e.muscleGroup !== 'cardio',
-    ) ?? [],
+  () => exercises.value?.filter((e) => e.createdBy === null && !e.deletedAt) ?? [],
 )
+const strengthExercises = computed(() =>
+  officialExercises.value.filter((e) => e.muscleGroup !== 'cardio'),
+)
+const cardioExercises = computed(() =>
+  officialExercises.value.filter((e) => e.muscleGroup === 'cardio'),
+)
+const selectedExercise = computed(() =>
+  officialExercises.value.find((e) => e.id === selectedExerciseId.value),
+)
+const isCardioSelected = computed(() => selectedExercise.value?.muscleGroup === 'cardio')
+const isKmhSelected = computed(() => selectedExercise.value?.speedUnit === 'kmh')
 
 const range = ref<StatsRange>('3m')
 const selectedExerciseId = ref<string>('')
+// 初期選択は筋トレの先頭（有酸素ではなく従来どおりの表示から始める）
 watchEffect(() => {
   if (!selectedExerciseId.value && officialExercises.value.length > 0) {
-    selectedExerciseId.value = officialExercises.value[0]!.id
+    selectedExerciseId.value = (strengthExercises.value[0] ?? officialExercises.value[0])!.id
   }
 })
 
@@ -79,13 +89,34 @@ const historyPending = ref(false)
 const historyError = ref(false)
 const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
 const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
+const distanceChartData = ref(toLineChartData([], '距離(km)'))
+const speedChartData = ref(toLineChartData([], 'ペース(分/km)'))
+// 取得中に種目が切り替わったとき、遅れて返った古い結果で上書きしないための印
+let historyRequestSeq = 0
 
 async function loadHistory() {
   if (!selectedExerciseId.value) return
+  const seq = ++historyRequestSeq
+  const exercise = selectedExercise.value
   historyPending.value = true
   historyError.value = false
   try {
-    const points = await fetchExerciseHistory(selectedExerciseId.value, range.value)
+    const result = await fetchExerciseHistory(selectedExerciseId.value, range.value)
+    if (seq !== historyRequestSeq) return
+    if (exercise?.muscleGroup === 'cardio') {
+      const cardioPoints = result as CardioHistoryPoint[]
+      const isKmh = exercise.speedUnit === 'kmh'
+      distanceChartData.value = toLineChartData(
+        cardioPoints.map((p) => ({ date: p.date, value: p.distanceKm })),
+        '距離(km)',
+      )
+      speedChartData.value = toLineChartData(
+        cardioPoints.map((p) => ({ date: p.date, value: isKmh ? p.speedKmh : p.paceSecPerKm })),
+        isKmh ? '時速(km/h)' : 'ペース(分/km)',
+      )
+      return
+    }
+    const points = result as ExerciseHistoryPoint[]
     maxWeightChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.maxWeightKg })),
       '最大重量(kg)',
@@ -95,9 +126,9 @@ async function loadHistory() {
       '合計負荷重量(kg)',
     )
   } catch {
-    historyError.value = true
+    if (seq === historyRequestSeq) historyError.value = true
   } finally {
-    historyPending.value = false
+    if (seq === historyRequestSeq) historyPending.value = false
   }
 }
 
@@ -140,6 +171,32 @@ const chartOptions = computed(() => ({
   },
 }))
 
+// ペース（秒/km）は小さいほど速いので軸を反転して上ほど速い向きにそろえる（時速は大きいほど速いので反転しない）。
+// ペースのグラフだけ、軸（反転）と目盛り・ツールチップの「分:秒」表示が違う
+const paceChartOptions = computed(() => ({
+  ...chartOptions.value,
+  plugins: {
+    ...chartOptions.value.plugins,
+    tooltip: {
+      callbacks: {
+        label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) =>
+          `${ctx.dataset.label}: ${ctx.parsed.y === null ? '-' : `${formatPaceTick(ctx.parsed.y)}/km`}`,
+      },
+    },
+  },
+  scales: {
+    ...chartOptions.value.scales,
+    y: {
+      ...chartOptions.value.scales.y,
+      reverse: true,
+      ticks: {
+        ...chartOptions.value.scales.y.ticks,
+        callback: (value: string | number) => formatPaceTick(Number(value)),
+      },
+    },
+  },
+}))
+
 function withThemedColor(data: LineChartData): LineChartData {
   if (!isDarkTheme.value) return data
   return {
@@ -151,6 +208,8 @@ function withThemedColor(data: LineChartData): LineChartData {
 const volumeChartDataThemed = computed(() => withThemedColor(volumeChartData.value))
 const maxWeightChartDataThemed = computed(() => withThemedColor(maxWeightChartData.value))
 const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolumeChartData.value))
+const distanceChartDataThemed = computed(() => withThemedColor(distanceChartData.value))
+const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value))
 </script>
 
 <template>
@@ -201,13 +260,48 @@ const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolum
           class="mb-3 w-full rounded border border-gray-300 dark:border-border-dark bg-white px-2 py-1.5 text-sm text-gray-900 dark:bg-panel dark:text-ink"
         >
           <option v-if="officialExercises.length === 0" value="">種目がありません</option>
-          <option v-for="e in officialExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+          <optgroup v-if="cardioExercises.length > 0" label="筋トレ">
+            <option v-for="e in strengthExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </optgroup>
+          <optgroup v-if="cardioExercises.length > 0" label="有酸素">
+            <option v-for="e in cardioExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </optgroup>
+          <template v-else>
+            <option v-for="e in strengthExercises" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </template>
         </select>
 
         <LoadingText v-if="historyPending" center />
         <p v-else-if="historyError" class="text-center text-sm text-red-600 dark:text-red-400">
           データの取得に失敗しました。時間をおいて再度お試しください
         </p>
+        <template v-else-if="selectedExerciseId && isCardioSelected">
+          <p
+            v-if="distanceChartData.labels.length === 0"
+            class="py-6 text-center text-sm text-gray-500 dark:text-muted"
+          >
+            この期間の記録がありません
+          </p>
+          <ClientOnly v-else>
+            <div class="mb-4">
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">距離</p>
+              <div class="h-48">
+                <Line :data="distanceChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div>
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">
+                {{ isKmhSelected ? '時速' : 'ペース（上ほど速い）' }}
+              </p>
+              <div class="h-48">
+                <Line
+                  :data="speedChartDataThemed"
+                  :options="isKmhSelected ? chartOptions : paceChartOptions"
+                />
+              </div>
+            </div>
+          </ClientOnly>
+        </template>
         <template v-else-if="selectedExerciseId">
           <p
             v-if="maxWeightChartData.labels.length === 0"

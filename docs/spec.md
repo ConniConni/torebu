@@ -496,6 +496,13 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   rangeや選択種目が変わるたびに取り直す一覧のため、`useStats`（コンポーザブル）では
   `exercises`/`workouts`のようなセッション中キャッシュ（`useState`）は行っていない
 - ホーム画面（②）から「統計」ボタンでSPA遷移する
+- **有酸素の推移（Issue #352）**：種目セレクトに「有酸素」グループ（ランニング・ウォーキング・エアロバイク）を追加
+  （初期選択は従来どおり筋トレの先頭）。選ぶと「距離」と「ペース（上ほど速い）」／バイクは「時速」の2グラフを出す。
+  APIは有酸素種目だけ別の形で返す：`distanceKm`は日ごとの距離合計、`paceSecPerKm`・`speedKmh`は**距離と時間がそろった
+  セットだけ**の合計時間÷合計距離（加重平均）で、そろったセットが無い日は`null`（グラフでは点を打たない）。
+  距離が1つも無い日（時間だけの記録）は含めない。ペースの軸は反転し、目盛り・ツールチップは「分:秒」表示。
+  種目を素早く切り替えたとき古い応答で上書きしないよう、`stats.vue`の`loadHistory`は連番で判定している。
+  合計負荷重量の推移（全種目合算）は従来どおり有酸素を含まない
 
 **部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
 - コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)
@@ -1034,9 +1041,9 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   サマリーパネルは筋トレだけの日は従来どおり（合計負荷重量・種目・セット）、有酸素もある日は（合計負荷重量・セット・距離）、
   有酸素だけの日は（距離・種目）で、距離が無ければ「合計時間」にする。**有酸素だけの日に「0kg」は出さない**。
   共有本文は「筋トレ◯日目」のまま（有酸素だけの日も同じ。日数は有酸素だけの日も数える）
-- **集計・ランキング・統計・ルーティン・自己ベストに混ざらない**（PR1のAPI側で除外。統計の種目選択は`muscleGroup !== 'cardio'`で除外）。
+- **集計・ランキング・統計・ルーティン・自己ベストに混ざらない**（PR1のAPI側で除外。統計の種目別推移は有酸素専用の距離・ペース／時速グラフで扱う。Issue #352）。
   ②ホームの期間別サマリー（合計負荷重量）は`GET /stats/volume`由来のため有酸素は含まれず、**トレ日数には含まれる**
-- **後続（別Issue、[roadmap.md](./roadmap.md)・[backlog.md](./backlog.md)）**：ランキングの有酸素タブ、統計の有酸素対応、
+- **後続（別Issue、[roadmap.md](./roadmap.md)・[backlog.md](./backlog.md)）**：
   ランの自己ベスト、ホームの距離サマリー、ルーティンへの有酸素追加
 
 ### 3-2. 記録するときの流れ（実装どおり）
@@ -1354,7 +1361,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
 | GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
-| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。`range`クエリは`/stats/volume`と同じ |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
 
 ### グループ（Phase4） — [groups.ts](../backend/src/routes/groups.ts)
 
@@ -1404,7 +1411,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `DELETE /workouts/:id/sets/:setId` | 削除すると、**同一workout・同一種目内の残りセットのsetOrderを1から連番に詰め直す**（Issue #224）。詰め直さないと、中間のセットを消したときに欠番が残ったまま表示されてしまう。追加と同じworkoutの行ロックを取ってから削除・詰め直しを行うため、追加と並行しても連番が崩れない（Issue #322）。ロック待ちの間に同じセットが別リクエストで削除済みなら`404`。フロント(`useWorkoutSession.ts`の`removeSet`)は削除後にsetsを再取得して反映する |
 | `DELETE /workouts/:id/sets/:setId`<br>`PATCH /workouts/:id` の`deleted` | セットを削除、またはメモをクリアした結果、そのworkoutが**セット0件・メモ無し**（中身が空）になった場合、workout自体もソフトデリートする（Issue #234）。中身の無いworkoutを放置すると、②ホームの「記録がありません」判定（`GET /workouts`一覧の件数のみで判定）が中身の無い行を「記録あり」と誤判定し、実在しない記録の削除ボタンが機能してしまう不具合につながるため。レスポンスの`deleted: true`でこれをフロントに伝え、`useWorkoutSession.ts`の`removeSet`/`updateMemo`は`session.workoutId`を`null`に戻す（削除済みのworkoutIdを使い回して後続の保存操作が404になるのを防ぐため）。逆に、セットが無くてもメモがあれば（またはその逆）削除しない |
 | 有酸素のセット（[Issue #345](https://github.com/ConniConni/torebu/issues/345)） | 有酸素かどうかは`exercises.muscle_group = 'cardio'`で判定する（`backend/src/lib/exercise.ts`の`isCardio`）。`POST`/`PATCH /workouts/:id/sets`は種目の分類で受け付ける項目を切り替える：**有酸素**は`distanceKm`（0より大きく999.99以下・小数第2位まで）・`durationSec`（1〜59999の整数＝分:秒入力で最大999分59秒）のみ。どちらも`null`可で、`POST`は**両方省略しても空の1行として保存できる**（「＋記録追加」の初期値。前回値はフロントが送る）。`PATCH`は4項目のうち最低1つが必要で、`null`を送るとその項目をクリア。`weightKg`・`reps`を送ると`400`。**筋トレ**は従来どおり（`POST`は`reps`必須、`PATCH`で`reps: null`は`400`）で、`distanceKm`・`durationSec`を送ると`400`。エラー形式は`{ error: 'invalid_request', details }`。有酸素の行は`reps`・`weightKg`が`null`で返る |
-| 有酸素の扱い（集計・ランキング・ルーティン・自己ベスト・記録日数） | **対象外**：ランキング（合計・種目別・初期種目・種目一覧。`exerciseId`に有酸素を指定すると`404`）、統計（`weightKg`が`null`のため従来から外れる）、ルーティン（`POST /routines/:id/exercises`が`400`）、自己ベスト判定（`personalBest`は常に`null`）、カスタム種目（`POST /exercises`が`400`）。**記録日数には数える**：有酸素だけの日も「セットがある日」なので、トレ日数・節目通知・久しぶり通知・ランキングの継続スタンプ（`daysTrained`）に入る。有酸素だけのメンバーのランキングの合計は0kg |
+| 有酸素の扱い（集計・ランキング・ルーティン・自己ベスト・記録日数） | **対象外**：ランキング（合計・種目別・初期種目・種目一覧。`exerciseId`に有酸素を指定すると`404`）、統計の合計負荷重量（`weightKg`が`null`のため従来から外れる。種目別推移は有酸素専用の形で返す）、ルーティン（`POST /routines/:id/exercises`が`400`）、自己ベスト判定（`personalBest`は常に`null`）、カスタム種目（`POST /exercises`が`400`）。**記録日数には数える**：有酸素だけの日も「セットがある日」なので、トレ日数・節目通知・久しぶり通知・ランキングの継続スタンプ（`daysTrained`）に入る。有酸素だけのメンバーのランキングの合計は0kg |
 | 重量・回数の制約 | `weightKg` は正の数・**0.5kg刻み**・999.5kg以下。省略すると**自重（null）**扱い。`workout_sets`の`reps` は0以上の整数・999以下（0は失敗した挑戦）。ルーティンの目安セットの`reps`は正の整数 |
 | `PATCH /workouts/:id`<br>`PATCH /workouts/:id/sets/:setId` | **空のボディ `{}` は弾く**（最低1項目は必要）。何も変えないPATCHに意味がないため |
 | `PATCH /workouts/:id` の `memo` | 空文字列・`null`を送るとメモを**クリア**（`null`化）できる。省略時のみ「変更しない」 |

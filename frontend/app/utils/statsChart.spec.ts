@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateLabel, toLineChartData } from './statsChart'
+import { formatDateLabel, formatPaceTick, toLineChartData } from './statsChart'
 
 describe('formatDateLabel', () => {
   it('YYYY-MM-DDを"M/D"に変換する（先頭の0を落とす）', () => {
@@ -34,5 +34,27 @@ describe('toLineChartData', () => {
       labels: ['9/1', '9/3', '9/8'],
       datasets: [{ label: '最大重量(kg)', data: [100, 0, 250.5] }],
     })
+  })
+})
+
+describe('toLineChartData（有酸素の速さが無い日）', () => {
+  it('値がnullの日はnullのまま残す（線を途切れさせる）', () => {
+    expect(
+      toLineChartData(
+        [
+          { date: '2026-09-01', value: 360 },
+          { date: '2026-09-02', value: null },
+        ],
+        'ペース',
+      ).datasets[0].data,
+    ).toEqual([360, null])
+  })
+})
+
+describe('formatPaceTick', () => {
+  it('秒/kmを分:秒にする', () => {
+    expect(formatPaceTick(330)).toBe('5:30')
+    expect(formatPaceTick(365)).toBe('6:05')
+    expect(formatPaceTick(359.6)).toBe('6:00')
   })
 })

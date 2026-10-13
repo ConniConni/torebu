@@ -8,7 +8,7 @@ import type { ChartDataset } from 'chart.js'
 
 export interface DatedValue {
   date: string // YYYY-MM-DD
-  value: number
+  value: number | null // nullは点を打たない（有酸素の速さが無い日）
 }
 
 export interface LineChartData {
@@ -16,7 +16,7 @@ export interface LineChartData {
   // 線の色はダークモード時だけstats.vueの`withThemedColor`が上書きする（canvas描画のためCSSの
   // `dark:`が効かない）。ライトでは未指定のままChart.jsの既定色で描かせる
   datasets: [
-    { label: string; data: number[] } & Partial<
+    { label: string; data: (number | null)[] } & Partial<
       Pick<ChartDataset<'line'>, 'borderColor' | 'backgroundColor'>
     >,
   ]
@@ -34,4 +34,10 @@ export function toLineChartData(points: DatedValue[], label: string): LineChartD
     labels: points.map((p) => formatDateLabel(p.date)),
     datasets: [{ label, data: points.map((p) => p.value) }],
   }
+}
+
+// 有酸素のペース（秒/km）の軸・ツールチップ用に「分:秒」へ。Chart.jsのtick値は小数が来うるので丸める
+export function formatPaceTick(secPerKm: number): string {
+  const total = Math.round(secPerKm)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
