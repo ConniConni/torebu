@@ -385,17 +385,38 @@ function isSetUpFromPrevious(set: WorkoutSetItem) {
   return beatsTopSet(set, previousTopSetFor(set.exerciseId))
 }
 
-// --- 推定1RM（RM列、Issue #360） ---
-// 保存済みのセット（session.value.sets）から出す。強調するのはカード内の最大の行
-function estimateFor(set: WorkoutSetItem) {
-  return estimateOneRepMaxKg(set.weightKg, set.reps)
+// --- 推定1RM（RM列、Issue #360・#362） ---
+// 保存済みのセット（session.value.sets）から出す。対象は複合関節の種目（isOneRmTarget）で、それ以外
+// （単関節・自重など）はRM列ごと出さない。マイページの設定（showAllOneRm）がオンなら対象外の種目にも
+// 参考値として出す。強調するのは、カード内の通常の回数帯（1〜10回）の最大の行
+const { user } = useAuth()
+
+function isOneRmTargetExercise(exerciseId: string) {
+  return exercises.value?.find((e) => e.id === exerciseId)?.isOneRmTarget ?? false
+}
+
+function showRmFor(exerciseId: string) {
+  return isOneRmTargetExercise(exerciseId) || (user.value?.showAllOneRm ?? false)
+}
+
+function rmCellFor(set: WorkoutSetItem) {
+  return oneRepMaxCell(set.weightKg, set.reps, isOneRmTargetExercise(set.exerciseId))
 }
 
 function isTopEstimate(set: WorkoutSetItem) {
   const group = groupFor(set.exerciseId)
   if (!group) return false
-  const top = topEstimate(group.sets.map(estimateFor))
-  return top !== null && estimateFor(set) === top
+  const top = topNormalEstimate(group.sets.map(rmCellFor))
+  const cell = rmCellFor(set)
+  return top !== null && cell?.level === 'normal' && cell.valueKg === top
+}
+
+// 表の下の注意書き。RM列を出さない種目は「非表示：…」の1行だけ
+function rmNotesFor(exerciseId: string) {
+  const group = groupFor(exerciseId)
+  if (!group) return []
+  if (!showRmFor(exerciseId)) return [ONE_RM_NOT_TARGET_NOTE]
+  return oneRepMaxNotes(group.sets, isOneRmTargetExercise(exerciseId))
 }
 
 function beatsPreviousFor(exerciseId: string) {
@@ -868,23 +889,40 @@ async function onGoToExercisePicker() {
                   </div>
                 </div>
                 <div v-else class="overflow-x-auto">
-                  <div class="min-w-[17.75rem] overflow-hidden rounded-lg">
+                  <div
+                    class="overflow-hidden rounded-lg"
+                    :class="showRmFor(element.exerciseId) ? 'min-w-[18.75rem]' : 'min-w-[17rem]'"
+                  >
                     <div
-                      class="grid grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_2.5rem_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                      class="grid bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                      :class="
+                        showRmFor(element.exerciseId)
+                          ? 'grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
+                          : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5'
+                      "
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted"
                         >セット</span
                       >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
-                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">RM</span>
+                      <span
+                        v-if="showRmFor(element.exerciseId)"
+                        class="text-xs font-semibold text-gray-500 dark:text-muted"
+                        >RM</span
+                      >
                       <span></span>
                     </div>
                     <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
                       <div
                         v-if="setInputs[set.id]"
-                        class="grid grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_2.5rem_2.25rem] items-center gap-x-2 px-3 py-1.5"
-                        :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
+                        class="grid items-center px-3 py-1.5"
+                        :class="[
+                          showRmFor(element.exerciseId)
+                            ? 'grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
+                            : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5',
+                          i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : '',
+                        ]"
                       >
                         <!-- 前回のトップセットを上回ったら↑（Issue #354）。同じ・下がった場合は何も出さない。
                              ↑は数字の右に絶対配置で添え、↑の有無で数字の中央位置がずれないようにする -->
@@ -923,17 +961,25 @@ async function onGoToExercisePicker() {
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
                         </span>
-                        <!-- 推定1RM（Issue #360）。保存済みの値から出す（前回比の↑と同じ）。対象外は「−」。
-                             カード内の最大の行だけ強調する -->
+                        <!-- 推定1RM（Issue #360・#362）。保存済みの値から出す（前回比の↑と同じ）。対象外の回数は「−」。
+                             通常の回数帯（1〜10回）の最大の行だけ強調し、参考値（11〜14回など）はグレー -->
                         <span
+                          v-if="showRmFor(element.exerciseId)"
                           class="text-sm tabular-nums"
                           :class="
                             isTopEstimate(set)
                               ? 'font-semibold text-brand-600 dark:text-accent'
-                              : 'text-gray-500 dark:text-muted'
+                              : rmCellFor(set)?.level === 'normal'
+                                ? 'text-gray-900 dark:text-ink'
+                                : 'text-gray-400 dark:text-muted'
                           "
-                          >{{ estimateFor(set)?.toFixed(1) ?? '−' }}</span
                         >
+                          <template v-if="rmCellFor(set)"
+                            >{{ rmCellFor(set)!.valueKg.toFixed(1)
+                            }}<span class="text-xs">kg</span></template
+                          >
+                          <template v-else>−</template>
+                        </span>
                         <span class="flex justify-center">
                           <button
                             type="button"
@@ -949,16 +995,21 @@ async function onGoToExercisePicker() {
                     </template>
                   </div>
                 </div>
-                <!-- RM列の意味の補足（Issue #360）。筋トレでセットがあるときだけ -->
-                <p
+                <!-- RM列の補足・注意書き（Issue #360・#362）。筋トレでセットがあるときだけ -->
+                <template
                   v-if="
                     !groupFor(element.exerciseId)!.isCardio &&
                     groupFor(element.exerciseId)!.sets.length > 0
                   "
-                  class="mt-1.5 text-xs text-gray-400 dark:text-muted"
                 >
-                  RM＝推定1RM（kg、1〜12回のセットで計算）
-                </p>
+                  <p
+                    v-for="note in rmNotesFor(element.exerciseId)"
+                    :key="note"
+                    class="mt-1.5 text-xs text-gray-400 dark:text-muted"
+                  >
+                    {{ note }}
+                  </p>
+                </template>
                 <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
                   <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
                     {{ set.setOrder

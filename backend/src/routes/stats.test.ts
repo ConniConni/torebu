@@ -218,7 +218,7 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
         date: '2026-09-01',
         maxWeightKg: 65,
         volumeKg: 60 * 10 + 65 * 8,
-        estimated1RmKg: 82.3,
+        estimated1RmKg: 78,
         setCount: 2,
       },
     ])
@@ -227,13 +227,13 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
   it('推定1RMは同じ日の対象セットの最大値(0.1kg単位)になる', async () => {
     const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 }, // 80.0
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 }, // 75.0
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 6, weightKg: 65 }, // 78.0
+      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 6, weightKg: 65 }, // 74.75
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId, setOrder: 3, reps: 15, weightKg: 40 }, // 対象外
+      data: { workoutId: workout.id, exerciseId, setOrder: 3, reps: 15, weightKg: 40 }, // 15回以上は対象外
     })
 
     const agent = await loginAsOwner()
@@ -241,10 +241,10 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(1)
-    expect(res.body[0].estimated1RmKg).toBe(80)
+    expect(res.body[0].estimated1RmKg).toBe(75)
   })
 
-  it('13回以上のセットだけの日は推定1RMがnullになる(日自体は残る)', async () => {
+  it('15回以上のセットだけの日は推定1RMがnullになる(日自体は残る)', async () => {
     const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
     await prisma.workoutSet.create({
       data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 15, weightKg: 40 },
@@ -281,6 +281,60 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(1)
     expect(res.body[0].setCount).toBe(2)
+  })
+
+  it('推定1RMは0.1kg単位に丸める(65kg×6回は74.75→74.8)', async () => {
+    const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 6, weightKg: 65 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/history?range=all`)
+
+    expect(res.body[0].estimated1RmKg).toBe(74.8)
+  })
+
+  it('統計の推定1RMは10回までのセットだけで計算し、11〜14回の参考値は含めない(Issue #362)', async () => {
+    const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 12, weightKg: 50 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/history?range=all`)
+
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].estimated1RmKg).toBeNull()
+  })
+
+  it('対象外の種目(単関節)は推定1RMがnull。設定(showAllOneRm)をオンにすると値が出る(Issue #362)', async () => {
+    const lateral = await prisma.exercise.create({
+      data: { name: 'ダンベルサイドレイズ', muscleGroup: 'shoulders' },
+    })
+    try {
+      const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+      await prisma.workoutSet.create({
+        data: {
+          workoutId: workout.id,
+          exerciseId: lateral.id,
+          setOrder: 1,
+          reps: 10,
+          weightKg: 10,
+        },
+      })
+
+      const agent = await loginAsOwner()
+      const off = await agent.get(`/stats/exercises/${lateral.id}/history?range=all`)
+      await agent.patch('/auth/me/settings').send({ showAllOneRm: true })
+      const on = await agent.get(`/stats/exercises/${lateral.id}/history?range=all`)
+
+      expect(off.body[0].estimated1RmKg).toBeNull()
+      expect(on.body[0].estimated1RmKg).toBe(12.5)
+    } finally {
+      await prisma.workoutSet.deleteMany({ where: { exerciseId: lateral.id } })
+      await prisma.exercise.delete({ where: { id: lateral.id } })
+    }
   })
 
   it('他人の記録は推定1RMに混ざらない', async () => {

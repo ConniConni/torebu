@@ -4,6 +4,7 @@ import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { MuscleGroup } from '../generated/prisma/enums.js'
 import { isCardio } from '../lib/exercise.js'
+import { isOneRmTarget } from '../lib/oneRepMaxTarget.js'
 
 export const exercisesRouter = Router()
 
@@ -91,6 +92,8 @@ exercisesRouter.get('/', requireAuth, async (req, res) => {
       relatedMuscles: exercise.relatedMuscles,
       mainZone: exercise.mainZone,
       deletedAt: exercise.deletedAt,
+      // 推定1RMの対象（複合関節の公式種目）か(Issue #362)。判定はlib/oneRepMaxTarget.ts
+      isOneRmTarget: isOneRmTarget(exercise),
       lastSet: lastSetByExerciseId.get(exercise.id) ?? null,
     })),
   )
@@ -139,6 +142,7 @@ exercisesRouter.post('/', requireAuth, async (req, res) => {
     relatedMuscles: exercise.relatedMuscles,
     mainZone: exercise.mainZone,
     deletedAt: exercise.deletedAt,
+    isOneRmTarget: isOneRmTarget(exercise),
     // 作成直後なので実績はまだ無い。GET /exercisesとレスポンスの形を揃えるため含める
     lastSet: null,
   })

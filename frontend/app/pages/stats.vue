@@ -160,6 +160,15 @@ await loadVolume()
 // 見て、軸ラベル・グリッド線・線グラフ本体の色を出し分ける。線の色はダークモードのみ
 // アクセントのライム(#c8ff4d、WelcomeScreen.vue/Issue #239で導入した値)に変更し視認性を上げる。
 // ライト側は元々Chart.jsの既定色に任せていたため、そこは変更しない
+// 推定1RMのグラフが空のときの文言。対象外の種目（単関節・自重など）で、マイページの設定もオフなら
+// 記録が無いのではなく対象外のため出していない、と分かるようにする（Issue #362）
+const { user } = useAuth()
+const oneRmEmptyMessage = computed(() =>
+  selectedExercise.value?.isOneRmTarget === false && !user.value?.showAllOneRm
+    ? ONE_RM_NOT_TARGET_NOTE
+    : 'この期間は推定できる記録がありません',
+)
+
 const { theme } = useTheme()
 const isDarkTheme = computed(() => theme.value === 'dark')
 
@@ -346,13 +355,13 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
             <div class="mb-4">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">推定1RM</p>
               <p class="mb-1 text-xs text-gray-500 dark:text-muted">
-                重さと回数から推定した、1回挙げられる重さの目安（12回までのセットで計算）
+                重さと回数から推定した、1回挙げられる重さの目安（オコナー式。10回までのセットで計算）
               </p>
               <p
                 v-if="estimated1RmChartData.labels.length === 0"
                 class="py-6 text-center text-sm text-gray-500 dark:text-muted"
               >
-                この期間は推定できる記録がありません
+                {{ oneRmEmptyMessage }}
               </p>
               <div v-else class="h-48">
                 <Line :data="estimated1RmChartDataThemed" :options="chartOptions" />

@@ -6,7 +6,7 @@
 // 「マイページ（⑨）の新設・設計」参照）
 definePageMeta({ middleware: 'auth' })
 
-const { user, logout, updateNotifyWorkoutRecorded } = useAuth()
+const { user, logout, updateNotifyWorkoutRecorded, updateShowAllOneRm } = useAuth()
 const { groups, pending: groupsPending, error: groupsError, fetchGroups } = useGroups()
 const { workouts, fetchWorkouts } = useWorkouts()
 const { fetchVolume } = useStats()
@@ -59,6 +59,22 @@ async function onToggleNotifyWorkoutRecorded() {
     notifyError.value = true
   } finally {
     notifySaving.value = false
+  }
+}
+
+// 推定1RMの表示設定（Issue #362）。切り替えは通知と同じく即時にAPIへ保存し、失敗したらメッセージを出す
+const showAllOneRmSaving = ref(false)
+const showAllOneRmError = ref(false)
+async function onToggleShowAllOneRm() {
+  if (showAllOneRmSaving.value || !user.value) return
+  showAllOneRmSaving.value = true
+  showAllOneRmError.value = false
+  try {
+    await updateShowAllOneRm(!user.value.showAllOneRm)
+  } catch {
+    showAllOneRmError.value = true
+  } finally {
+    showAllOneRmSaving.value = false
   }
 }
 
@@ -206,6 +222,41 @@ async function onLogout() {
             </button>
           </div>
           <p v-if="notifyError" class="mt-1 text-xs text-red-600 dark:text-red-400">
+            設定を保存できませんでした。時間をおいて再度お試しください
+          </p>
+        </div>
+
+        <!-- 推定1RMの表示設定（Issue #362） -->
+        <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">推定1RM</p>
+          <div class="flex items-center gap-3 py-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-gray-700 dark:text-ink">対象外の種目でも表示する</p>
+              <p class="text-xs text-gray-500 dark:text-muted">
+                単関節・自重・カスタム種目の推定1RMも、参考値（グレー）として表示します
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="user?.showAllOneRm ?? false"
+              aria-label="推定1RMを対象外の種目でも表示する"
+              :disabled="showAllOneRmSaving"
+              class="relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60"
+              :class="
+                (user?.showAllOneRm ?? false)
+                  ? 'bg-brand-600 dark:bg-accent'
+                  : 'bg-gray-300 dark:bg-white/20'
+              "
+              @click="onToggleShowAllOneRm"
+            >
+              <span
+                class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                :class="(user?.showAllOneRm ?? false) ? 'translate-x-5' : ''"
+              />
+            </button>
+          </div>
+          <p v-if="showAllOneRmError" class="mt-1 text-xs text-red-600 dark:text-red-400">
             設定を保存できませんでした。時間をおいて再度お試しください
           </p>
         </div>

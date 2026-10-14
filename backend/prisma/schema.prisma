@@ -68,6 +68,8 @@ model User {
   signupRef              String?     @map("signup_ref")
   // 仲間の「記録した」通知(workout_recorded)を受け取るか(Issue #350)。既定はオン
   notifyWorkoutRecorded  Boolean     @default(true) @map("notify_workout_recorded")
+  // 推定1RMの対象外の種目(単関節・自重・カスタム)にも推定1RMを表示するか(Issue #362)。既定はオフ
+  showAllOneRm           Boolean     @default(false) @map("show_all_one_rm")
   createdAt              DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
