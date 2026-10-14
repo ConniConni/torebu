@@ -319,6 +319,12 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
           </p>
           <ClientOnly v-else>
             <div class="mb-4">
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
+              <div class="h-48">
+                <Line :data="historyVolumeChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div class="mb-4">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">推定1RM</p>
               <p class="mb-1 text-xs text-gray-500 dark:text-muted">
                 重さと回数から推定した、1回挙げられる重さの目安（12回までのセットで計算）
@@ -333,16 +339,10 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
                 <Line :data="estimated1RmChartDataThemed" :options="chartOptions" />
               </div>
             </div>
-            <div class="mb-4">
+            <div>
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">最大重量</p>
               <div class="h-48">
                 <Line :data="maxWeightChartDataThemed" :options="chartOptions" />
-              </div>
-            </div>
-            <div>
-              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
-              <div class="h-48">
-                <Line :data="historyVolumeChartDataThemed" :options="chartOptions" />
               </div>
             </div>
           </ClientOnly>
