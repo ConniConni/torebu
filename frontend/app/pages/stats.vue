@@ -88,6 +88,7 @@ const historyPending = ref(false)
 const historyError = ref(false)
 const estimated1RmChartData = ref(toLineChartData([], '推定1RM(kg)'))
 const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
+const setCountChartData = ref(toLineChartData([], 'セット数'))
 const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 const distanceChartData = ref(toLineChartData([], '距離(km)'))
 const speedChartData = ref(toLineChartData([], 'ペース(分/km)'))
@@ -127,6 +128,10 @@ async function loadHistory() {
     maxWeightChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.maxWeightKg })),
       '最大重量(kg)',
+    )
+    setCountChartData.value = toLineChartData(
+      points.map((p) => ({ date: p.date, value: p.setCount })),
+      'セット数',
     )
     historyVolumeChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.volumeKg })),
@@ -178,6 +183,19 @@ const chartOptions = computed(() => ({
   },
 }))
 
+// セット数は整数なので、軸の目盛りも整数だけにする（既定だと0.5刻みが出る）
+const setCountChartOptions = computed(() => ({
+  ...chartOptions.value,
+  scales: {
+    ...chartOptions.value.scales,
+    y: {
+      ...chartOptions.value.scales.y,
+      beginAtZero: true,
+      ticks: { ...chartOptions.value.scales.y.ticks, precision: 0 },
+    },
+  },
+}))
+
 // ペース（秒/km）は小さいほど速いので軸を反転して上ほど速い向きにそろえる（時速は大きいほど速いので反転しない）。
 // ペースのグラフだけ、軸（反転）と目盛り・ツールチップの「分:秒」表示が違う
 const paceChartOptions = computed(() => ({
@@ -214,6 +232,7 @@ function withThemedColor(data: LineChartData): LineChartData {
 
 const volumeChartDataThemed = computed(() => withThemedColor(volumeChartData.value))
 const estimated1RmChartDataThemed = computed(() => withThemedColor(estimated1RmChartData.value))
+const setCountChartDataThemed = computed(() => withThemedColor(setCountChartData.value))
 const maxWeightChartDataThemed = computed(() => withThemedColor(maxWeightChartData.value))
 const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolumeChartData.value))
 const distanceChartDataThemed = computed(() => withThemedColor(distanceChartData.value))
@@ -339,10 +358,16 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
                 <Line :data="estimated1RmChartDataThemed" :options="chartOptions" />
               </div>
             </div>
-            <div>
+            <div class="mb-4">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">最大重量</p>
               <div class="h-48">
                 <Line :data="maxWeightChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div>
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">セット数</p>
+              <div class="h-48">
+                <Line :data="setCountChartDataThemed" :options="setCountChartOptions" />
               </div>
             </div>
           </ClientOnly>

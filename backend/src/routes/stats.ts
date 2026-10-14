@@ -76,7 +76,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
 })
 
 // GET /stats/exercises/:exerciseId/history?range=1m|3m|all
-// 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM(Epley式、1〜12回のセットのみ)の推移を返す。
+// 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM(Epley式、1〜12回のセットのみ)・セット数の推移を返す。
 // /stats/volumeと同じ理由で自重セットは除外する。公式種目以外(カスタム種目・存在しない種目)は404。
 // 有酸素種目は{date, distanceKm, paceSecPerKm, speedKmh}の形で返す(Issue #352)
 statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) => {
@@ -170,7 +170,7 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
 
   const byDate = new Map<
     string,
-    { maxWeightKg: number; volumeKg: number; estimated1RmKg: number | null }
+    { maxWeightKg: number; volumeKg: number; estimated1RmKg: number | null; setCount: number }
   >()
   for (const set of sets) {
     const weightKg = Number(set.weightKg)
@@ -181,11 +181,17 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     if (existing) {
       existing.maxWeightKg = Math.max(existing.maxWeightKg, weightKg)
       existing.volumeKg += volumeKg
+      existing.setCount += 1
       if (estimated !== null) {
         existing.estimated1RmKg = Math.max(existing.estimated1RmKg ?? 0, estimated)
       }
     } else {
-      byDate.set(dateKey, { maxWeightKg: weightKg, volumeKg, estimated1RmKg: estimated })
+      byDate.set(dateKey, {
+        maxWeightKg: weightKg,
+        volumeKg,
+        estimated1RmKg: estimated,
+        setCount: 1,
+      })
     }
   }
 

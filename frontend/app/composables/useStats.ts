@@ -11,6 +11,8 @@ interface ExerciseHistoryPoint {
   volumeKg: number
   // 推定1RM(Epley式、1〜12回のセットのみ)。対象セットが無い日はnull
   estimated1RmKg: number | null
+  // その日の重量ありセットの数
+  setCount: number
 }
 
 // 有酸素種目の推移（Issue #352）。速さは距離・時間がそろったセットがある日だけ（無ければnull）

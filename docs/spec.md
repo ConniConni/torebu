@@ -174,7 +174,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/exercises-new` | ⑦ | 種目追加（**作成フォームは無く、「準備中／有料オプションで追加予定です。」の案内と④へ戻るリンクのみ**。④の「＋種目を追加」は遷移せず案内ダイアログを開くため、直リンクでのみ到達する。Issue #330） | なし | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
-| `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移〔合計負荷重量・推定1RM・最大重量〕をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
+| `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移〔合計負荷重量・推定1RM・最大重量・セット数〕をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
 | `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
 | `/groups/join` | - | 招待コードで参加（Phase4）。招待リンクを丸ごと（共有文ごと）貼り付けてもコードを読み取る（[Issue #312](https://github.com/ConniConni/torebu/issues/312)） | `POST /groups/join` | `auth` |
 | `/invite/[code]` | - | 招待リンクの受け口（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。ログイン不要でグループ名・人数を表示し、未ログインなら「新規登録して参加」「ログインして参加」、ログイン中なら「参加する」、参加済みなら「グループを開く」を出す | `GET /groups/invites/:code`, `POST /groups/join` | なし（`robots.txt`で`Disallow`） |
@@ -486,7 +486,7 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
 
 **統計画面（⑧、Phase3-C）の実装メモ**
 - 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋合計負荷重量・
-  推定1RM・最大重量の推移、折れ線3本。この順に上から並べる、Issue #356）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
+  推定1RM・最大重量・セット数の推移、折れ線4本。この順に上から並べる、Issue #356・#358。セット数の軸は整数目盛りで0始まり）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
   共通適用する
 - 種目セレクトの選択肢は集計対象（`GET /stats/exercises/:id/history`）と同じ公式種目のみに絞る
   （カスタム種目・削除済み種目は候補から除外。渡すと404になるため）
@@ -1387,7 +1387,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
 | GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
-| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM（`estimated1RmKg: number \| null`、Epley式・1〜12回のセットの最大値を0.1kg単位に丸めた値。対象セットが無い日は`null`、[Issue #356](https://github.com/ConniConni/torebu/issues/356)）の推移を返す。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM（`estimated1RmKg: number \| null`、Epley式・1〜12回のセットの最大値を0.1kg単位に丸めた値。対象セットが無い日は`null`、[Issue #356](https://github.com/ConniConni/torebu/issues/356)）の推移を返す。**`setCount`**（その日の重量ありセットの数。13回以上も数え、自重は数えない、[Issue #358](https://github.com/ConniConni/torebu/issues/358)）も含む。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
 
 ### グループ（Phase4） — [groups.ts](../backend/src/routes/groups.ts)
 

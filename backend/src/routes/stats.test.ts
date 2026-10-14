@@ -219,6 +219,7 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
         maxWeightKg: 65,
         volumeKg: 60 * 10 + 65 * 8,
         estimated1RmKg: 82.3,
+        setCount: 2,
       },
     ])
   })
@@ -254,8 +255,32 @@ describe('GET /stats/exercises/:exerciseId/history', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual([
-      { date: '2026-09-01', maxWeightKg: 40, volumeKg: 600, estimated1RmKg: null },
+      { date: '2026-09-01', maxWeightKg: 40, volumeKg: 600, estimated1RmKg: null, setCount: 1 },
     ])
+  })
+
+  it('セット数は日ごとの重量ありセットの数で、13回以上も数え、自重は数えない', async () => {
+    const workout = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 60 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 2, reps: 15, weightKg: 40 },
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId, setOrder: 3, reps: 12 }, // 自重
+    })
+    const otherWorkout = await createWorkout(otherId, { performedAt: new Date('2026-09-01') })
+    await prisma.workoutSet.create({
+      data: { workoutId: otherWorkout.id, exerciseId, setOrder: 1, reps: 5, weightKg: 80 },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/history?range=all`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].setCount).toBe(2)
   })
 
   it('他人の記録は推定1RMに混ざらない', async () => {
