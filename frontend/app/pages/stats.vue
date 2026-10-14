@@ -10,7 +10,12 @@ import {
   Tooltip,
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
-import type { CardioHistoryPoint, ExerciseHistoryPoint, StatsRange } from '~/composables/useStats'
+import type {
+  CardioHistoryPoint,
+  ExerciseHistoryPoint,
+  GrowthResponse,
+  StatsRange,
+} from '~/composables/useStats'
 import { formatPaceTick, type LineChartData } from '~/utils/statsChart'
 
 definePageMeta({ middleware: 'auth', layout: 'tabbar' })
@@ -32,7 +37,7 @@ const RANGES: { value: StatsRange; label: string }[] = [
   { value: 'all', label: '全期間' },
 ]
 
-const { fetchVolume, fetchExerciseHistory } = useStats()
+const { fetchVolume, fetchExerciseHistory, fetchGrowth } = useStats()
 const { exercises, fetchExercises } = useExercises()
 if (!exercises.value) {
   await fetchExercises()
@@ -81,6 +86,34 @@ async function loadVolume() {
     volumeError.value = true
   } finally {
     volumePending.value = false
+  }
+}
+
+// 期間比較カード（Issue #366）。1か月・3か月のときだけ取得して出す（全期間は比較相手が無い）
+const growth = ref<GrowthResponse | null>(null)
+const growthPending = ref(false)
+const growthError = ref(false)
+let growthRequestSeq = 0
+
+async function loadGrowth() {
+  if (range.value === 'all') {
+    growthRequestSeq++
+    growth.value = null
+    growthPending.value = false
+    growthError.value = false
+    return
+  }
+  const seq = ++growthRequestSeq
+  growthPending.value = true
+  growthError.value = false
+  try {
+    const result = await fetchGrowth(range.value)
+    if (seq !== growthRequestSeq) return
+    growth.value = result
+  } catch {
+    if (seq === growthRequestSeq) growthError.value = true
+  } finally {
+    if (seq === growthRequestSeq) growthPending.value = false
   }
 }
 
@@ -156,6 +189,7 @@ async function loadHistory() {
 }
 
 watch(range, () => {
+  loadGrowth()
   loadVolume()
   loadHistory()
 })
@@ -164,7 +198,9 @@ watch(range, () => {
 // ページを開いた直後(=自動選択された種目)はloadHistory()が一度も呼ばれないまま
 // 「この期間の記録がありません」の初期状態で放置されてしまう(Issue #126)
 watch(selectedExerciseId, loadHistory, { immediate: true })
-await loadVolume()
+// 待たずに呼ぶとSSRとクライアントで描画時点の状態が食い違いHydration mismatchになるため、
+// loadVolumeと同じく待つ
+await Promise.all([loadGrowth(), loadVolume()])
 
 // Chart.jsはcanvas描画のためTailwindのdark:バリアントが効かず、テーマに応じた色を
 // options・datasetに明示的に渡す必要がある（Issue #241）。useThemeのtheme（'light'|'dark'）を
@@ -281,6 +317,14 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
           {{ r.label }}
         </button>
       </div>
+
+      <GrowthCard
+        v-if="range !== 'all'"
+        :growth="growth"
+        :pending="growthPending"
+        :error="growthError"
+        :range-label="range === '1m' ? '1ヶ月' : '3ヶ月'"
+      />
 
       <div class="rounded-lg bg-white dark:bg-panel p-4 shadow">
         <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">合計負荷重量の推移</p>
