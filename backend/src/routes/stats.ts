@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { estimateOneRepMaxKg, roundToTenth } from '../lib/oneRepMax.js'
 
 export const statsRouter = Router()
 
@@ -75,7 +76,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
 })
 
 // GET /stats/exercises/:exerciseId/history?range=1m|3m|all
-// 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。
+// 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM(Epley式、1〜12回のセットのみ)の推移を返す。
 // /stats/volumeと同じ理由で自重セットは除外する。公式種目以外(カスタム種目・存在しない種目)は404。
 // 有酸素種目は{date, distanceKm, paceSecPerKm, speedKmh}の形で返す(Issue #352)
 statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) => {
@@ -167,22 +168,34 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     select: { weightKg: true, reps: true, workout: { select: { performedAt: true } } },
   })
 
-  const byDate = new Map<string, { maxWeightKg: number; volumeKg: number }>()
+  const byDate = new Map<
+    string,
+    { maxWeightKg: number; volumeKg: number; estimated1RmKg: number | null }
+  >()
   for (const set of sets) {
     const weightKg = Number(set.weightKg)
     const dateKey = toDateKey(set.workout.performedAt)
     const existing = byDate.get(dateKey)
     const volumeKg = weightKg * (set.reps ?? 0)
+    const estimated = estimateOneRepMaxKg(weightKg, set.reps)
     if (existing) {
       existing.maxWeightKg = Math.max(existing.maxWeightKg, weightKg)
       existing.volumeKg += volumeKg
+      if (estimated !== null) {
+        existing.estimated1RmKg = Math.max(existing.estimated1RmKg ?? 0, estimated)
+      }
     } else {
-      byDate.set(dateKey, { maxWeightKg: weightKg, volumeKg })
+      byDate.set(dateKey, { maxWeightKg: weightKg, volumeKg, estimated1RmKg: estimated })
     }
   }
 
+  // 推定1RMは日ごとの最大値(0.1kg単位)。対象セットが無い日はnull(グラフに点を出さない)
   const result = Array.from(byDate.entries())
-    .map(([date, values]) => ({ date, ...values }))
+    .map(([date, values]) => ({
+      date,
+      ...values,
+      estimated1RmKg: values.estimated1RmKg === null ? null : roundToTenth(values.estimated1RmKg),
+    }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
   res.json(result)
