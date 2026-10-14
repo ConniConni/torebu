@@ -1,0 +1,64 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>推定1RM 記録画面モック</title>
+<style>
+:root{--brand:#c8552b;--bg:#f9fafb;--card:#fff;--ink:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#d1d5db;--zebra:#f9fafb;--head:#f3f4f6;--tint:#fdf1ec;--tintline:#f6d9cc}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--card:#222;--ink:#f2f2ee;--muted:#a3a29b;--faint:#7a7973;--line:#3a3a38;--zebra:#1a1a1a;--head:#2a2a28;--tint:#2b3318;--tintline:#44521f;--brand:#c8ff4d}}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif;padding:16px}
+h1{font-size:16px;margin:0 0 4px}.note{color:var(--muted);font-size:12px;margin:0 0 16px}
+.wrap{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));max-width:1100px;margin:auto}
+.pat>h2{font-size:13px;margin:0 0 6px}.pat>p{font-size:12px;color:var(--muted);margin:0 0 8px}
+.card{background:var(--card);border-radius:12px;box-shadow:0 1px 3px #0002;padding:14px;max-width:360px}
+.name{font-weight:600;margin:0 0 4px}.prev{font-size:12px;color:var(--faint);margin:0 0 8px}
+.tbl{border-radius:8px;overflow:hidden}
+.row{display:grid;grid-template-columns:2.75rem 1.15fr .85fr 2.25rem;gap:0 10px;align-items:center;padding:6px 12px}
+.row.h{background:var(--head);font-size:12px;font-weight:600;color:var(--muted)}.row.z{background:var(--zebra)}
+.no{font-size:18px;font-weight:700;text-align:center;position:relative}.up{color:var(--brand);font-size:14px;margin-left:2px}
+.in{display:flex;align-items:baseline;gap:6px}.box{flex:1;border:1px solid var(--line);border-radius:8px;padding:5px 10px;text-align:right;background:var(--card)}
+.u{font-size:12px;color:var(--muted)}.del{width:32px;height:32px;border-radius:50%;border:1px solid #fecaca;background:#fef2f2}
+.est{font-size:11px;color:var(--muted);text-align:right;padding:0 12px 4px;font-variant-numeric:tabular-nums}.est b{color:var(--ink)}
+.sum{margin:8px 0 0;font-size:13px;color:var(--muted)}.sum b{color:var(--ink);font-size:15px}
+.chip{display:inline-block;margin-left:6px;font-size:11px;color:var(--brand);background:var(--tint);border:1px solid var(--tintline);border-radius:9px;padding:0 7px}
+.beat{margin:8px 0 0;border:1px solid var(--tintline);background:var(--tint);color:var(--brand);border-radius:8px;padding:8px 12px;font-weight:600;font-size:14px}
+.row4{grid-template-columns:2.25rem minmax(3.6rem,1.1fr) minmax(3rem,.85fr) 2.6rem 2rem;gap:0 6px}
+.row4 .box{padding:5px 6px}.rm{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted)}.rm.top{color:var(--brand)}.rm.na{font-weight:400;color:var(--faint)}
+.cmp{font-size:12px;color:var(--muted)}
+</style></head><body>
+<h1>推定1RMを「日々の記録」に出す案</h1>
+<p class="note">ベンチプレス：前回 60kg×10 → 今回 62.5kg×8・65kg×6・40kg×15 の例（推定1RM＝Epley式、1〜12回のセットだけ。13回以上は「−」）</p>
+<div class="wrap">
+
+<section class="pat"><h2>D. 折衷案：Bの「RM」列（数字だけ）</h2><p>セット行の右に推定1RMの列を足す。行は増えない。その日の最大は色を付けて分かるようにした。13回以上は「−」。幅375pxの想定</p>
+<div class="card" style="width:343px;box-sizing:border-box"><p class="name">ベンチプレス</p><p class="prev">前回 60kg×10</p>
+<div class="tbl"><div class="row row4 h"><span>セット</span><span>重量</span><span>回数</span><span style="text-align:right">RM</span><span></span></div>
+<div class="row row4"><span class="no">1</span><span class="in"><span class="box">62.5</span><span class="u">kg</span></span><span class="in"><span class="box">8</span><span class="u">回</span></span><span class="rm top">79.2</span><span class="del" style="width:28px;height:28px"></span></div>
+<div class="row row4 z"><span class="no">2</span><span class="in"><span class="box">65</span><span class="u">kg</span></span><span class="in"><span class="box">6</span><span class="u">回</span></span><span class="rm">78.0</span><span class="del" style="width:28px;height:28px"></span></div>
+<div class="row row4"><span class="no">3</span><span class="in"><span class="box">40</span><span class="u">kg</span></span><span class="in"><span class="box">15</span><span class="u">回</span></span><span class="rm na">−</span><span class="del" style="width:28px;height:28px"></span></div></div>
+<p class="prev" style="margin:8px 0 0">RM＝推定1RM（kg）。1〜12回のセットだけ計算</p>
+</div></section>
+
+<section class="pat"><h2>A. 種目カードに1行（推奨）</h2><p>今日のベストを1行。前回の行に並べて、前回と比べられる。セット行は今のまま</p>
+<div class="card"><p class="name">ベンチプレス</p>
+<p class="prev">前回 60kg×10</p>
+<p class="sum" style="margin:0 0 8px">推定1RM <b>79.2kg</b> <span class="cmp">（前回 80.0kg）</span></p>
+<div class="tbl"><div class="row h"><span>セット</span><span>重量</span><span>回数</span><span></span></div>
+<div class="row"><span class="no">1</span><span class="in"><span class="box">62.5</span><span class="u">kg</span></span><span class="in"><span class="box">8</span><span class="u">回</span></span><span class="del"></span></div>
+<div class="row z"><span class="no">2</span><span class="in"><span class="box">65</span><span class="u">kg</span></span><span class="in"><span class="box">6</span><span class="u">回</span></span><span class="del"></span></div>
+<div class="row"><span class="no">3</span><span class="in"><span class="box">40</span><span class="u">kg</span></span><span class="in"><span class="box">15</span><span class="u">回</span></span><span class="del"></span></div></div>
+</div></section>
+
+<section class="pat"><h2>B. 各セットの行ごと</h2><p>セットごとの推定値が分かる。行が1段増えて縦に長くなる</p>
+<div class="card"><p class="name">ベンチプレス</p><p class="prev">前回 60kg×10</p>
+<div class="tbl"><div class="row h"><span>セット</span><span>重量</span><span>回数</span><span></span></div>
+<div class="row"><span class="no">1</span><span class="in"><span class="box">62.5</span><span class="u">kg</span></span><span class="in"><span class="box">8</span><span class="u">回</span></span><span class="del"></span></div>
+<div class="est" style="background:none">推定1RM <b>79.2</b></div>
+<div class="row z"><span class="no">2</span><span class="in"><span class="box">65</span><span class="u">kg</span></span><span class="in"><span class="box">6</span><span class="u">回</span></span><span class="del"></span></div>
+<div class="est" style="background:var(--zebra)">推定1RM <b>78.0</b></div>
+<div class="row"><span class="no">3</span><span class="in"><span class="box">40</span><span class="u">kg</span></span><span class="in"><span class="box">15</span><span class="u">回</span></span><span class="del"></span></div>
+<div class="est">推定1RM <b>−</b>（13回以上）</div></div>
+</div></section>
+
+<section class="pat"><h2>C. ホームの記録カード（見るだけ）</h2><p>ホームで日付を選んだときの記録カードに1行。記録画面は今のまま</p>
+<div class="card"><p class="name">ベンチプレス <span class="chip">推定1RM 79.2kg</span></p>
+<p class="sum" style="margin:2px 0 0">62.5kg×8 ／ 65kg×6 ／ 40kg×15</p></div></section>
+
+</div></body></html>

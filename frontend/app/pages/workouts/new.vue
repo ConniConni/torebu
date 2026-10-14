@@ -385,6 +385,19 @@ function isSetUpFromPrevious(set: WorkoutSetItem) {
   return beatsTopSet(set, previousTopSetFor(set.exerciseId))
 }
 
+// --- 推定1RM（RM列、Issue #360） ---
+// 保存済みのセット（session.value.sets）から出す。強調するのはカード内の最大の行
+function estimateFor(set: WorkoutSetItem) {
+  return estimateOneRepMaxKg(set.weightKg, set.reps)
+}
+
+function isTopEstimate(set: WorkoutSetItem) {
+  const group = groupFor(set.exerciseId)
+  if (!group) return false
+  const top = topEstimate(group.sets.map(estimateFor))
+  return top !== null && estimateFor(set) === top
+}
+
 function beatsPreviousFor(exerciseId: string) {
   const previous = previousSessionFor(exerciseId)
   const current = groupFor(exerciseId)
@@ -855,21 +868,22 @@ async function onGoToExercisePicker() {
                   </div>
                 </div>
                 <div v-else class="overflow-x-auto">
-                  <div class="min-w-[17rem] overflow-hidden rounded-lg">
+                  <div class="min-w-[17.75rem] overflow-hidden rounded-lg">
                     <div
-                      class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                      class="grid grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_2.5rem_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted"
                         >セット</span
                       >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">RM</span>
                       <span></span>
                     </div>
                     <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
                       <div
                         v-if="setInputs[set.id]"
-                        class="grid grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] items-center gap-x-2.5 px-3 py-1.5"
+                        class="grid grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_2.5rem_2.25rem] items-center gap-x-2 px-3 py-1.5"
                         :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                       >
                         <!-- 前回のトップセットを上回ったら↑（Issue #354）。同じ・下がった場合は何も出さない。
@@ -894,7 +908,7 @@ async function onGoToExercisePicker() {
                             step="0.5"
                             min="0"
                             placeholder="自重"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                             @blur="onSetFieldBlur(set.id)"
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">kg</span>
@@ -904,11 +918,22 @@ async function onGoToExercisePicker() {
                             v-model="setInputs[set.id]!.reps"
                             type="number"
                             min="0"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
                             @blur="onSetFieldBlur(set.id)"
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
                         </span>
+                        <!-- 推定1RM（Issue #360）。保存済みの値から出す（前回比の↑と同じ）。対象外は「−」。
+                             カード内の最大の行だけ強調する -->
+                        <span
+                          class="text-sm tabular-nums"
+                          :class="
+                            isTopEstimate(set)
+                              ? 'font-semibold text-brand-600 dark:text-accent'
+                              : 'text-gray-500 dark:text-muted'
+                          "
+                          >{{ estimateFor(set)?.toFixed(1) ?? '−' }}</span
+                        >
                         <span class="flex justify-center">
                           <button
                             type="button"
@@ -924,6 +949,16 @@ async function onGoToExercisePicker() {
                     </template>
                   </div>
                 </div>
+                <!-- RM列の意味の補足（Issue #360）。筋トレでセットがあるときだけ -->
+                <p
+                  v-if="
+                    !groupFor(element.exerciseId)!.isCardio &&
+                    groupFor(element.exerciseId)!.sets.length > 0
+                  "
+                  class="mt-1.5 text-xs text-gray-400 dark:text-muted"
+                >
+                  RM＝推定1RM（kg、1〜12回のセットで計算）
+                </p>
                 <template v-for="set in groupFor(element.exerciseId)!.sets" :key="`msg-${set.id}`">
                   <p v-if="setSaving[set.id]" class="mt-1 text-xs text-gray-400 dark:text-muted">
                     {{ set.setOrder
