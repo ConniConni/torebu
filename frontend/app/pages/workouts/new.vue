@@ -897,7 +897,7 @@ async function onGoToExercisePicker() {
                       class="grid bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                       :class="
                         showRmFor(element.exerciseId)
-                          ? 'grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
+                          ? 'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2'
                           : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2'
                       "
                     >
@@ -919,7 +919,7 @@ async function onGoToExercisePicker() {
                         class="grid items-center px-3 py-1.5"
                         :class="[
                           showRmFor(element.exerciseId)
-                            ? 'grid-cols-[2.75rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
+                            ? 'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2'
                             : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2',
                           i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : '',
                         ]"
@@ -956,7 +956,7 @@ async function onGoToExercisePicker() {
                             v-model="setInputs[set.id]!.reps"
                             type="number"
                             min="0"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             @blur="onSetFieldBlur(set.id)"
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
@@ -965,7 +965,7 @@ async function onGoToExercisePicker() {
                              通常の回数帯（1〜10回）の最大の行だけ強調し、参考値（11〜14回など）はグレー -->
                         <span
                           v-if="showRmFor(element.exerciseId)"
-                          class="text-sm tabular-nums"
+                          class="text-xs tabular-nums"
                           :class="
                             isTopEstimate(set)
                               ? 'font-semibold text-brand-600 dark:text-accent'
@@ -976,7 +976,7 @@ async function onGoToExercisePicker() {
                         >
                           <template v-if="rmCellFor(set)"
                             >{{ rmCellFor(set)!.valueKg.toFixed(1)
-                            }}<span class="text-xs">kg</span></template
+                            }}<span class="text-[10px]">kg</span></template
                           >
                           <template v-else>−</template>
                         </span>
