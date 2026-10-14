@@ -30,6 +30,8 @@ interface Exercise {
   lastSet: LastSet | null
   // 速さの表示単位(Issue #345)。有酸素のみ値を持ち、pace=ペース(分/km)・kmh=時速。筋トレはnull
   speedUnit: SpeedUnit | null
+  // 推定1RMの対象（複合関節の公式種目）か(Issue #362)。判定はbackendのlib/oneRepMaxTarget.ts
+  isOneRmTarget: boolean
 }
 
 interface CreateExercisePayload {

@@ -141,8 +141,8 @@
 | 10 | 記録日は**作成後は編集不可**。②ホームの「＋今日の記録を始める」ボタンは**「今日」固定のまま** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる。**③のページ自体はIssue #52で`?date=`クエリに対応済み**（下記③の行・§3-4参照）で、**②の既存記録カード（過去日含む）から③へ日付付きで遷移する導線は実装済み**（⑥廃止・統合ステップ4）。**②のカレンダーで過去日を選んで記録が0件のときに③を開始する導線もIssue #61で実装済み**（未来日は③側で今日にクランプされ紛らわしいため対象外） |
 | 11 | **カスタム種目の追加は今後の有料オプション**とし、導線は案内表示に差し替えた（[Issue #330](https://github.com/ConniConni/torebu/issues/330)）。**UIのみ**止めており`POST /exercises`は止めていない | 課金要素にする方針のため。課金の実装前は、④の「＋種目を追加」と⑦の直リンクで案内を出すだけにした。既存のカスタム種目はそのまま使え・削除もできる。API側は課金の実装時に止める |
 | 12 | ③の**前回比**（[Issue #354](https://github.com/ConniConni/torebu/issues/354)）は、「前回」を**対象日より前でその種目のセットがある直近の日付の全セット**とし、各セットは**前回のトップセット**（最も重いセット、同じ重量なら回数が多い方）と比べて、上回ったときだけ↑を出す。**同じ・下がったことは表示しない**。カード単位の「前回超え！」は**合計負荷重量（統計と同じ定義、自重セット除外）**で判定し、全セット自重どうしのときだけ合計回数で比べる | 漸進性過負荷（少しずつ負荷を上げる）をトレーニング中に見える化する機能群（①前回比→②今日の挑戦→③推定1RM推移→④伸びの記録の拡張）の1つ目。下がった表示を出さないのはユーザー判断（モックで確認済み）。当初は前回の同じ番目のセットと比べていたが、ウォームアップの本数が日によって違うと位置がずれて意図しない↑／＝が出るため、トップセットとの比較に変え、＝も出さないことにした（ユーザー判断）。前回の基準をworkoutではなく日付にしたのは、workoutsに日付の一意制約が無く、③を開いた時点ではworkoutがまだ無いこともあるため |
-| 13 | 統計の種目別推移に**推定1RM**（[Issue #356](https://github.com/ConniConni/torebu/issues/356)）を足し、**合計負荷重量の次**（合計負荷重量→推定1RM→最大重量）に出す。当初は一番上の予定だったが、ユーザー判断（2026-10-14）で合計負荷重量を先頭にした。計算は**Epley式** `重量 × (1 + 回数 / 30)`（1回は重量そのまま）で、**1〜12回のセットだけ**使う。日ごとの値はその日の対象セットの最大値を0.1kg単位に丸め、対象セットが無い日（13回以上だけ・自重だけ）は`null`にしてグラフに点を出さない（0にしない） | 漸進性過負荷の③。重さと回数が違う記録（60kg×10と65kg×6など）を1本の線で比べて伸びを見るため。12回を上限にしたのは、回数が多いほど推定の誤差が大きくなる一方、8〜12回で組む日にも点が出るようにするため（ユーザー判断）。1回に式を当てると重量より大きくなるため重量そのままにした。②今日の挑戦は優先度を下げた（2026-10-14、ユーザー判断） |
-| 14 | ③記録作成画面の筋トレのセット行に**「RM」列**（推定1RM、数字だけ・左揃え、[Issue #360](https://github.com/ConniConni/torebu/issues/360)）を足す。計算は統計と同じ（§2の13：Epley式・1〜12回のみ）で、自重・回数0/未入力・13回以上は「−」。カード内の最大の行だけ強調する（値のある行が2つ以上のとき）。値は**保存済みのセット**から出し、API変更はない | 漸進性過負荷をトレーニング中にも見えるようにするため（ユーザー要望）。モック（`docs/mock/estimated-1rm-record.html`）のA〜Dから、行を増やさず数字だけで済むD案（Bの折衷）をユーザーが選んだ。前回との併記は入れていない |
+| 13 | 統計の種目別推移に**推定1RM**（[Issue #356](https://github.com/ConniConni/torebu/issues/356)・[#362](https://github.com/ConniConni/torebu/issues/362)）を足し、**合計負荷重量の次**（合計負荷重量→推定1RM→最大重量→セット数）に出す。計算は**オコナー式** `重量 × (1 + 0.025 × 回数)`（1回は重量そのまま、#362でEpley式から変更）。回数帯は**1〜10回＝通常／11〜14回＝参考値／15回以上＝出さない**で、**統計に入れるのは1〜10回のセットだけ**（参考値はグラフに入れない）。日ごとの値はその日の対象セットの最大値を0.1kg単位に丸め、対象セットが無い日は`null`にしてグラフに点を出さない（0にしない）。**対象は複合関節の公式種目だけ**（下の14）。対象外の種目は、マイページの設定をオンにしない限り`null`で、グラフの代わりに「非表示：単関節・自重種目は1RMの対象外です。」を出す | 漸進性過負荷の③。重さと回数が違う記録（60kg×10と65kg×6など）を1本の線で比べて伸びを見るため。回数が多い・単関節・自重のセットは推定の誤差が大きいため、オコナー式・回数帯・種目の分類で絞った（ユーザー判断、2026-10-14）。1回に式を当てると重量より大きくなるため重量そのままにした。合計負荷重量を先頭にしたのもユーザー判断。②今日の挑戦は優先度を下げた（2026-10-14、ユーザー判断） |
+| 14 | ③記録作成画面の筋トレのセット行に**「RM」列**（推定1RM、[Issue #360](https://github.com/ConniConni/torebu/issues/360)・[#362](https://github.com/ConniConni/torebu/issues/362)）を出す。式・回数帯は§2の13と同じで、**複合関節の公式種目だけ**に出す（対象は`backend/src/lib/oneRepMaxTarget.ts`の**種目名リスト**で判定し、`GET /exercises`が`isOneRmTarget`として返す。DBに分類の列は持たない）。表示：**1〜10回＝通常（kg付き。カード内の通常値の最大の行だけ強調、通常値が2行以上のとき）／11〜14回＝グレー（強調しない、「参考値」の注記）／15回以上・自重＝「−」（「誤差が大きいため表示しない」の注記）**。**対象外の種目（単関節・自重・体幹・カスタム）はRM列ごと非表示**で、表の下に「非表示：単関節・自重種目は1RMの対象外です。」。**マイページの設定（`users.show_all_one_rm`、既定オフ）をオンにすると、対象外の種目にも全て参考値（グレー）で出す**（15回以上は常に非表示）。値は**保存済みのセット**から出す | 漸進性過負荷をトレーニング中にも見えるようにするため（ユーザー要望）。モック（`docs/mock/estimated-1rm-record.html`）のD案（行を増やさずRM列に数字だけ）をユーザーが選び、その後オコナー式・回数帯・種目分類・設定を決めた（2026-10-14）。分類を種目名リストにしたのは、DBに複合／単関節の情報が無く（部位・器具・関連筋では判定できない）、列追加より軽く、統計とGET /exercisesで判定を1か所にできるため。複合関節の例はBIG3やプレス・ロウ・スクワット系、マシンはチェストプレス・レッグプレス・スミス系など。ラットプルダウン・ローロウ・ルーマニアンデッドリフト・ゴブレットスクワット・アップライトロウ・アシストチンニングは対象外（ユーザー判断など） |
 
 ### 2-1. 決めたが、まだ実装されていないこと
 
@@ -183,7 +183,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/groups/[id]/workouts` | - | グループの記録フィード（Phase4）。所属メンバー全員（本人含む）の記録を新しい順に表示する。各記録にいいねボタン・コメント（アコーディオン展開、一覧・投稿・自分の削除）を表示する | `GET /groups/:id/workouts`, `POST/DELETE /workouts/:id/reactions`, `GET/POST /workouts/:id/comments`, `DELETE /workouts/:id/comments/:commentId` | `auth` |
 | `/notifications` | - | 通知一覧（Phase4）。自分の記録への「いいね」「コメント」、所属グループへの新メンバー参加（[Issue #249](https://github.com/ConniConni/torebu/issues/249)）、仲間の自己ベスト更新（[Issue #253](https://github.com/ConniConni/torebu/issues/253)）、仲間の通算の節目・久しぶりの復帰（[Issue #255](https://github.com/ConniConni/torebu/issues/255)）、仲間の「記録しました」（[Issue #350](https://github.com/ConniConni/torebu/issues/350)。反応・達成より控えめな軽量の1行で別セクションに表示）の通知を新しい順に表示する。種類ごとに文面・アイコン・遷移先を出し分ける。開いた時点で、表示した未読通知が既読になる | `GET /notifications`, `POST /notifications/read` | `auth` |
 | `/groups/[id]/ranking` | - | グループ内ランキング（Phase4）。「合計／種目別／有酸素／継続」の4タブ（[Issue #258](https://github.com/ConniConni/torebu/issues/258)、有酸素タブは[Issue #348](https://github.com/ConniConni/torebu/issues/348)、下記「有酸素のランキング」参照）。合計・種目別は週間/月間/通算のタブで挙上重量の順位を表示する。種目別の種目セレクタは、グループの誰かが記録したことのある公式種目だけに絞り込む。継続は順位を持たず、各メンバーを名前順（あいうえお順）に並べ、直近28日の参加・継続の可視化スタンプ（none/bronze/silver/gold）だけを表示する | `GET /groups/:id/ranking`, `GET /groups/:id/ranking/default-exercise`, `GET /groups/:id/ranking/exercises` | `auth` |
-| `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アカウント（「パスワードを変更」から`/mypage/password`へ、Issue #247）・アプリの見た目（ダークモードの切替UI自体）は非活性の「準備中」表示のみ
+| `/mypage` | ⑨ | マイページ（Issue #237）。②ホームのヘッダー「表示名」クリックから遷移する。プロフィール表示（アイコン・表示名・メールアドレス、表示のみ）・実績サマリー（直近28日の合計負荷重量・トレ日数、「統計を見る」で⑧統計画面へ）・所属グループ一覧（名前・人数・自分の役割）・アカウント（「パスワードを変更」から`/mypage/password`へ、Issue #247）・通知の設定（Issue #350）・推定1RMの設定（「対象外の種目でも表示する」の切り替え、Issue #362）。アプリの見た目（ダークモードの切替UI自体）は非活性の「準備中」表示のみ
 （配色自体はIssue #241で全画面対応済み。切替UIはStripe連携着手Issueで追加予定）・サポート情報（利用規約・プライバシーポリシー・`mailto:`のお問い合わせ）・ログアウト。グループPro・ダークモードの実処理はStripe連携着手Issueで追加予定（下記参照）。ファイルは`pages/mypage/index.vue`（配下に`password.vue`を置くため、Issue #247で`pages/mypage.vue`から移動） | `GET /stats/volume`, `GET /workouts`, `GET /groups`, `POST /auth/logout` | `auth` |
 | `/mypage/password` | ⑨ | パスワード変更（Issue #247）。ログイン中に現在のパスワード・新しいパスワード（確認付き）を入力して変更する。成功時は同じ画面で完了表示に切り替わり、「マイページに戻る」で⑨へ戻る。変更後もログイン状態は維持される。現在のパスワードを忘れた場合の案内は文言のみ（`/password-reset`は`guest`ミドルウェア付きでログイン中は開けないため、リンクにしていない） | `POST /auth/password-changes` | `auth` |
 
@@ -487,7 +487,7 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
 
 **統計画面（⑧、Phase3-C）の実装メモ**
 - 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋合計負荷重量・
-  推定1RM・最大重量・セット数の推移、折れ線4本。この順に上から並べる、Issue #356・#358。セット数の軸は整数目盛りで0始まり）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
+  推定1RM・最大重量・セット数の推移、折れ線4本。この順に上から並べる、Issue #356・#358。推定1RMの説明は「オコナー式。10回までのセットで計算」。対象外の種目（設定オフ）は推定1RMのグラフの代わりに「非表示：単関節・自重種目は1RMの対象外です。」を出す、#362。セット数の軸は整数目盛りで0始まり）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
   共通適用する
 - 種目セレクトの選択肢は集計対象（`GET /stats/exercises/:id/history`）と同じ公式種目のみに絞る
   （カスタム種目・削除済み種目は候補から除外。渡すと404になるため）
@@ -1198,10 +1198,16 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
    │        - 前回は`GET /exercises/:exerciseId/previous-session?before=対象日`で種目ごとに取り、③の
    │          **ページ内の状態**として持つ（`useState`には載せない。§3-3の`lastSet`との違いを参照）。
    │          比較ロジックは[utils/progression.ts](../frontend/app/utils/progression.ts)の純関数
-   │      ・筋トレ種目のセット行の右端に**「RM」列**（推定1RM、[Issue #360](https://github.com/ConniConni/torebu/issues/360)、
-   │        §2の14）。保存済みのセットから0.1kg単位で出し（`estimateOneRepMaxKg`、
-   │        [utils/oneRepMax.ts](../frontend/app/utils/oneRepMax.ts)。統計のbackend側と同じ式）、対象外は「−」。
-   │        カード内の最大の行は強調色。表の下に「RM＝推定1RM（kg、1〜12回のセットで計算）」の補足
+   │      ・筋トレ種目のセット行の右端に**「RM」列**（推定1RM、[Issue #360](https://github.com/ConniConni/torebu/issues/360)・
+   │        [#362](https://github.com/ConniConni/torebu/issues/362)、§2の14）。保存済みのセットから0.1kg単位で出す
+   │        （[utils/oneRepMax.ts](../frontend/app/utils/oneRepMax.ts)。統計のbackend側と同じ式・回数帯）。
+   │        - 複合関節の種目（`isOneRmTarget`）だけRM列を出す。1〜10回は通常（kg付き、カード内の最大の行は強調）、
+   │          11〜14回はグレー（強調しない）、15回以上・自重は「−」。列が増える分、列幅は詰めるが外枠の幅は変えない
+   │        - 対象外の種目はRM列なしの元の4列で、表の下に「非表示：単関節・自重種目は1RMの対象外です。」
+   │        - 表の下の注記：「RM＝推定1RM（kg、オコナー式）」、11〜14回があれば参考値の説明、15回以上があれば
+   │          非表示の説明、対象外を設定で表示中なら「参考値です」の説明
+   │        - マイページの「推定1RM」の切り替え（`showAllOneRm`）をオンにすると、対象外の種目にも全て参考値（グレー）で出す。
+   │          記録画面は`useAuth`のuserを見ており、切り替え後にSPA遷移で戻れば反映される
    │      ・セット数が増えると縦に伸びて見づらいため、種目単位で「セット／重量／回数」の
    │        ヘッダー帯を1回だけ表示し、各セットは1行のコンパクトな表形式（偶数行に背景色を
    │        付けたゼブラ縞）にする（ユーザー指摘、2026-09-05・Issue #95）。重量・回数の
@@ -1339,8 +1345,8 @@ workout行自体が作られないため、②ホームに空の記録カード�
 |---|---|---|---|
 | POST | `/auth/register` | 不要 | ユーザー登録（登録だけ。ログイン状態にはならない）。任意の`signupRef`（登録のきっかけ、許可値は`share`のみ。それ以外は`400 invalid_request`）を`users.signup_ref`に保存する（[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
 | POST | `/auth/login` | 不要 | ログイン。**レート制限あり**（同一IPから15分に10回まで） |
-| GET | `/auth/me` | 要 | ログイン中のユーザー情報を返す（`notifyWorkoutRecorded`＝仲間の記録通知を受け取る設定を含む。[Issue #350](https://github.com/ConniConni/torebu/issues/350)） |
-| PATCH | `/auth/me/settings` | 要 | 通知の受信設定を変更する。ボディは`{ notifyWorkoutRecorded: boolean }`（空のボディ・真偽値以外は`400 invalid_request`）。レスポンスは`{ notifyWorkoutRecorded }`（[Issue #350](https://github.com/ConniConni/torebu/issues/350)） |
+| GET | `/auth/me` | 要 | ログイン中のユーザー情報を返す（`notifyWorkoutRecorded`＝仲間の記録通知を受け取る設定を含む。[Issue #350](https://github.com/ConniConni/torebu/issues/350)。`showAllOneRm`＝推定1RMの対象外の種目も表示する設定を含む。[Issue #362](https://github.com/ConniConni/torebu/issues/362)。`POST /auth/login`のレスポンスも同じ） |
+| PATCH | `/auth/me/settings` | 要 | ユーザー設定を変更する。ボディは`{ notifyWorkoutRecorded?: boolean, showAllOneRm?: boolean }`（指定した項目だけ更新。両方無い・真偽値以外は`400 invalid_request`）。レスポンスは`{ notifyWorkoutRecorded, showAllOneRm }`（[Issue #350](https://github.com/ConniConni/torebu/issues/350)・[#362](https://github.com/ConniConni/torebu/issues/362)） |
 | POST | `/auth/logout` | 要 | セッションを破棄する |
 | POST | `/auth/password-reset-requests` | 不要 | パスワード再設定メールの送信をリクエストする（Issue #213）。メール列挙対策のため、ユーザーが存在しない場合も常に`202`を返す。**レート制限あり**（同一IPから15分に5回まで） |
 | POST | `/auth/password-resets` | 不要 | トークンを検証し、新しいパスワードを設定する（Issue #213）。トークンは有効期限1時間・使い切り |
@@ -1350,7 +1356,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
-| GET | `/exercises` | 要 | 種目一覧。削除済み（後述）のカスタム種目も含む。各種目に前回の実績セット（`lastSet`）と、有酸素種目の速さの単位（`speedUnit`）を含む |
+| GET | `/exercises` | 要 | 種目一覧。削除済み（後述）のカスタム種目も含む。各種目に前回の実績セット（`lastSet`）と、有酸素種目の速さの単位（`speedUnit`）、推定1RMの対象（複合関節の公式種目）かどうか（`isOneRmTarget`、[Issue #362](https://github.com/ConniConni/torebu/issues/362)、§2の14）を含む |
 | POST | `/exercises` | 要 | カスタム種目を追加する（**フロントの導線は止めてあるが、APIは有効のまま**。課金の実装時に止める。Issue #330）。`muscleGroup: 'cardio'`（有酸素）は`400`（有酸素は公式種目のみ。Issue #345） |
 | GET | `/exercises/:exerciseId/previous-session` | 要 | 前回比用（[Issue #354](https://github.com/ConniConni/torebu/issues/354)）。`before`クエリ（`YYYY-MM-DD`、必須。不正なら`400 invalid_request`）より前で、その種目のセットがある直近の日付の全セットを`{ performedAt, sets: [{ weightKg, reps }] }`で返す（無ければ`null`）。見えない種目は`404`、有酸素は`400 invalid_exercise`（下記§4-2） |
 | DELETE | `/exercises/:id` | 要 | カスタム種目を削除する（**ソフトデリート**）。作成者本人のみ。公式種目・他人の種目・削除済みは`404` |
@@ -1392,7 +1398,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
 | GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
-| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM（`estimated1RmKg: number \| null`、Epley式・1〜12回のセットの最大値を0.1kg単位に丸めた値。対象セットが無い日は`null`、[Issue #356](https://github.com/ConniConni/torebu/issues/356)）の推移を返す。**`setCount`**（その日の重量ありセットの数。13回以上も数え、自重は数えない、[Issue #358](https://github.com/ConniConni/torebu/issues/358)）も含む。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM（`estimated1RmKg: number \| null`、オコナー式・複合関節種目の1〜10回のセットの最大値を0.1kg単位に丸めた値。対象セットが無い日・対象外の種目（設定`showAllOneRm`オフ）は`null`、[Issue #356](https://github.com/ConniConni/torebu/issues/356)・[#362](https://github.com/ConniConni/torebu/issues/362)）の推移を返す。**`setCount`**（その日の重量ありセットの数。13回以上も数え、自重は数えない、[Issue #358](https://github.com/ConniConni/torebu/issues/358)）も含む。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
 
 ### グループ（Phase4） — [groups.ts](../backend/src/routes/groups.ts)
 
@@ -1451,7 +1457,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 | `routine_exercises` の `targetSets`（目安セット） | `[{ weightKg, reps }, ...]` の配列。`weightKg`・`reps` の制約は`workout_sets`と同じ（上記「重量・回数の制約」参照）。未設定は常に空配列 `[]` で返す（DB上は `null`）。`PATCH .../exercises/:routineExerciseId` は配列を丸ごと置き換える方式（1セットずつの更新APIは無い）。`targetSets: []` を送るとクリアできる |
-| `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **推定1RM（`estimated1RmKg`）は1〜12回のセットだけで計算し、13回以上・回数0のセットは使わない。その日に対象セットが無ければ`null`（日自体は結果に残る）**（Issue #356）。**集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
+| `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **推定1RM（`estimated1RmKg`）はオコナー式で、複合関節の公式種目（`lib/oneRepMaxTarget.ts`）の1〜10回のセットだけで計算し、11回以上・回数0のセットは使わない（参考値の11〜14回は記録画面のグレー表示だけ）。対象外の種目は、ユーザーの`showAllOneRm`がオンのときだけ計算する。その日に対象セットが無ければ`null`（日自体は結果に残る）**（Issue #356・#362）。**集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
 | `GET /groups`<br>`GET /groups/:id`<br>`GET /groups/:id/workouts` | 「所属している」は`group_members`が**アクティブ**（`left_at IS NULL`）であること。退会済み（`left_at`あり）は未所属として扱う（`404`） |
 | `GET /groups/:id/workouts` | 件数の絞り込み（ページネーション・期間指定）は行わない。既存の`GET /workouts`と同じく件数が増えたら対応する技術的負債として`docs/backlog.md`に記載済み |
 | `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等。通知も作らない）。参加（`201`）時は、メンバー追加と同じトランザクション内で、参加者本人を除くそのグループのアクティブなメンバー宛に`member_joined`通知を作る（[Issue #249](https://github.com/ConniConni/torebu/issues/249)） |
@@ -1476,7 +1482,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 
 | テーブル | 役割 | 押さえること |
 |---|---|---|
-| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_token`にはトークンの生の値ではなくSHA-256ハッシュを保存する（DB漏洩時の悪用対策）。`password_reset_expires_at`は発行から1時間後、使用後または期限切れで`null`に戻る（Issue #213）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない。`notify_workout_recorded`（boolean、既定`true`）は仲間の「記録しました」通知を受け取るかの設定（[Issue #350](https://github.com/ConniConni/torebu/issues/350)）。`signup_ref`（nullable）は登録のきっかけで、画像カードシェアの共有URL経由で登録した場合だけ`share`が入る（効果測定用、アプリの動作には使わない。[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
+| `users` | ユーザー | `password_hash` にbcryptハッシュを保存。`password_reset_token`にはトークンの生の値ではなくSHA-256ハッシュを保存する（DB漏洩時の悪用対策）。`password_reset_expires_at`は発行から1時間後、使用後または期限切れで`null`に戻る（Issue #213）。`last_login_at`（nullable）は`POST /auth/login`の成功時にのみ更新する。長期未利用アカウントの自動削除バッチ（未実装、`docs/backlog.md`参照）の判定に使う想定で、削除バッチ本体・通知方法・削除期間はまだ決まっていない。`notify_workout_recorded`（boolean、既定`true`）は仲間の「記録しました」通知を受け取るかの設定（[Issue #350](https://github.com/ConniConni/torebu/issues/350)）。`show_all_one_rm`（boolean、既定`false`）は推定1RMの対象外の種目（単関節・自重・カスタム）にも推定1RMを参考値として表示するかの設定（[Issue #362](https://github.com/ConniConni/torebu/issues/362)）。`signup_ref`（nullable）は登録のきっかけで、画像カードシェアの共有URL経由で登録した場合だけ`share`が入る（効果測定用、アプリの動作には使わない。[Issue #314](https://github.com/ConniConni/torebu/issues/314)） |
 | `exercises` | 種目マスタ | `created_by` が **null なら公式種目**、値が入っていればその人のカスタム種目。`default_sort_order`は公式種目のみ設定（種目マスタ元データの並び順。使用実績が無いユーザーの初期並び順に使う、Issue #167）、カスタム種目は常にnull。公式種目81件（筋トレ78件は部位ハイライト用データ付き。有酸素3件〔ランニング・ウォーキング・エアロバイク、[Issue #345](https://github.com/ConniConni/torebu/issues/345)〕は`main_muscle`等がnull／空配列で部位ハイライトの対象外）を `backend/prisma/seed.ts` で投入済み（`npm run prisma:seed`。複数回実行しても重複しない。旧マスタからの入れ替え時は旧種目とそれを参照する`workout_sets`/`routine_exercises`を削除してから新規投入する）。`main_muscle`/`related_muscles`/`main_zone`は部位ハイライト可視化（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）用のnullableカラムで、**カスタム種目では常にnull／空配列**。④種目選択画面の部位ハイライトシート（§3-1参照）で使用。`speed_unit`（enum `SpeedUnit`：`pace`＝ペース〔分/km〕／`kmh`＝時速〔km/h〕、nullable）は**有酸素の公式種目だけ**に値を持つ速さの表示単位で、ランニング・ウォーキングが`pace`、エアロバイクが`kmh`。筋トレ・カスタム種目はnull。速さの単位は種目名ではこの列で判定する（速さ自体は保存せず表示時に計算する）。**`deleted_at`を持つ（ソフトデリート）**：カスタム種目を作成者本人が`DELETE /exercises/:id`で削除できる（公式種目は対象外、[Issue #113](https://github.com/ConniConni/torebu/issues/113)） |
 | `workouts` | 1日1回分のトレーニング | `deleted_at` を持つ（ソフトデリート） |
 | `workout_sets` | セット1件（筋トレ＝重量・回数、有酸素＝距離・時間） | `weight_kg` は **nullable = 自重種目**。`reps`は**nullable**（筋トレはAPIで必須、有酸素はnull）。`distance_km`（`Decimal(6,2)`、km）・`duration_sec`（整数、秒）は有酸素の行だけが持つ（筋トレはnull。[Issue #345](https://github.com/ConniConni/torebu/issues/345)）。`set_order` は種目ごとに1からリセットされる連番でサーバー採番（種目カード自体の並び順は`workout_exercises`が持つ） |

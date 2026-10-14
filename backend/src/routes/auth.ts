@@ -152,6 +152,7 @@ authRouter.post('/login', loginRateLimiter, async (req, res) => {
     displayName: user.displayName,
     gender: user.gender,
     notifyWorkoutRecorded: user.notifyWorkoutRecorded,
+    showAllOneRm: user.showAllOneRm,
   })
 })
 
@@ -170,15 +171,19 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     displayName: user.displayName,
     gender: user.gender,
     notifyWorkoutRecorded: user.notifyWorkoutRecorded,
+    showAllOneRm: user.showAllOneRm,
   })
 })
 
-// 通知の受信設定(Issue #350)。今は「仲間の記録した通知を受け取るか」のみ。
-// 指定した項目だけを更新する(空のボディは弾く)
+// ユーザー設定(Issue #350・#362)。通知の受信(notifyWorkoutRecorded)と、推定1RMの対象外の種目も
+// 表示するか(showAllOneRm)。指定した項目だけを更新する(空のボディは弾く)
 const settingsSchema = z
-  .object({ notifyWorkoutRecorded: z.boolean().optional() })
-  .refine((data) => data.notifyWorkoutRecorded !== undefined, {
-    message: 'notifyWorkoutRecordedを指定してください',
+  .object({
+    notifyWorkoutRecorded: z.boolean().optional(),
+    showAllOneRm: z.boolean().optional(),
+  })
+  .refine((data) => data.notifyWorkoutRecorded !== undefined || data.showAllOneRm !== undefined, {
+    message: 'notifyWorkoutRecordedまたはshowAllOneRmを指定してください',
   })
 
 authRouter.patch('/me/settings', requireAuth, async (req, res) => {
@@ -189,9 +194,15 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
   }
   const user = await prisma.user.update({
     where: { id: req.session.userId! }, // requireAuthを通過済みのため必ず存在
-    data: { notifyWorkoutRecorded: parsed.data.notifyWorkoutRecorded },
+    data: {
+      notifyWorkoutRecorded: parsed.data.notifyWorkoutRecorded,
+      showAllOneRm: parsed.data.showAllOneRm,
+    },
   })
-  res.status(200).json({ notifyWorkoutRecorded: user.notifyWorkoutRecorded })
+  res.status(200).json({
+    notifyWorkoutRecorded: user.notifyWorkoutRecorded,
+    showAllOneRm: user.showAllOneRm,
+  })
 })
 
 // パスワード再設定トークンの有効期限

@@ -6,6 +6,8 @@ interface AuthUser {
   gender: 'male' | 'female' | 'other' | 'no_answer' | null
   // 仲間の「記録した」通知を受け取るか（Issue #350）。既定はオン
   notifyWorkoutRecorded: boolean
+  // 推定1RMの対象外の種目（単関節・自重・カスタム）にも推定1RMを表示するか（Issue #362）。既定はオフ
+  showAllOneRm: boolean
 }
 
 interface RegisterPayload {
@@ -121,6 +123,16 @@ export function useAuth() {
     return res.notifyWorkoutRecorded
   }
 
+  // 推定1RMの対象外の種目も表示する設定の変更（Issue #362）。成功したらuserにも反映する
+  async function updateShowAllOneRm(value: boolean) {
+    const res = await $fetch<{ showAllOneRm: boolean }>('/api/auth/me/settings', {
+      method: 'PATCH',
+      body: { showAllOneRm: value },
+    })
+    if (user.value) user.value = { ...user.value, showAllOneRm: res.showAllOneRm }
+    return res.showAllOneRm
+  }
+
   return {
     user,
     fetchMe,
@@ -131,5 +143,6 @@ export function useAuth() {
     resetPassword,
     changePassword,
     updateNotifyWorkoutRecorded,
+    updateShowAllOneRm,
   }
 }

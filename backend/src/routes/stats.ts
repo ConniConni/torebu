@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { estimateOneRepMaxKg, roundToTenth } from '../lib/oneRepMax.js'
+import { estimateOneRepMaxKg, oneRepMaxLevel, roundToTenth } from '../lib/oneRepMax.js'
+import { isOneRmTarget } from '../lib/oneRepMaxTarget.js'
 
 export const statsRouter = Router()
 
@@ -76,7 +77,7 @@ statsRouter.get('/volume', requireAuth, async (req, res) => {
 })
 
 // GET /stats/exercises/:exerciseId/history?range=1m|3m|all
-// 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM(Epley式、1〜12回のセットのみ)・セット数の推移を返す。
+// 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM(オコナー式、複合関節種目の1〜10回のセットのみ)・セット数の推移を返す。
 // /stats/volumeと同じ理由で自重セットは除外する。公式種目以外(カスタム種目・存在しない種目)は404。
 // 有酸素種目は{date, distanceKm, paceSecPerKm, speedKmh}の形で返す(Issue #352)
 statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) => {
@@ -168,6 +169,14 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     select: { weightKg: true, reps: true, workout: { select: { performedAt: true } } },
   })
 
+  // 推定1RMを出すのは複合関節の公式種目だけ。対象外の種目は、設定(users.showAllOneRm)がオンのときだけ出す
+  // (Issue #362)。統計に入れるのは通常の回数帯(1〜10回)だけで、11〜14回の参考値は含めない
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { showAllOneRm: true },
+  })
+  const showEstimate = isOneRmTarget(exercise) || (user?.showAllOneRm ?? false)
+
   const byDate = new Map<
     string,
     { maxWeightKg: number; volumeKg: number; estimated1RmKg: number | null; setCount: number }
@@ -177,7 +186,10 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     const dateKey = toDateKey(set.workout.performedAt)
     const existing = byDate.get(dateKey)
     const volumeKg = weightKg * (set.reps ?? 0)
-    const estimated = estimateOneRepMaxKg(weightKg, set.reps)
+    const estimated =
+      showEstimate && oneRepMaxLevel(set.reps) === 'normal'
+        ? estimateOneRepMaxKg(weightKg, set.reps)
+        : null
     if (existing) {
       existing.maxWeightKg = Math.max(existing.maxWeightKg, weightKg)
       existing.volumeKg += volumeKg

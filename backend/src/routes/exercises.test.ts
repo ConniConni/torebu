@@ -136,6 +136,24 @@ describe('GET /exercises', () => {
     expect(order.indexOf(isolation.id)).toBeLessThan(order.indexOf(customLike.id))
   })
 
+  it('isOneRmTargetは複合関節の公式種目だけtrue。単関節の公式種目・同名のカスタム種目はfalse(Issue #362)', async () => {
+    const compound = await createExercise({ data: { name: 'ベンチプレス', muscleGroup: 'chest' } })
+    const isolation = await createExercise({
+      data: { name: 'ダンベルサイドレイズ', muscleGroup: 'shoulders' },
+    })
+    const customSameName = await createExercise({
+      data: { name: 'ベンチプレス', muscleGroup: 'chest', createdBy: ownerId },
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/exercises')
+
+    const byId = new Map((res.body as Array<Record<string, unknown>>).map((e) => [e.id, e]))
+    expect(byId.get(compound.id)).toMatchObject({ isOneRmTarget: true })
+    expect(byId.get(isolation.id)).toMatchObject({ isOneRmTarget: false })
+    expect(byId.get(customSameName.id)).toMatchObject({ isOneRmTarget: false })
+  })
+
   it('部位ハイライト用の項目(mainMuscle/relatedMuscles/mainZone)を返す。カスタム種目は全てnull', async () => {
     const official = await createExercise({
       data: {
@@ -289,6 +307,7 @@ describe('POST /exercises', () => {
       relatedMuscles: [],
       mainZone: null,
       deletedAt: null,
+      isOneRmTarget: false,
       lastSet: null,
     })
   })

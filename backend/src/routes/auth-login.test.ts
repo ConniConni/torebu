@@ -38,6 +38,7 @@ describe('POST /auth/login', () => {
       displayName: 'ログインテストユーザー',
       gender: null,
       notifyWorkoutRecorded: true,
+      showAllOneRm: false,
     })
     expect(res.headers['set-cookie']).toBeDefined()
   })

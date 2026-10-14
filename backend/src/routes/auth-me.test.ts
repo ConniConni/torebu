@@ -44,6 +44,7 @@ describe('GET /auth/me', () => {
       displayName: 'meテストユーザー',
       gender: null,
       notifyWorkoutRecorded: true,
+      showAllOneRm: false,
     })
   })
 })

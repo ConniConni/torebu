@@ -375,9 +375,23 @@ describe('PATCH /auth/me/settings', () => {
     const on = await agent.patch('/auth/me/settings').send({ notifyWorkoutRecorded: true })
 
     expect(off.status).toBe(200)
-    expect(off.body).toEqual({ notifyWorkoutRecorded: false })
+    expect(off.body).toEqual({ notifyWorkoutRecorded: false, showAllOneRm: false })
     expect(me.body.notifyWorkoutRecorded).toBe(false)
-    expect(on.body).toEqual({ notifyWorkoutRecorded: true })
+    expect(on.body).toEqual({ notifyWorkoutRecorded: true, showAllOneRm: false })
+  })
+
+  it('showAllOneRmを切り替えられ、/auth/meにも反映される。通知の設定は変わらない(Issue #362)', async () => {
+    const agent = await login(mateEmail)
+
+    const on = await agent.patch('/auth/me/settings').send({ showAllOneRm: true })
+    const me = await agent.get('/auth/me')
+    const off = await agent.patch('/auth/me/settings').send({ showAllOneRm: false })
+
+    expect(on.status).toBe(200)
+    expect(on.body).toEqual({ notifyWorkoutRecorded: true, showAllOneRm: true })
+    expect(me.body.showAllOneRm).toBe(true)
+    expect(me.body.notifyWorkoutRecorded).toBe(true)
+    expect(off.body.showAllOneRm).toBe(false)
   })
 
   it('空のボディ・真偽値以外は400', async () => {
@@ -387,6 +401,7 @@ describe('PATCH /auth/me/settings', () => {
     expect(
       (await agent.patch('/auth/me/settings').send({ notifyWorkoutRecorded: 'no' })).status,
     ).toBe(400)
+    expect((await agent.patch('/auth/me/settings').send({ showAllOneRm: 'no' })).status).toBe(400)
   })
 
   it('未ログインは401', async () => {
