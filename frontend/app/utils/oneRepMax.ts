@@ -46,20 +46,22 @@ export function topNormalEstimate(cells: (OneRepMaxCell | null)[]): number | nul
 }
 
 // 表の下の注意書き（種目カード単位）。RM列を出さない（対象外の種目で設定オフ）ときの文言も含む
-export const ONE_RM_NOT_TARGET_NOTE = '非表示：単関節・自重種目は1RMの対象外です。'
+export const ONE_RM_NOT_TARGET_NOTE = '単関節・自重種目は1RMの対象外です。'
 
 export function oneRepMaxNotes(
   sets: { weightKg: number | null; reps: number | null }[],
   isTarget: boolean,
 ): string[] {
-  const notes = ['RM＝推定1RM（kg、オコナー式）']
+  const notes = ['RM＝推定1RM（オコナー式）']
   if (!isTarget) {
     notes.push('この種目は1RMの対象外のため、値は参考値です（設定で表示中）')
   } else if (sets.some((s) => s.weightKg !== null && oneRepMaxLevel(s.reps) === 'reference')) {
     notes.push('グレーの値は11〜14回のセットの参考値です')
   }
   if (sets.some((s) => s.weightKg !== null && s.reps !== null && s.reps > MAX_REPS_REFERENCE)) {
-    notes.push('15回以上のセットは誤差が大きいため1RMを表示しません')
+    // 「RM＝…」の説明は、「表示しません」の説明と並べずに外す（1行にまとめる）
+    notes.shift()
+    notes.push('15回以上のセットは誤差が大きいため1RMを表示しません。')
   }
   return notes
 }

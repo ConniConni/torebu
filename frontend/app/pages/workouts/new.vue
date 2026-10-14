@@ -399,7 +399,9 @@ function showRmFor(exerciseId: string) {
   return isOneRmTargetExercise(exerciseId) || (user.value?.showAllOneRm ?? false)
 }
 
+// RMを出さない種目（対象外で設定もオフ）は、列は残して全行「−」にする
 function rmCellFor(set: WorkoutSetItem) {
+  if (!showRmFor(set.exerciseId)) return null
   return oneRepMaxCell(set.weightKg, set.reps, isOneRmTargetExercise(set.exerciseId))
 }
 
@@ -411,7 +413,7 @@ function isTopEstimate(set: WorkoutSetItem) {
   return top !== null && cell?.level === 'normal' && cell.valueKg === top
 }
 
-// 表の下の注意書き。RM列を出さない種目は「非表示：…」の1行だけ
+// 表の下の注意書き。RMを計算しない種目（RM列は「−」のまま）は「対象外です」の1行だけ
 function rmNotesFor(exerciseId: string) {
   const group = groupFor(exerciseId)
   if (!group) return []
@@ -805,9 +807,9 @@ async function onGoToExercisePicker() {
                      （ペース／時速。単位は種目のspeedUnit）を表示する。保存の仕組みは筋トレと同じ
                      （常時入力欄＋blur自動保存） -->
                 <div v-if="groupFor(element.exerciseId)!.isCardio" class="overflow-x-auto">
-                  <div class="min-w-[19rem] overflow-hidden rounded-lg">
+                  <div class="min-w-[20rem] overflow-hidden rounded-lg">
                     <div
-                      class="grid grid-cols-[2rem_minmax(5.25rem,1.3fr)_minmax(7.5rem,1.2fr)_2.25rem] gap-x-2.5 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
+                      class="grid grid-cols-[2.75rem_minmax(4rem,1fr)_minmax(8rem,1.3fr)_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">No.</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">距離</span>
@@ -820,7 +822,7 @@ async function onGoToExercisePicker() {
                         :class="i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : ''"
                       >
                         <div
-                          class="grid grid-cols-[2rem_minmax(5.25rem,1.3fr)_minmax(7.5rem,1.2fr)_2.25rem] items-center gap-x-2.5 px-3 pt-1.5"
+                          class="grid grid-cols-[2.75rem_minmax(4rem,1fr)_minmax(8rem,1.3fr)_2.25rem] items-center gap-x-2 px-3 pt-1.5"
                         >
                           <span
                             class="text-center text-lg font-bold tabular-nums text-gray-900 dark:text-ink"
@@ -846,7 +848,7 @@ async function onGoToExercisePicker() {
                               inputmode="numeric"
                               min="0"
                               aria-label="時間（分）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">分</span>
@@ -857,7 +859,7 @@ async function onGoToExercisePicker() {
                               min="0"
                               max="59"
                               aria-label="時間（秒）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1.5 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">秒</span>
@@ -889,28 +891,16 @@ async function onGoToExercisePicker() {
                   </div>
                 </div>
                 <div v-else class="overflow-x-auto">
-                  <div
-                    class="overflow-hidden rounded-lg"
-                    :class="showRmFor(element.exerciseId) ? 'min-w-[18.75rem]' : 'min-w-[17rem]'"
-                  >
+                  <div class="min-w-[19.5rem] overflow-hidden rounded-lg">
                     <div
-                      class="grid bg-gray-100 dark:bg-white/5 px-3 py-1.5"
-                      :class="
-                        showRmFor(element.exerciseId)
-                          ? 'grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
-                          : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5'
-                      "
+                      class="grid grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted"
                         >セット</span
                       >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
-                      <span
-                        v-if="showRmFor(element.exerciseId)"
-                        class="text-xs font-semibold text-gray-500 dark:text-muted"
-                        >RM</span
-                      >
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">RM</span>
                       <span></span>
                     </div>
                     <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
@@ -918,9 +908,7 @@ async function onGoToExercisePicker() {
                         v-if="setInputs[set.id]"
                         class="grid items-center px-3 py-1.5"
                         :class="[
-                          showRmFor(element.exerciseId)
-                            ? 'grid-cols-[2.25rem_minmax(4rem,1.15fr)_minmax(3.25rem,0.85fr)_3.5rem_2.25rem] gap-x-2'
-                            : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2.5',
+                          'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2',
                           i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : '',
                         ]"
                       >
@@ -956,7 +944,7 @@ async function onGoToExercisePicker() {
                             v-model="setInputs[set.id]!.reps"
                             type="number"
                             min="0"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                             @blur="onSetFieldBlur(set.id)"
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
@@ -964,8 +952,7 @@ async function onGoToExercisePicker() {
                         <!-- 推定1RM（Issue #360・#362）。保存済みの値から出す（前回比の↑と同じ）。対象外の回数は「−」。
                              通常の回数帯（1〜10回）の最大の行だけ強調し、参考値（11〜14回など）はグレー -->
                         <span
-                          v-if="showRmFor(element.exerciseId)"
-                          class="text-sm tabular-nums"
+                          class="text-xs tabular-nums"
                           :class="
                             isTopEstimate(set)
                               ? 'font-semibold text-brand-600 dark:text-accent'
@@ -976,7 +963,7 @@ async function onGoToExercisePicker() {
                         >
                           <template v-if="rmCellFor(set)"
                             >{{ rmCellFor(set)!.valueKg.toFixed(1)
-                            }}<span class="text-xs">kg</span></template
+                            }}<span class="text-[10px]">kg</span></template
                           >
                           <template v-else>−</template>
                         </span>
@@ -1158,3 +1145,19 @@ async function onGoToExercisePicker() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 数値欄の増減ボタン(スピナー)は、マウス操作のPCでは出し、タッチ端末では消す(Issue #364)。
+   狭い欄(回数・分・秒)ではスピナーが右端の幅を取るため、PCでは3桁(分の100以上など)が見切れうる */
+@media (pointer: coarse) {
+  .no-spin-touch {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .no-spin-touch::-webkit-inner-spin-button,
+  .no-spin-touch::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+</style>

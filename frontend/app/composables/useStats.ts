@@ -15,10 +15,12 @@ interface ExerciseHistoryPoint {
   setCount: number
 }
 
-// 有酸素種目の推移（Issue #352）。速さは距離・時間がそろったセットがある日だけ（無ければnull）
+// 有酸素種目の推移（Issue #352）。距離・時間は記録が無い側がnull（Issue #364）。
+// 速さは距離・時間がそろったセットがある日だけ（無ければnull）
 interface CardioHistoryPoint {
   date: string
-  distanceKm: number
+  distanceKm: number | null
+  durationSec: number | null
   paceSecPerKm: number | null
   speedKmh: number | null
 }

@@ -91,6 +91,7 @@ const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
 const setCountChartData = ref(toLineChartData([], 'セット数'))
 const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 const distanceChartData = ref(toLineChartData([], '距離(km)'))
+const durationChartData = ref(toLineChartData([], '時間(分)'))
 const speedChartData = ref(toLineChartData([], 'ペース(分/km)'))
 // 取得中に種目が切り替わったとき、遅れて返った古い結果で上書きしないための印
 let historyRequestSeq = 0
@@ -107,12 +108,22 @@ async function loadHistory() {
     if (exercise?.muscleGroup === 'cardio') {
       const cardioPoints = result as CardioHistoryPoint[]
       const isKmh = exercise.speedUnit === 'kmh'
+      // 距離だけ・時間だけの日もあるため、グラフごとに値のある日だけを並べる(Issue #364)
+      const distancePoints = cardioPoints.filter((p) => p.distanceKm !== null)
       distanceChartData.value = toLineChartData(
-        cardioPoints.map((p) => ({ date: p.date, value: p.distanceKm })),
+        distancePoints.map((p) => ({ date: p.date, value: p.distanceKm })),
         '距離(km)',
       )
+      durationChartData.value = toLineChartData(
+        cardioPoints.flatMap((p) =>
+          p.durationSec === null
+            ? []
+            : [{ date: p.date, value: Math.round((p.durationSec / 60) * 10) / 10 }],
+        ),
+        '時間(分)',
+      )
       speedChartData.value = toLineChartData(
-        cardioPoints.map((p) => ({ date: p.date, value: isKmh ? p.speedKmh : p.paceSecPerKm })),
+        distancePoints.map((p) => ({ date: p.date, value: isKmh ? p.speedKmh : p.paceSecPerKm })),
         isKmh ? '時速(km/h)' : 'ペース(分/km)',
       )
       return
@@ -245,6 +256,7 @@ const setCountChartDataThemed = computed(() => withThemedColor(setCountChartData
 const maxWeightChartDataThemed = computed(() => withThemedColor(maxWeightChartData.value))
 const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolumeChartData.value))
 const distanceChartDataThemed = computed(() => withThemedColor(distanceChartData.value))
+const durationChartDataThemed = computed(() => withThemedColor(durationChartData.value))
 const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value))
 </script>
 
@@ -313,19 +325,25 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
         </p>
         <template v-else-if="selectedExerciseId && isCardioSelected">
           <p
-            v-if="distanceChartData.labels.length === 0"
+            v-if="distanceChartData.labels.length === 0 && durationChartData.labels.length === 0"
             class="py-6 text-center text-sm text-gray-500 dark:text-muted"
           >
             この期間の記録がありません
           </p>
           <ClientOnly v-else>
-            <div class="mb-4">
+            <div v-if="distanceChartData.labels.length > 0" class="mb-4">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">距離</p>
               <div class="h-48">
                 <Line :data="distanceChartDataThemed" :options="chartOptions" />
               </div>
             </div>
-            <div>
+            <div v-if="durationChartData.labels.length > 0" class="mb-4">
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">時間（分）</p>
+              <div class="h-48">
+                <Line :data="durationChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div v-if="distanceChartData.labels.length > 0">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">
                 {{ isKmhSelected ? '時速' : 'ペース（上ほど速い）' }}
               </p>
