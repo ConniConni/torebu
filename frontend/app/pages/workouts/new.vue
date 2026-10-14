@@ -399,7 +399,9 @@ function showRmFor(exerciseId: string) {
   return isOneRmTargetExercise(exerciseId) || (user.value?.showAllOneRm ?? false)
 }
 
+// RMを出さない種目（対象外で設定もオフ）は、列は残して全行「−」にする
 function rmCellFor(set: WorkoutSetItem) {
+  if (!showRmFor(set.exerciseId)) return null
   return oneRepMaxCell(set.weightKg, set.reps, isOneRmTargetExercise(set.exerciseId))
 }
 
@@ -411,7 +413,7 @@ function isTopEstimate(set: WorkoutSetItem) {
   return top !== null && cell?.level === 'normal' && cell.valueKg === top
 }
 
-// 表の下の注意書き。RM列を出さない種目は「非表示：…」の1行だけ
+// 表の下の注意書き。RMを計算しない種目（RM列は「−」のまま）は「非表示：…」の1行だけ
 function rmNotesFor(exerciseId: string) {
   const group = groupFor(exerciseId)
   if (!group) return []
@@ -889,28 +891,16 @@ async function onGoToExercisePicker() {
                   </div>
                 </div>
                 <div v-else class="overflow-x-auto">
-                  <div
-                    class="overflow-hidden rounded-lg"
-                    :class="showRmFor(element.exerciseId) ? 'min-w-[19.5rem]' : 'min-w-[17rem]'"
-                  >
+                  <div class="min-w-[19.5rem] overflow-hidden rounded-lg">
                     <div
-                      class="grid bg-gray-100 dark:bg-white/5 px-3 py-1.5"
-                      :class="
-                        showRmFor(element.exerciseId)
-                          ? 'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2'
-                          : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2'
-                      "
+                      class="grid grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2 bg-gray-100 dark:bg-white/5 px-3 py-1.5"
                     >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted"
                         >セット</span
                       >
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">重量</span>
                       <span class="text-xs font-semibold text-gray-500 dark:text-muted">回数</span>
-                      <span
-                        v-if="showRmFor(element.exerciseId)"
-                        class="text-xs font-semibold text-gray-500 dark:text-muted"
-                        >RM</span
-                      >
+                      <span class="text-xs font-semibold text-gray-500 dark:text-muted">RM</span>
                       <span></span>
                     </div>
                     <template v-for="(set, i) in groupFor(element.exerciseId)!.sets" :key="set.id">
@@ -918,9 +908,7 @@ async function onGoToExercisePicker() {
                         v-if="setInputs[set.id]"
                         class="grid items-center px-3 py-1.5"
                         :class="[
-                          showRmFor(element.exerciseId)
-                            ? 'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2'
-                            : 'grid-cols-[2.75rem_minmax(4.5rem,1.15fr)_minmax(3.5rem,0.85fr)_2.25rem] gap-x-2',
+                          'grid-cols-[2.75rem_minmax(4rem,1.1fr)_minmax(4rem,0.9fr)_3rem_2.25rem] gap-x-2',
                           i % 2 === 1 ? 'bg-gray-50 dark:bg-surface' : '',
                         ]"
                       >
@@ -964,7 +952,6 @@ async function onGoToExercisePicker() {
                         <!-- 推定1RM（Issue #360・#362）。保存済みの値から出す（前回比の↑と同じ）。対象外の回数は「−」。
                              通常の回数帯（1〜10回）の最大の行だけ強調し、参考値（11〜14回など）はグレー -->
                         <span
-                          v-if="showRmFor(element.exerciseId)"
                           class="text-xs tabular-nums"
                           :class="
                             isTopEstimate(set)
