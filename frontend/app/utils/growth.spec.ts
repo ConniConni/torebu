@@ -55,6 +55,7 @@ describe('splitVisibleExercises', () => {
 describe('表示の整形', () => {
   it('伸び率の符号', () => {
     expect(formatSignedPct(10.3)).toBe('+10.3%')
+    expect(formatSignedPct(10)).toBe('+10.0%')
     expect(formatSignedPct(-2.1)).toBe('−2.1%')
     expect(formatSignedPct(0)).toBe('±0')
     expect(formatSignedPct(null)).toBe('—')

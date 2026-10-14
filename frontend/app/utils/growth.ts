@@ -45,7 +45,8 @@ export function splitVisibleExercises(
 export function formatSignedPct(pct: number | null): string {
   if (pct === null) return '—'
   if (pct === 0) return '±0'
-  return pct > 0 ? `+${pct}%` : `−${Math.abs(pct)}%`
+  // 桁をそろえるため小数1桁で出す（10は「+10.0%」）
+  return pct > 0 ? `+${pct.toFixed(1)}%` : `−${Math.abs(pct).toFixed(1)}%`
 }
 
 export function formatSignedDays(diff: number): string {
