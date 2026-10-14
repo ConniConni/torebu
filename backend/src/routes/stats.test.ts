@@ -415,8 +415,20 @@ describe('GET /stats/exercises/:exerciseId/history（有酸素、Issue #352）',
     const res = await agent.get(`/stats/exercises/${bikeId}/history?range=all`)
 
     expect(res.body).toEqual([
-      { date: '2026-09-01', distanceKm: 20.5, durationSec: null, paceSecPerKm: null, speedKmh: null },
-      { date: '2026-09-02', distanceKm: null, durationSec: 1800, paceSecPerKm: null, speedKmh: null },
+      {
+        date: '2026-09-01',
+        distanceKm: 20.5,
+        durationSec: null,
+        paceSecPerKm: null,
+        speedKmh: null,
+      },
+      {
+        date: '2026-09-02',
+        distanceKm: null,
+        durationSec: 1800,
+        paceSecPerKm: null,
+        speedKmh: null,
+      },
     ])
   })
 
@@ -437,5 +449,202 @@ describe('GET /stats/exercises/:exerciseId/history（有酸素、Issue #352）',
     const res = await agent.get(`/stats/exercises/${runId}/history?range=all`)
 
     expect(res.body.map((p: { date: string }) => p.date)).toEqual(['2026-09-01'])
+  })
+})
+
+// 今日から数えてn日前の日付（その日のUTC 0時。performedAtは日付列のため、実行環境のタイムゾーンに
+// 関わらず「ローカルの暦日のn日前」を指すようにしてある。期間の境界のテストに使う）
+function daysAgo(n: number): Date {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+}
+
+describe('GET /stats/growth（期間比較、Issue #366）', () => {
+  async function addSet(
+    userId: string,
+    exId: string,
+    performedAt: Date,
+    reps: number,
+    weightKg: number | null,
+  ) {
+    const workout = await createWorkout(userId, { performedAt })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: exId, setOrder: 1, reps, weightKg },
+    })
+  }
+
+  it('未ログインなら401を返す', async () => {
+    const res = await request(app).get('/stats/growth')
+
+    expect(res.status).toBe(401)
+  })
+
+  it('全期間・不正なrangeは400を返す（全期間は比較相手が無い）', async () => {
+    const agent = await loginAsOwner()
+
+    expect((await agent.get('/stats/growth?range=all')).status).toBe(400)
+    expect((await agent.get('/stats/growth?range=invalid')).status).toBe(400)
+  })
+
+  it('前の期間に記録が無ければ、hasPrevious: falseと期間の日付だけを返す', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(5), 10, 60)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    expect(res.status).toBe(200)
+    expect(res.body.hasPrevious).toBe(false)
+    expect(res.body.current).toBeUndefined()
+    expect(res.body.exercises).toBeUndefined()
+    expect(res.body.previousStart).toBeTruthy()
+  })
+
+  it('今期と前期の合計負荷重量・トレ日数・推定1RMを比べる', async () => {
+    // 前期: 60kg×10(推定75.0kg、600kg)。今期: 65kg×6(390kg)＋70kg×10(700kg、推定87.5)
+    await addSet(ownerId, exerciseId, daysAgo(45), 10, 60)
+    await addSet(ownerId, exerciseId, daysAgo(5), 6, 65)
+    await addSet(ownerId, exerciseId, daysAgo(3), 10, 70)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    expect(res.status).toBe(200)
+    expect(res.body.hasPrevious).toBe(true)
+    expect(res.body.previous).toEqual({ volumeKg: 600, trainingDays: 1 })
+    expect(res.body.current).toEqual({ volumeKg: 65 * 6 + 70 * 10, trainingDays: 2 })
+    expect(res.body.volumeChangePct).toBe(81.7) // (1090-600)/600 = 81.67
+    expect(res.body.trainingDaysDiff).toBe(1)
+    // 推定1RM: 前期 60×(40+10)/40=75.0、今期 70×(40+10)/40=87.5 → +16.7%
+    expect(res.body.exercises).toEqual([
+      {
+        exerciseId,
+        name: 'ベンチプレス',
+        previousKg: 75,
+        currentKg: 87.5,
+        growthPct: 16.7,
+      },
+    ])
+  })
+
+  // 端ぎりぎりの日（-30/-31/-61/-62日）は、performedAtが日付列でDBへの比較値が日付に切り詰められるため
+  // 実行環境のタイムゾーン（本番はUTC、開発機は日本時間）で1日ずれる。/stats/volumeと同じ挙動なので、
+  // ここでは端から2日以上離れた日で「今期・前期・どちらでもない」の分類を確かめる
+  it('今期（-28日）・前期（-33日）に分かれ、それより前（-70日）はどちらにも入らない（1m）', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(28), 10, 10) // 今期 100kg
+    await addSet(ownerId, exerciseId, daysAgo(33), 10, 20) // 前期 200kg
+    await addSet(ownerId, exerciseId, daysAgo(70), 10, 30) // 対象外
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    expect(res.body.current.volumeKg).toBe(100)
+    expect(res.body.previous.volumeKg).toBe(200)
+  })
+
+  it('3mは90日ずつで比べる', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(60), 10, 10) // 今期
+    await addSet(ownerId, exerciseId, daysAgo(120), 10, 20) // 前期
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=3m')
+
+    expect(res.body.current.volumeKg).toBe(100)
+    expect(res.body.previous.volumeKg).toBe(200)
+  })
+
+  it('前期の合計負荷重量が0（自重のみ）でも比較は出し、増減%はnullになる', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(45), 10, null)
+    await addSet(ownerId, exerciseId, daysAgo(5), 10, 60)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    expect(res.body.hasPrevious).toBe(true)
+    expect(res.body.previous).toEqual({ volumeKg: 0, trainingDays: 1 })
+    expect(res.body.volumeChangePct).toBeNull()
+    expect(res.body.exercises).toEqual([])
+  })
+
+  it('種目別は、両方の期間に10回までのセットがある種目だけを伸び率の大きい順に返す', async () => {
+    const squat = await prisma.exercise.create({
+      data: { name: 'バーベルスクワット', muscleGroup: 'legs' },
+    })
+    const deadlift = await prisma.exercise.create({
+      data: { name: 'デッドリフト', muscleGroup: 'back' },
+    })
+    try {
+      await addSet(ownerId, exerciseId, daysAgo(45), 10, 60) // ベンチ 75.0
+      await addSet(ownerId, exerciseId, daysAgo(5), 10, 62) // 77.5 → +3.3%
+      await addSet(ownerId, squat.id, daysAgo(45), 5, 100) // 112.5
+      await addSet(ownerId, squat.id, daysAgo(5), 5, 110) // 123.75→123.8 → +10.0%
+      await addSet(ownerId, deadlift.id, daysAgo(5), 5, 120) // 今期だけ→出さない
+
+      const agent = await loginAsOwner()
+      const res = await agent.get('/stats/growth?range=1m')
+
+      expect(res.body.exercises.map((e: { name: string }) => e.name)).toEqual([
+        'バーベルスクワット',
+        'ベンチプレス',
+      ])
+      expect(res.body.exercises[0].growthPct).toBe(10)
+    } finally {
+      await prisma.workoutSet.deleteMany({ where: { exerciseId: { in: [squat.id, deadlift.id] } } })
+      await prisma.exercise.deleteMany({ where: { id: { in: [squat.id, deadlift.id] } } })
+    }
+  })
+
+  it('11回以上のセットだけの種目は種目別に出さない（合計負荷重量には入る）', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(45), 12, 50)
+    await addSet(ownerId, exerciseId, daysAgo(5), 12, 55)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    expect(res.body.exercises).toEqual([])
+    expect(res.body.current.volumeKg).toBe(55 * 12)
+  })
+
+  it('対象外の種目（単関節）は、設定showAllOneRmをオンにしたときだけ種目別に出る', async () => {
+    const lateral = await prisma.exercise.create({
+      data: { name: 'ダンベルサイドレイズ', muscleGroup: 'shoulders' },
+    })
+    try {
+      await addSet(ownerId, lateral.id, daysAgo(45), 10, 10)
+      await addSet(ownerId, lateral.id, daysAgo(5), 10, 12)
+
+      const agent = await loginAsOwner()
+      const off = await agent.get('/stats/growth?range=1m')
+      await agent.patch('/auth/me/settings').send({ showAllOneRm: true })
+      const on = await agent.get('/stats/growth?range=1m')
+
+      expect(off.body.exercises).toEqual([])
+      expect(on.body.exercises).toHaveLength(1)
+      expect(on.body.exercises[0].growthPct).toBe(20)
+    } finally {
+      await prisma.workoutSet.deleteMany({ where: { exerciseId: lateral.id } })
+      await prisma.exercise.delete({ where: { id: lateral.id } })
+    }
+  })
+
+  it('他人の記録・削除済みの記録・カスタム種目は含めない', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(45), 10, 60)
+    await addSet(ownerId, exerciseId, daysAgo(5), 10, 62)
+    await addSet(otherId, exerciseId, daysAgo(5), 10, 200) // 他人
+    const deleted = await createWorkout(ownerId, {
+      performedAt: daysAgo(4),
+      deletedAt: new Date(),
+    })
+    await prisma.workoutSet.create({
+      data: { workoutId: deleted.id, exerciseId, setOrder: 1, reps: 10, weightKg: 300 },
+    })
+    await addSet(ownerId, customExerciseId, daysAgo(5), 10, 500) // カスタム種目
+
+    const agent = await loginAsOwner()
+    const res = await agent.get('/stats/growth?range=1m')
+
+    // 他人・削除済み・カスタム種目を除くと、今期は62kg×10の1日だけ
+    expect(res.body.current).toEqual({ volumeKg: 620, trainingDays: 1 })
+    expect(res.body.exercises).toHaveLength(1)
   })
 })

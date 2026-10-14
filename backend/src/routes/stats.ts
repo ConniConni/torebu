@@ -17,6 +17,11 @@ const RANGE_DAYS: Record<string, number | null> = {
   all: null,
 }
 
+// 期間比較（GET /stats/growth）は全期間（比較相手が無い）を受け付けない
+const growthRangeSchema = z.object({
+  range: z.enum(['1m', '3m']).default('1m'),
+})
+
 const rangeSchema = z.object({
   range: z.enum(['1m', '3m', 'all']).default('3m'),
 })
@@ -230,4 +235,113 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
     .sort((a, b) => a.date.localeCompare(b.date))
 
   res.json(result)
+})
+
+// 伸び率(%)。0.1%単位に丸める。前が0以下なら定義できないのでnull
+function growthPct(previous: number, current: number): number | null {
+  if (previous <= 0) return null
+  return Math.round(((current - previous) / previous) * 1000) / 10
+}
+
+// GET /stats/growth?range=1m|3m (Issue #366)
+// 直近の期間と、その直前の同じ長さの期間を比べる。期間の切り方は/stats/volumeと同じ
+// (今日を含む「今日-N日〜今日」のN+1日間。前の期間はその直前のN+1日間)。全期間は比較相手が無いので400。
+// 前の期間にセットが1件も無ければ比較値は返さず`hasPrevious: false`だけ返す(トレ日数0＝記録なし)。
+// - 合計負荷重量：/stats/volumeと同じ定義(公式種目・自重除外)。前期が0なら増減%はnull
+// - トレ日数：セットがある日の数(frontend/app/utils/trainingDays.tsと同じ定義。種目の種類は問わない)
+// - 種目別：推定1RM(日ごとではなく期間内の最大値)。今期・前期の両方に対象セット(1〜10回)がある公式種目だけ。
+//   対象種目の判定は種目別推移と同じ(複合関節の種目、または設定showAllOneRmがオン)。伸び率の大きい順
+statsRouter.get('/growth', requireAuth, async (req, res) => {
+  const parsed = growthRangeSchema.safeParse(req.query)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() })
+    return
+  }
+  const userId = req.session.userId
+  const windowDays = (RANGE_DAYS[parsed.data.range] as number) + 1
+  const currentStart = rangeStartDate(parsed.data.range) as Date
+  const previousStart = new Date(currentStart)
+  previousStart.setDate(previousStart.getDate() - windowDays)
+  const previousEnd = new Date(currentStart)
+  previousEnd.setDate(previousEnd.getDate() - 1)
+
+  const period = {
+    range: parsed.data.range,
+    currentStart: toDateKey(currentStart),
+    currentEnd: toDateKey(new Date()),
+    previousStart: toDateKey(previousStart),
+    previousEnd: toDateKey(previousEnd),
+  }
+
+  const [sets, user] = await Promise.all([
+    prisma.workoutSet.findMany({
+      where: { workout: { userId, deletedAt: null, performedAt: { gte: previousStart } } },
+      select: {
+        weightKg: true,
+        reps: true,
+        exercise: { select: { id: true, name: true, createdBy: true } },
+        workout: { select: { performedAt: true } },
+      },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { showAllOneRm: true } }),
+  ])
+  const showAllOneRm = user?.showAllOneRm ?? false
+
+  const empty = () => ({
+    volumeKg: 0,
+    days: new Set<string>(),
+    // 種目ID → { name, 期間内の推定1RMの最大値 }
+    oneRm: new Map<string, { name: string; kg: number }>(),
+  })
+  const current = empty()
+  const previous = empty()
+  for (const set of sets) {
+    const bucket = set.workout.performedAt >= currentStart ? current : previous
+    bucket.days.add(toDateKey(set.workout.performedAt))
+    if (set.weightKg === null || set.exercise.createdBy !== null) continue
+    const weightKg = Number(set.weightKg)
+    bucket.volumeKg += weightKg * (set.reps ?? 0)
+    if (!isOneRmTarget(set.exercise) && !showAllOneRm) continue
+    if (oneRepMaxLevel(set.reps) !== 'normal') continue
+    const estimated = estimateOneRepMaxKg(weightKg, set.reps)
+    if (estimated === null) continue
+    const existing = bucket.oneRm.get(set.exercise.id)
+    if (!existing || estimated > existing.kg) {
+      bucket.oneRm.set(set.exercise.id, { name: set.exercise.name, kg: estimated })
+    }
+  }
+
+  if (previous.days.size === 0) {
+    res.json({ ...period, hasPrevious: false })
+    return
+  }
+
+  const exercises = Array.from(current.oneRm.entries())
+    .flatMap(([exerciseId, cur]) => {
+      const prev = previous.oneRm.get(exerciseId)
+      if (!prev) return []
+      return [
+        {
+          exerciseId,
+          name: cur.name,
+          previousKg: roundToTenth(prev.kg),
+          currentKg: roundToTenth(cur.kg),
+          growthPct: growthPct(prev.kg, cur.kg),
+        },
+      ]
+    })
+    .sort(
+      (a, b) =>
+        (b.growthPct ?? -Infinity) - (a.growthPct ?? -Infinity) || a.name.localeCompare(b.name),
+    )
+
+  res.json({
+    ...period,
+    hasPrevious: true,
+    current: { volumeKg: current.volumeKg, trainingDays: current.days.size },
+    previous: { volumeKg: previous.volumeKg, trainingDays: previous.days.size },
+    volumeChangePct: growthPct(previous.volumeKg, current.volumeKg),
+    trainingDaysDiff: current.days.size - previous.days.size,
+    exercises,
+  })
 })
