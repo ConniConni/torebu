@@ -1,3 +1,5 @@
+import type { GrowthExercise } from '~/utils/growth'
+
 export type StatsRange = '1m' | '3m' | 'all'
 
 interface VolumePoint {
@@ -25,6 +27,28 @@ interface CardioHistoryPoint {
   speedKmh: number | null
 }
 
+// 期間比較（Issue #366、`GET /stats/growth`）。前の期間に記録が無いときはhasPrevious: falseだけ
+export type GrowthRange = '1m' | '3m'
+
+interface GrowthPeriod {
+  range: GrowthRange
+  currentStart: string
+  currentEnd: string
+  previousStart: string
+  previousEnd: string
+}
+
+type GrowthResponse =
+  | (GrowthPeriod & { hasPrevious: false })
+  | (GrowthPeriod & {
+      hasPrevious: true
+      current: { volumeKg: number; trainingDays: number }
+      previous: { volumeKg: number; trainingDays: number }
+      volumeChangePct: number | null
+      trainingDaysDiff: number
+      exercises: GrowthExercise[]
+    })
+
 // 統計画面（/stats、Phase3-C）専用のAPI呼び出し。exercises/workoutsと違い、rangeや選択種目が
 // 変わるたびに取り直す一覧のため、useExercises/useWorkoutsのようなuseStateでの
 // セッション中キャッシュはしない（画面を離れたら破棄してよい）
@@ -44,7 +68,11 @@ export function useStats() {
     )
   }
 
-  return { fetchVolume, fetchExerciseHistory }
+  async function fetchGrowth(range: GrowthRange) {
+    return requestFetch<GrowthResponse>('/api/stats/growth', { query: { range } })
+  }
+
+  return { fetchVolume, fetchExerciseHistory, fetchGrowth }
 }
 
-export type { VolumePoint, ExerciseHistoryPoint, CardioHistoryPoint }
+export type { VolumePoint, ExerciseHistoryPoint, CardioHistoryPoint, GrowthResponse }
