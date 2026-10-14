@@ -1,0 +1,155 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>伸びの記録 統計画面モック</title>
+<style>
+:root{--brand:#c8552b;--bg:#f9fafb;--card:#fff;--ink:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#d1d5db;--head:#f3f4f6;--tint:#fdf1ec;--tintline:#f6d9cc;--up:#15803d;--down:#b45309;--new:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--card:#222;--ink:#f2f2ee;--muted:#a3a29b;--faint:#7a7973;--line:#3a3a38;--head:#2a2a28;--tint:#2b3318;--tintline:#44521f;--brand:#c8ff4d;--up:#86efac;--down:#fbbf24;--new:#93c5fd}}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif;padding:16px}
+h1{font-size:16px;margin:0 0 4px}.note{color:var(--muted);font-size:12px;margin:0 0 16px}
+.wrap{display:flex;flex-wrap:wrap;gap:28px;justify-content:center;align-items:flex-start;max-width:900px;margin:auto}
+.pat{width:343px}
+.pat>h2{font-size:13px;margin:0 0 6px}.pat>p{font-size:12px;color:var(--muted);margin:0 0 8px}
+.screen{background:var(--bg);border:1px dashed var(--line);border-radius:14px;padding:10px;box-sizing:border-box}
+.card{background:var(--card);border-radius:10px;box-shadow:0 1px 3px #0002;padding:14px;box-sizing:border-box}
+.card+.card{margin-top:12px}
+.tag{display:inline-block;font-size:10px;font-weight:700;color:#fff;background:var(--new);border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
+@media(prefers-color-scheme:dark){.tag{color:#0b1220}}
+.exist{outline:1px dashed var(--faint);outline-offset:-1px}
+.top{font-size:16px;font-weight:600;margin:4px 2px 10px}
+.ttl{font-weight:600;margin:0 0 2px}.sub{font-size:12px;color:var(--faint);margin:0 0 10px}
+.tabs{display:flex;gap:4px;background:var(--head);border-radius:8px;padding:3px;margin-bottom:12px}
+.tabs span{flex:1;text-align:center;font-size:12px;padding:4px 0;border-radius:6px;color:var(--muted)}
+.tabs .on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px #0002}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.kpi .l{font-size:11px;color:var(--muted)}.kpi .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.kpi .v small{font-size:11px;font-weight:400;color:var(--muted);margin-left:2px}
+.d{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.d.up{color:var(--up)}.d.dn{color:var(--down)}.d.eq{color:var(--faint);font-weight:400}
+.vs{font-size:11px;color:var(--faint)}
+.sec{font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px}
+.rk{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
+.rk.f{border-top:0}
+.rk .n{font-weight:600}.rk .s{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;text-align:right}
+.rk .bar{grid-column:1/3;height:6px;border-radius:3px;background:var(--head);margin-top:4px;overflow:hidden}.rk .bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.rk .bar.none{background:none}
+.rk .dd{text-align:right}
+.pill{font-size:11px;padding:1px 8px;border-radius:9px;color:var(--brand);background:var(--tint);border:1px solid var(--tintline);white-space:nowrap}
+.sel{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:10px;display:flex;justify-content:space-between}
+.chart{margin:0 0 12px}.chart .cap{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 2px}
+.chart svg{display:block;width:100%;height:64px}
+.chart polyline{fill:none;stroke:var(--faint);stroke-width:2;stroke-linejoin:round}
+.hr{border:0;border-top:1px solid var(--line);margin:14px 0 12px}
+.tl{position:relative;margin:0;padding:0 0 0 18px;list-style:none}
+.tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl li{position:relative;padding:0 0 12px}.tl li:last-child{padding-bottom:0}
+.tl li:before{content:"";position:absolute;left:-17px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--faint)}
+.tl li.now:before{background:var(--brand);border-color:var(--brand)}
+.tl .dt{font-size:11px;color:var(--faint)}.tl .val{font-weight:700;font-variant-numeric:tabular-nums}.tl .val small{font-weight:400;color:var(--muted);font-size:12px}
+.tl .gain{font-size:12px;color:var(--up);font-weight:600;margin-left:6px}
+.tl .how{font-size:12px;color:var(--muted)}
+.more{text-align:center;font-size:12px;color:var(--brand);margin-top:10px}
+.gap{border:1px dashed var(--faint);border-radius:10px;padding:10px;font-size:12px;color:var(--muted);text-align:center;margin-top:12px}
+.fold{text-align:center;font-size:12px;color:var(--brand);padding:8px 0 0;border-top:1px solid var(--line)}
+.legend{font-size:11px;color:var(--muted);margin:10px 0 0}
+</style></head><body>
+<h1>伸びの記録：統計画面での並び</h1>
+<p class="note">決定事項：棒＝伸び率に比例（最大の伸びが100%、下がった・変化なしは棒なし）／①は1か月・3か月で出し、前の期間（直前の同じ長さ）に記録が1日以上あるときだけ比較を出す（なければその旨の文言）／全期間では①を出さない／種目が多いときは伸び率の大きい順に上位5種目まで、残りは折りたたみ／②は種目別推移カードの末尾で選択種目に連動し、既存の自己ベスト通知と同じ重量基準。幅343px・数値はダミー。<span class="tag">新</span>が追加部分、点線の枠が既存部分</p>
+<div class="wrap">
+
+<section class="pat"><h2>画面A：期間「1か月」</h2>
+<p>期間タブの下に①を置き、既存のカードはそのまま。②は種目別推移の最後</p>
+<div class="screen">
+<div class="top">統計</div>
+<div class="tabs exist" style="margin-bottom:12px"><span class="on">1か月</span><span>3か月</span><span>全期間</span></div>
+
+<div class="card">
+<p class="ttl">この1か月の伸び<span class="tag">新</span></p><p class="sub">9/16〜10/15 と 8/16〜9/15 の比較</p>
+<div class="big">
+<div class="kpi"><div class="l">合計負荷重量</div><div class="v">48,200<small>kg</small></div><div class="d up">▲ +12.4%</div><div class="vs">前の期間 42,900kg</div></div>
+<div class="kpi"><div class="l">トレ日数</div><div class="v">14<small>日</small></div><div class="d up">▲ +2日</div><div class="vs">前の期間 12日</div></div>
+</div>
+<p class="sec">種目別 推定1RMの伸び</p>
+<div class="rk f"><div class="n">ベンチプレス</div><div class="s">72.5→80.0kg　<span class="d up">+10.3%</span></div><div class="bar"><i style="width:100%"></i></div></div>
+<div class="rk"><div class="n">スクワット</div><div class="s">95.0→100.0kg　<span class="d up">+5.3%</span></div><div class="bar"><i style="width:51%"></i></div></div>
+<div class="rk"><div class="n">チェストプレス</div><div class="s">50.0→52.5kg　<span class="d up">+5.0%</span></div><div class="bar"><i style="width:49%"></i></div></div>
+<div class="rk"><div class="n">レッグプレス</div><div class="s">140→145kg　<span class="d up">+3.6%</span></div><div class="bar"><i style="width:35%"></i></div></div>
+<div class="rk"><div class="n">ベントオーバーロウ</div><div class="s">60.0→61.0kg　<span class="d up">+1.7%</span></div><div class="bar"><i style="width:16%"></i></div></div>
+<div class="fold">ほか3種目を見る ▾</div>
+<p class="legend">棒の長さ＝伸び率（この期間でいちばん伸びた種目を100%）。伸び率の大きい順に上位5種目まで表示し、残りは折りたたむ（下がった・変わらない種目は棒なし、折りたたみ側）。期間内に記録が無い種目、1RMの対象外の種目は出さない</p>
+</div>
+
+<div class="card exist">
+<p class="ttl">合計負荷重量の推移</p><p class="sub">全種目合算・日別</p>
+<div class="chart"><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,50 40,38 80,44 120,30 160,34 200,20 240,26 300,10"/></svg></div>
+</div>
+
+<div class="card exist">
+<p class="ttl">種目別推移</p>
+<div class="sel" style="margin-top:6px"><span>ベンチプレス</span><span style="color:var(--faint)">▾</span></div>
+<div class="chart"><p class="cap">合計負荷重量</p><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,46 60,40 120,44 180,28 240,30 300,14"/></svg></div>
+<div class="chart"><p class="cap">推定1RM</p><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,52 60,46 120,42 180,34 240,24 300,12"/></svg></div>
+<div class="chart"><p class="cap">最大重量</p><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,50 60,50 120,40 180,40 240,28 300,28"/></svg></div>
+<div class="chart" style="margin-bottom:0"><p class="cap">セット数</p><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,30 60,20 120,34 180,20 240,34 300,20"/></svg></div>
+
+<hr class="hr">
+<p class="ttl" style="margin-bottom:8px">自己ベストの履歴<span class="tag">新</span></p>
+<ul class="tl">
+<li class="now"><div class="dt">10/12</div><div class="val">65.0<small>kg</small><span class="gain">+2.5kg</span></div><div class="how">65kg×5　<span class="pill">現在のベスト</span></div></li>
+<li><div class="dt">9/28</div><div class="val">62.5<small>kg</small><span class="gain">+2.5kg</span></div><div class="how">62.5kg×8</div></li>
+<li><div class="dt">9/10</div><div class="val">60.0<small>kg</small><span class="gain">+5.0kg</span></div><div class="how">60kg×10</div></li>
+<li><div class="dt">8/24</div><div class="val">55.0<small>kg</small></div><div class="how">55kg×8　初めての記録</div></li>
+</ul>
+<div class="more">もっと見る（あと3件）</div>
+<p class="legend">最大重量が、それまでの自分の記録を上回った日だけ並べる（既存の自己ベスト通知と同じ基準）。期間タブとは無関係に全期間、新しい順</p>
+</div>
+</div>
+</section>
+
+<section class="pat"><h2>画面B：折りたたみを開いた状態（1か月）</h2>
+<p>「ほか3種目を見る」を押したあと。下がった・変わらない種目が並ぶ。「閉じる」で戻る</p>
+<div class="screen">
+<div class="card">
+<p class="ttl">この1か月の伸び<span class="tag">新</span></p><p class="sub">9/16〜10/15 と 8/16〜9/15 の比較</p>
+<p class="sec" style="margin-top:0">種目別 推定1RMの伸び（8種目）</p>
+<div class="rk f"><div class="n">ベンチプレス</div><div class="s">72.5→80.0kg　<span class="d up">+10.3%</span></div><div class="bar"><i style="width:100%"></i></div></div>
+<div class="rk"><div class="n" style="color:var(--faint)">⋮ 上位5種目（省略）</div><div></div></div>
+<div class="rk"><div class="n">ショルダープレス</div><div class="s">40.0→40.0kg　<span class="d eq">±0</span></div><div class="bar none"></div></div>
+<div class="rk"><div class="n">デッドリフト</div><div class="s">120.0→120.0kg　<span class="d eq">±0</span></div><div class="bar none"></div></div>
+<div class="rk"><div class="n">オーバーヘッドプレス</div><div class="s">47.0→46.0kg　<span class="d dn">−2.1%</span></div><div class="bar none"></div></div>
+<div class="fold">閉じる ▴</div>
+</div></div>
+</section>
+
+<section class="pat"><h2>画面C：期間「3か月」</h2>
+<p>前の期間（4/16〜7/15）に記録があれば、1か月と同じ形で比較する</p>
+<div class="screen">
+<div class="tabs exist"><span>1か月</span><span class="on">3か月</span><span>全期間</span></div>
+<div class="card">
+<p class="ttl">この3か月の伸び<span class="tag">新</span></p><p class="sub">7/16〜10/15 と 4/16〜7/15 の比較</p>
+<div class="big">
+<div class="kpi"><div class="l">合計負荷重量</div><div class="v">131,000<small>kg</small></div><div class="d up">▲ +18.2%</div><div class="vs">前の期間 110,800kg</div></div>
+<div class="kpi"><div class="l">トレ日数</div><div class="v">38<small>日</small></div><div class="d up">▲ +5日</div><div class="vs">前の期間 33日</div></div>
+</div>
+<p class="legend" style="margin-top:0">種目別の一覧は1か月と同じ表示（上位5種目＋折りたたみ）</p>
+</div></div>
+</section>
+
+<section class="pat"><h2>画面D：3か月で前の期間に記録がない場合</h2>
+<p>記録を始めて間もない人。①の位置に文言だけ出す（1か月でも、前の1か月に記録がなければ同じ）</p>
+<div class="screen">
+<div class="tabs exist"><span>1か月</span><span class="on">3か月</span><span>全期間</span></div>
+<div class="card">
+<p class="ttl">この3か月の伸び<span class="tag">新</span></p><p class="sub">7/16〜10/15</p>
+<div class="gap" style="margin-top:0">比較できる前の期間（4/16〜7/15）の<br>記録がまだありません。<br>記録を続けると、ここに伸びが出ます</div>
+</div></div>
+</section>
+
+<section class="pat"><h2>画面E：期間「全期間」</h2>
+<p>比較相手が無いので①は出さない。種目別推移・自己ベスト履歴は画面Aと同じ</p>
+<div class="screen">
+<div class="tabs exist"><span>1か月</span><span>3か月</span><span class="on">全期間</span></div>
+<div class="card exist">
+<p class="ttl">合計負荷重量の推移</p><p class="sub">全種目合算・日別</p>
+<div class="chart" style="margin:0"><svg viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="0,56 40,50 80,52 120,40 160,36 200,26 240,28 300,8"/></svg></div>
+</div></div>
+</section>
+
+</div></body></html>
