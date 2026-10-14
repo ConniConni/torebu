@@ -86,6 +86,7 @@ async function loadVolume() {
 
 const historyPending = ref(false)
 const historyError = ref(false)
+const estimated1RmChartData = ref(toLineChartData([], '推定1RM(kg)'))
 const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
 const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 const distanceChartData = ref(toLineChartData([], '距離(km)'))
@@ -116,6 +117,13 @@ async function loadHistory() {
       return
     }
     const points = result as ExerciseHistoryPoint[]
+    // 推定1RMは対象セットが無い日(13回以上だけ等)がnullで返る。0として描かないよう、その日は点ごと除く
+    estimated1RmChartData.value = toLineChartData(
+      points.flatMap((p) =>
+        p.estimated1RmKg === null ? [] : [{ date: p.date, value: p.estimated1RmKg }],
+      ),
+      '推定1RM(kg)',
+    )
     maxWeightChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.maxWeightKg })),
       '最大重量(kg)',
@@ -205,6 +213,7 @@ function withThemedColor(data: LineChartData): LineChartData {
 }
 
 const volumeChartDataThemed = computed(() => withThemedColor(volumeChartData.value))
+const estimated1RmChartDataThemed = computed(() => withThemedColor(estimated1RmChartData.value))
 const maxWeightChartDataThemed = computed(() => withThemedColor(maxWeightChartData.value))
 const historyVolumeChartDataThemed = computed(() => withThemedColor(historyVolumeChartData.value))
 const distanceChartDataThemed = computed(() => withThemedColor(distanceChartData.value))
@@ -310,15 +319,30 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
           </p>
           <ClientOnly v-else>
             <div class="mb-4">
-              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">最大重量</p>
-              <div class="h-48">
-                <Line :data="maxWeightChartDataThemed" :options="chartOptions" />
-              </div>
-            </div>
-            <div>
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">合計負荷重量</p>
               <div class="h-48">
                 <Line :data="historyVolumeChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div class="mb-4">
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">推定1RM</p>
+              <p class="mb-1 text-xs text-gray-500 dark:text-muted">
+                重さと回数から推定した、1回挙げられる重さの目安（12回までのセットで計算）
+              </p>
+              <p
+                v-if="estimated1RmChartData.labels.length === 0"
+                class="py-6 text-center text-sm text-gray-500 dark:text-muted"
+              >
+                この期間は推定できる記録がありません
+              </p>
+              <div v-else class="h-48">
+                <Line :data="estimated1RmChartDataThemed" :options="chartOptions" />
+              </div>
+            </div>
+            <div>
+              <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">最大重量</p>
+              <div class="h-48">
+                <Line :data="maxWeightChartDataThemed" :options="chartOptions" />
               </div>
             </div>
           </ClientOnly>

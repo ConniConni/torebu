@@ -125,7 +125,7 @@
 ## 2. あなたが決めたこと（読む章）
 
 [schema.md](./schema.md) の「設計方針メモ」には49項目ある。**多すぎて覚えられないのが正常。**
-そのうち **実際に効いている12個** だけをここに置く。困ったらまずこの12行に戻る。
+そのうち **実際に効いている13個** だけをここに置く。困ったらまずこの13行に戻る。
 
 | # | 決めたこと | なぜ |
 |---|---|---|
@@ -141,6 +141,7 @@
 | 10 | 記録日は**作成後は編集不可**。②ホームの「＋今日の記録を始める」ボタンは**「今日」固定のまま** | 過去日対応は画面設計ごとの見直しが必要になるため、意図的に切り離した。記録日を編集可能にすると、③の「同じ日付のworkoutがあれば再開する」という日付ベースの引き当てと噛み合わず、記録が実質二重になる事故につながる。**③のページ自体はIssue #52で`?date=`クエリに対応済み**（下記③の行・§3-4参照）で、**②の既存記録カード（過去日含む）から③へ日付付きで遷移する導線は実装済み**（⑥廃止・統合ステップ4）。**②のカレンダーで過去日を選んで記録が0件のときに③を開始する導線もIssue #61で実装済み**（未来日は③側で今日にクランプされ紛らわしいため対象外） |
 | 11 | **カスタム種目の追加は今後の有料オプション**とし、導線は案内表示に差し替えた（[Issue #330](https://github.com/ConniConni/torebu/issues/330)）。**UIのみ**止めており`POST /exercises`は止めていない | 課金要素にする方針のため。課金の実装前は、④の「＋種目を追加」と⑦の直リンクで案内を出すだけにした。既存のカスタム種目はそのまま使え・削除もできる。API側は課金の実装時に止める |
 | 12 | ③の**前回比**（[Issue #354](https://github.com/ConniConni/torebu/issues/354)）は、「前回」を**対象日より前でその種目のセットがある直近の日付の全セット**とし、各セットは**前回のトップセット**（最も重いセット、同じ重量なら回数が多い方）と比べて、上回ったときだけ↑を出す。**同じ・下がったことは表示しない**。カード単位の「前回超え！」は**合計負荷重量（統計と同じ定義、自重セット除外）**で判定し、全セット自重どうしのときだけ合計回数で比べる | 漸進性過負荷（少しずつ負荷を上げる）をトレーニング中に見える化する機能群（①前回比→②今日の挑戦→③推定1RM推移→④伸びの記録の拡張）の1つ目。下がった表示を出さないのはユーザー判断（モックで確認済み）。当初は前回の同じ番目のセットと比べていたが、ウォームアップの本数が日によって違うと位置がずれて意図しない↑／＝が出るため、トップセットとの比較に変え、＝も出さないことにした（ユーザー判断）。前回の基準をworkoutではなく日付にしたのは、workoutsに日付の一意制約が無く、③を開いた時点ではworkoutがまだ無いこともあるため |
+| 13 | 統計の種目別推移に**推定1RM**（[Issue #356](https://github.com/ConniConni/torebu/issues/356)）を足し、**合計負荷重量の次**（合計負荷重量→推定1RM→最大重量）に出す。当初は一番上の予定だったが、ユーザー判断（2026-10-14）で合計負荷重量を先頭にした。計算は**Epley式** `重量 × (1 + 回数 / 30)`（1回は重量そのまま）で、**1〜12回のセットだけ**使う。日ごとの値はその日の対象セットの最大値を0.1kg単位に丸め、対象セットが無い日（13回以上だけ・自重だけ）は`null`にしてグラフに点を出さない（0にしない） | 漸進性過負荷の③。重さと回数が違う記録（60kg×10と65kg×6など）を1本の線で比べて伸びを見るため。12回を上限にしたのは、回数が多いほど推定の誤差が大きくなる一方、8〜12回で組む日にも点が出るようにするため（ユーザー判断）。1回に式を当てると重量より大きくなるため重量そのままにした。②今日の挑戦は優先度を下げた（2026-10-14、ユーザー判断） |
 
 ### 2-1. 決めたが、まだ実装されていないこと
 
@@ -173,7 +174,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/workouts/exercises-new` | ⑦ | 種目追加（**作成フォームは無く、「準備中／有料オプションで追加予定です。」の案内と④へ戻るリンクのみ**。④の「＋種目を追加」は遷移せず案内ダイアログを開くため、直リンクでのみ到達する。Issue #330） | なし | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
-| `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
+| `/stats` | ⑧ | 統計（合計負荷重量の推移・種目別推移〔合計負荷重量・推定1RM・最大重量〕をグラフ表示、Phase3-C） | `GET /stats/volume`, `GET /stats/exercises/:id/history`, `GET /exercises` | `auth` |
 | `/groups` | - | グループ一覧（Phase4）。所属グループの一覧・新規作成・招待コードで参加する画面への導線 | `GET /groups`, `POST /groups` | `auth` |
 | `/groups/join` | - | 招待コードで参加（Phase4）。招待リンクを丸ごと（共有文ごと）貼り付けてもコードを読み取る（[Issue #312](https://github.com/ConniConni/torebu/issues/312)） | `POST /groups/join` | `auth` |
 | `/invite/[code]` | - | 招待リンクの受け口（[Issue #312](https://github.com/ConniConni/torebu/issues/312)）。ログイン不要でグループ名・人数を表示し、未ログインなら「新規登録して参加」「ログインして参加」、ログイン中なら「参加する」、参加済みなら「グループを開く」を出す | `GET /groups/invites/:code`, `POST /groups/join` | なし（`robots.txt`で`Disallow`） |
@@ -484,8 +485,8 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   独立してエラー表示する（「サマリーの取得に失敗しました」）
 
 **統計画面（⑧、Phase3-C）の実装メモ**
-- 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋最大重量・
-  合計負荷重量の推移、折れ線2本）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
+- 構成：合計負荷重量の推移（全種目合算・日別・折れ線）＋種目別推移（種目セレクト＋合計負荷重量・
+  推定1RM・最大重量の推移、折れ線3本。この順に上から並べる、Issue #356）。期間（`1m`/`3m`/`all`）の切り替えは画面上部のタブで両グラフに
   共通適用する
 - 種目セレクトの選択肢は集計対象（`GET /stats/exercises/:id/history`）と同じ公式種目のみに絞る
   （カスタム種目・削除済み種目は候補から除外。渡すと404になるため）
@@ -1386,7 +1387,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | メソッド | パス | 認証 | 役割 |
 |---|---|---|---|
 | GET | `/stats/volume` | 要 | 日別の合計負荷重量（`Σ weightKg × reps`）を返す。`range`クエリ（`1m`/`3m`/`all`、省略時`3m`）で対象期間を絞る |
-| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量の推移を返す。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
+| GET | `/stats/exercises/:exerciseId/history` | 要 | 指定した種目の、実施日ごとの最大重量・合計負荷重量・推定1RM（`estimated1RmKg: number \| null`、Epley式・1〜12回のセットの最大値を0.1kg単位に丸めた値。対象セットが無い日は`null`、[Issue #356](https://github.com/ConniConni/torebu/issues/356)）の推移を返す。`range`クエリは`/stats/volume`と同じ。**有酸素の公式種目は`{date, distanceKm, paceSecPerKm, speedKmh}`の形で返す**（Issue #352、下記） |
 
 ### グループ（Phase4） — [groups.ts](../backend/src/routes/groups.ts)
 
@@ -1445,7 +1446,7 @@ workout行自体が作られないため、②ホームに空の記録カード�
 | `GET /routines/:id` | **このエンドポイントだけ** `exercises[].exercise: { id, name, muscleGroup }` を埋め込んで返す。種目マスタを未取得のまま画面を開かれても名前が出せるようにするため。`POST` / `PATCH` のレスポンスはIDのみ |
 | 種目の指定全般 | 記録にもルーティンにも、`GET /exercises` と同じ基準（公式 or 自分のカスタム）の種目しか使えない。違反は `400 invalid_exercise` |
 | `routine_exercises` の `targetSets`（目安セット） | `[{ weightKg, reps }, ...]` の配列。`weightKg`・`reps` の制約は`workout_sets`と同じ（上記「重量・回数の制約」参照）。未設定は常に空配列 `[]` で返す（DB上は `null`）。`PATCH .../exercises/:routineExerciseId` は配列を丸ごと置き換える方式（1セットずつの更新APIは無い）。`targetSets: []` を送るとクリアできる |
-| `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
+| `GET /stats/volume`<br>`GET /stats/exercises/:exerciseId/history` | **推定1RM（`estimated1RmKg`）は1〜12回のセットだけで計算し、13回以上・回数0のセットは使わない。その日に対象セットが無ければ`null`（日自体は結果に残る）**（Issue #356）。**集計対象は公式種目（`createdBy` が null）のみ**。カスタム種目のセットは集計から除外し、`/stats/exercises/:exerciseId/history`にカスタム種目のIDを渡すと`404`になる（2026-09-08決定、`docs/backlog.md`参照）。**`weightKg`が`null`の自重セットも集計から完全に除外する**（体重データを持たないため「挙上重量」を定義できない。0kg扱いにもしない）。日付は自分の削除されていない（`deletedAt: null`の）workoutの`performedAt`単位で集計し、データが無い日は結果配列に含めない（0埋めしない） |
 | `GET /groups`<br>`GET /groups/:id`<br>`GET /groups/:id/workouts` | 「所属している」は`group_members`が**アクティブ**（`left_at IS NULL`）であること。退会済み（`left_at`あり）は未所属として扱う（`404`） |
 | `GET /groups/:id/workouts` | 件数の絞り込み（ページネーション・期間指定）は行わない。既存の`GET /workouts`と同じく件数が増えたら対応する技術的負債として`docs/backlog.md`に記載済み |
 | `POST /groups/join` | 「あと何人入れるか」は別カウンタを持たず、参加のたびに「アクティブな`group_members`数 < `member_limit`」を判定する（docs/schema.md「設計方針メモ」参照）。既にアクティブなメンバーが同じ招待コードで参加した場合は`member_limit`を再チェックせず`200`でそのまま返す（冪等。通知も作らない）。参加（`201`）時は、メンバー追加と同じトランザクション内で、参加者本人を除くそのグループのアクティブなメンバー宛に`member_joined`通知を作る（[Issue #249](https://github.com/ConniConni/torebu/issues/249)） |
