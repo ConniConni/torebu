@@ -397,11 +397,11 @@ describe('GET /stats/exercises/:exerciseId/history（有酸素、Issue #352）',
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual([
-      { date: '2026-09-01', distanceKm: 10, paceSecPerKm: 330, speedKmh: 10.9 },
+      { date: '2026-09-01', distanceKm: 10, durationSec: 3300, paceSecPerKm: 330, speedKmh: 10.9 },
     ])
   })
 
-  it('距離だけの日は距離を返し、速さはnull。時間だけの日は含めない', async () => {
+  it('距離だけの日は時間がnull、時間だけの日は距離がnullで、どちらも速さはnull（Issue #364）', async () => {
     const w1 = await createWorkout(ownerId, { performedAt: new Date('2026-09-01') })
     await prisma.workoutSet.create({
       data: { workoutId: w1.id, exerciseId: bikeId, setOrder: 1, distanceKm: 20.5 },
@@ -415,7 +415,8 @@ describe('GET /stats/exercises/:exerciseId/history（有酸素、Issue #352）',
     const res = await agent.get(`/stats/exercises/${bikeId}/history?range=all`)
 
     expect(res.body).toEqual([
-      { date: '2026-09-01', distanceKm: 20.5, paceSecPerKm: null, speedKmh: null },
+      { date: '2026-09-01', distanceKm: 20.5, durationSec: null, paceSecPerKm: null, speedKmh: null },
+      { date: '2026-09-02', distanceKm: null, durationSec: 1800, paceSecPerKm: null, speedKmh: null },
     ])
   })
 
