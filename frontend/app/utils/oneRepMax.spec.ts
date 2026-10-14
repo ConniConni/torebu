@@ -85,7 +85,7 @@ describe('topNormalEstimate', () => {
 describe('oneRepMaxNotes', () => {
   it('通常の回数だけなら基本の1行', () => {
     expect(oneRepMaxNotes([{ weightKg: 60, reps: 8 }], true)).toEqual([
-      'RM＝推定1RM（kg、オコナー式）',
+      'RM＝推定1RM（オコナー式）',
     ])
   })
   it('11〜14回があれば参考値の説明、15回以上があれば非表示の説明を足す', () => {
@@ -97,11 +97,22 @@ describe('oneRepMaxNotes', () => {
       true,
     )
     expect(notes).toContain('グレーの値は11〜14回のセットの参考値です')
-    expect(notes).toContain('15回以上のセットは誤差が大きいため1RMを表示しません')
+    expect(notes).toContain('15回以上のセットは誤差が大きいため1RMを表示しません。')
+  })
+  it('15回以上があるときは「RM＝…」の説明を外し、「表示しません」の1行だけにする', () => {
+    expect(
+      oneRepMaxNotes(
+        [
+          { weightKg: 60, reps: 8 },
+          { weightKg: 40, reps: 15 },
+        ],
+        true,
+      ),
+    ).toEqual(['15回以上のセットは誤差が大きいため1RMを表示しません。'])
   })
   it('自重のセットは説明の対象にしない', () => {
     expect(oneRepMaxNotes([{ weightKg: null, reps: 20 }], true)).toEqual([
-      'RM＝推定1RM（kg、オコナー式）',
+      'RM＝推定1RM（オコナー式）',
     ])
   })
   it('対象外の種目を設定で表示しているときは参考値の説明を足す', () => {

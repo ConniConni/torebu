@@ -413,7 +413,7 @@ function isTopEstimate(set: WorkoutSetItem) {
   return top !== null && cell?.level === 'normal' && cell.valueKg === top
 }
 
-// 表の下の注意書き。RMを計算しない種目（RM列は「−」のまま）は「非表示：…」の1行だけ
+// 表の下の注意書き。RMを計算しない種目（RM列は「−」のまま）は「対象外です」の1行だけ
 function rmNotesFor(exerciseId: string) {
   const group = groupFor(exerciseId)
   if (!group) return []
