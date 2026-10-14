@@ -316,7 +316,11 @@ describe('通知一覧・未読バッジ', () => {
 
     await mate.post('/notifications/read')
 
-    const rows = await prisma.notification.findMany({ where: { type: 'workout_recorded' } })
+    // 他ユーザー宛(ローカルDBに残った通知など)を拾わないよう、受信者で絞る
+    const rows = await prisma.notification.findMany({
+      where: { type: 'workout_recorded', recipientId: mateId },
+    })
+    expect(rows).toHaveLength(1)
     expect(rows.every((n) => n.isRead)).toBe(true)
   })
 
