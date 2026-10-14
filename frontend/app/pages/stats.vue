@@ -198,8 +198,9 @@ watch(range, () => {
 // ページを開いた直後(=自動選択された種目)はloadHistory()が一度も呼ばれないまま
 // 「この期間の記録がありません」の初期状態で放置されてしまう(Issue #126)
 watch(selectedExerciseId, loadHistory, { immediate: true })
-loadGrowth()
-await loadVolume()
+// 待たずに呼ぶとSSRとクライアントで描画時点の状態が食い違いHydration mismatchになるため、
+// loadVolumeと同じく待つ
+await Promise.all([loadGrowth(), loadVolume()])
 
 // Chart.jsはcanvas描画のためTailwindのdark:バリアントが効かず、テーマに応じた色を
 // options・datasetに明示的に渡す必要がある（Issue #241）。useThemeのtheme（'light'|'dark'）を
