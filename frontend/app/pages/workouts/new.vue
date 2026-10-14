@@ -848,7 +848,7 @@ async function onGoToExercisePicker() {
                               inputmode="numeric"
                               min="0"
                               aria-label="時間（分）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">分</span>
@@ -859,7 +859,7 @@ async function onGoToExercisePicker() {
                               min="0"
                               max="59"
                               aria-label="時間（秒）"
-                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-1 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                               @blur="onSetFieldBlur(set.id)"
                             />
                             <span class="shrink-0 text-xs text-gray-500 dark:text-muted">秒</span>
@@ -944,7 +944,7 @@ async function onGoToExercisePicker() {
                             v-model="setInputs[set.id]!.reps"
                             type="number"
                             min="0"
-                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            class="w-full min-w-0 rounded-lg border border-gray-300 dark:border-border-dark px-2 py-1.5 text-right text-base tabular-nums bg-white dark:bg-panel text-gray-900 dark:text-ink no-spin-touch"
                             @blur="onSetFieldBlur(set.id)"
                           />
                           <span class="shrink-0 text-xs text-gray-500 dark:text-muted">回</span>
@@ -1145,3 +1145,19 @@ async function onGoToExercisePicker() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 数値欄の増減ボタン(スピナー)は、マウス操作のPCでは出し、タッチ端末では消す(Issue #364)。
+   狭い欄(回数・分・秒)ではスピナーが右端の幅を取るため、PCでは3桁(分の100以上など)が見切れうる */
+@media (pointer: coarse) {
+  .no-spin-touch {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .no-spin-touch::-webkit-inner-spin-button,
+  .no-spin-touch::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+</style>
