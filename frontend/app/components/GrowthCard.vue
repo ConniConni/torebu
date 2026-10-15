@@ -151,7 +151,7 @@ function arrow(direction: GrowthDirection | null) {
             {{ expanded ? '閉じる ▴' : `ほか${split.hiddenCount}種目を見る ▾` }}
           </button>
           <p class="mt-2 text-[11px] text-gray-400 dark:text-muted">
-            棒の長さは伸び率です（この期間で一番伸びた種目が100%）。<br />
+            棒の長さは伸び率です。（この期間で一番伸びた種目が100%）<br />
             推定1RMは期間内の最大値で比べています。<br />
             両方の期間に記録がある種目だけ表示します。
           </p>
