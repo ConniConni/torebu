@@ -39,6 +39,7 @@ torebu/
 - `docs/muscle-highlight.md` — Phase2（部位ハイライト可視化）の検討経緯サマリー（元の検討は`/Users/koni/Desktop/ClaudeCode/筋トレ部位紐付け/decision_log.md`、詳細はそちらを参照）
 - `docs/backlog.md` — 保留事項・課題・アイデア（バグ／ドキュメントと実装のズレ／技術的負債／UI改善アイデア／未決定事項／先送りにした学習項目）
 - `docs/roadmap.md` — Issueバックログ（着手予定のIssueをタイトルだけ並べた見通し用のメモ）
+- `docs/sns-plan.md` — X（公式アカウント）の運用計画（目標・日課・投稿カレンダー・流入計測の現状）
 - `docs/learning-log.md` — 学習ログ（**MVPまでの記録。凍結済みで、以降は更新しない**）
 
 より詳細な検討経緯（比較・トレードオフの議論など）は、企画メモ（Claudeとのセッションで作成したArtifact）にまとまっている。
