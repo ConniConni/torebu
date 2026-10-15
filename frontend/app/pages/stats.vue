@@ -232,7 +232,7 @@ const { user } = useAuth()
 const oneRmEmptyMessage = computed(() =>
   selectedExercise.value?.isOneRmTarget === false && !user.value?.showAllOneRm
     ? ONE_RM_NOT_TARGET_NOTE
-    : 'この期間は推定できる記録がありません',
+    : 'この期間は推定できる記録がありません。',
 )
 
 const { theme } = useTheme()
@@ -349,13 +349,14 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
         <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-ink">合計負荷重量の推移</p>
         <LoadingText v-if="volumePending" center />
         <p v-else-if="volumeError" class="text-center text-sm text-red-600 dark:text-red-400">
-          データの取得に失敗しました。時間をおいて再度お試しください
+          データの取得に失敗しました。<br />
+          時間をおいて、もう一度お試しください。
         </p>
         <p
           v-else-if="volumeChartData.labels.length === 0"
           class="py-6 text-center text-sm text-gray-500 dark:text-muted"
         >
-          この期間の記録がありません
+          この期間の記録がありません。
         </p>
         <ClientOnly v-else>
           <div class="h-56">
@@ -384,14 +385,15 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
 
         <LoadingText v-if="historyPending" center />
         <p v-else-if="historyError" class="text-center text-sm text-red-600 dark:text-red-400">
-          データの取得に失敗しました。時間をおいて再度お試しください
+          データの取得に失敗しました。<br />
+          時間をおいて、もう一度お試しください。
         </p>
         <template v-else-if="selectedExerciseId && isCardioSelected">
           <p
             v-if="distanceChartData.labels.length === 0 && durationChartData.labels.length === 0"
             class="py-6 text-center text-sm text-gray-500 dark:text-muted"
           >
-            この期間の記録がありません
+            この期間の記録がありません。
           </p>
           <ClientOnly v-else>
             <div v-if="distanceChartData.labels.length > 0" class="mb-4">
@@ -424,7 +426,7 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
             v-if="maxWeightChartData.labels.length === 0"
             class="py-6 text-center text-sm text-gray-500 dark:text-muted"
           >
-            この期間の記録がありません
+            この期間の記録がありません。
           </p>
           <ClientOnly v-else>
             <div class="mb-4">
@@ -436,7 +438,8 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
             <div class="mb-4">
               <p class="mb-1 text-xs font-semibold text-gray-500 dark:text-muted">推定1RM</p>
               <p class="mb-1 text-xs text-gray-500 dark:text-muted">
-                重さと回数から推定した、1回挙げられる重さの目安（オコナー式。10回までのセットで計算）
+                重さと回数から推定した、1回だけ挙げられる重さの目安です。<br />
+                オコナー式で、10回までのセットから計算します。
               </p>
               <p
                 v-if="estimated1RmChartData.labels.length === 0"

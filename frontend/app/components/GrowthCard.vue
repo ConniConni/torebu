@@ -51,7 +51,8 @@ function arrow(direction: GrowthDirection | null) {
     <p class="text-sm font-semibold text-gray-900 dark:text-ink">この{{ rangeLabel }}の伸び</p>
     <LoadingText v-if="pending && !growth" center />
     <p v-else-if="error" class="mt-2 text-center text-sm text-red-600 dark:text-red-400">
-      データの取得に失敗しました。時間をおいて再度お試しください
+      データの取得に失敗しました。<br />
+      時間をおいて、もう一度お試しください。
     </p>
     <template v-else-if="growth">
       <p class="mb-3 text-xs text-gray-400 dark:text-muted">
@@ -68,7 +69,7 @@ function arrow(direction: GrowthDirection | null) {
       >
         比較できる前の期間（{{ formatPeriod(growth.previousStart, growth.previousEnd) }}）の<br />
         記録がまだありません。<br />
-        記録を続けると、ここに伸びが出ます
+        記録を続けると、ここに伸びが出ます。
       </p>
 
       <template v-else>
@@ -150,7 +151,9 @@ function arrow(direction: GrowthDirection | null) {
             {{ expanded ? '閉じる ▴' : `ほか${split.hiddenCount}種目を見る ▾` }}
           </button>
           <p class="mt-2 text-[11px] text-gray-400 dark:text-muted">
-            棒の長さは伸び率（この期間でいちばん伸びた種目が100%）。推定1RMはオコナー式・10回までのセットの最大値で、両方の期間に記録がある種目だけ出します
+            棒の長さは伸び率です（この期間で一番伸びた種目が100%）。<br />
+            推定1RMは期間内の最大値で比べています。<br />
+            両方の期間に記録がある種目だけ表示します。
           </p>
         </template>
       </template>

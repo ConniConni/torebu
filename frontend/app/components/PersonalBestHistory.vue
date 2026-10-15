@@ -71,7 +71,8 @@ const currentYear = new Date().getFullYear()
       {{ expanded ? '閉じる ▴' : `もっと見る（あと${split.hiddenCount}件） ▾` }}
     </button>
     <p class="mt-2 text-[11px] text-gray-400 dark:text-muted">
-      最大重量が、それまでの自分の記録を上回った日だけを並べています（期間タブとは無関係に全期間）
+      最大重量がそれまでの記録を上回った日だけを並べています。<br />
+      期間の切り替えに関係なく、全期間が対象です。
     </p>
   </div>
 </template>
