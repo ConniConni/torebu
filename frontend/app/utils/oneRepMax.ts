@@ -54,9 +54,9 @@ export function oneRepMaxNotes(
 ): string[] {
   const notes = ['RM＝推定1RM（オコナー式）']
   if (!isTarget) {
-    notes.push('この種目は1RMの対象外のため、値は参考値です（設定で表示中）')
+    notes.push('この種目は1RMの対象外のため、値は参考値です。（設定で表示中）')
   } else if (sets.some((s) => s.weightKg !== null && oneRepMaxLevel(s.reps) === 'reference')) {
-    notes.push('グレーの値は11〜14回のセットの参考値です')
+    notes.push('グレーの値は11〜14回のセットの参考値です。')
   }
   if (sets.some((s) => s.weightKg !== null && s.reps !== null && s.reps > MAX_REPS_REFERENCE)) {
     // 「RM＝…」の説明は、「表示しません」の説明と並べずに外す（1行にまとめる）
