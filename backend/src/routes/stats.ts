@@ -237,6 +237,64 @@ statsRouter.get('/exercises/:exerciseId/history', requireAuth, async (req, res) 
   res.json(result)
 })
 
+// GET /stats/exercises/:exerciseId/personal-bests (Issue #370)
+// 指定した種目の自己ベスト更新の履歴を、期間を問わず全期間・新しい順で返す。
+// 基準は既存の自己ベスト通知と同じ「種目ごとの最大重量」(workouts.tsのevaluatePersonalBest)。
+// 自重セット(weightKg null)・回数0のセットは対象外。同じ日は最大重量の1件にまとめ(同重量なら回数が多いセット)、
+// それまでの最高を「上回った」日だけ数える(同じ重量を出しただけの日は含めない)。初めての記録は previousBestKg: null。
+// 公式種目以外は404。有酸素は重量の概念が無いので空配列
+statsRouter.get('/exercises/:exerciseId/personal-bests', requireAuth, async (req, res) => {
+  const userId = req.session.userId
+  const exerciseId = req.params.exerciseId as string
+
+  const exercise = await prisma.exercise.findFirst({
+    where: { id: exerciseId, ...OFFICIAL_EXERCISE_FILTER },
+  })
+  if (!exercise) {
+    res.status(404).json({ error: 'not_found' })
+    return
+  }
+  if (exercise.muscleGroup === 'cardio') {
+    res.json([])
+    return
+  }
+
+  const sets = await prisma.workoutSet.findMany({
+    where: {
+      exerciseId,
+      weightKg: { not: null },
+      reps: { gt: 0 },
+      workout: { userId, deletedAt: null },
+    },
+    select: { weightKg: true, reps: true, workout: { select: { performedAt: true } } },
+  })
+
+  const topByDate = new Map<string, { weightKg: number; reps: number }>()
+  for (const set of sets) {
+    const weightKg = Number(set.weightKg)
+    const reps = set.reps as number // whereでreps > 0に絞っている
+    const dateKey = toDateKey(set.workout.performedAt)
+    const top = topByDate.get(dateKey)
+    if (!top || weightKg > top.weightKg || (weightKg === top.weightKg && reps > top.reps)) {
+      topByDate.set(dateKey, { weightKg, reps })
+    }
+  }
+
+  const records: { date: string; weightKg: number; reps: number; previousBestKg: number | null }[] =
+    []
+  let best: number | null = null
+  for (const [date, top] of Array.from(topByDate.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  )) {
+    if (best === null || top.weightKg > best) {
+      records.push({ date, ...top, previousBestKg: best })
+      best = top.weightKg
+    }
+  }
+
+  res.json(records.reverse())
+})
+
 // 伸び率(%)。0.1%単位に丸める。前が0以下なら定義できないのでnull
 function growthPct(previous: number, current: number): number | null {
   if (previous <= 0) return null

@@ -1,4 +1,5 @@
 import type { GrowthExercise } from '~/utils/growth'
+import type { PersonalBestRecord } from '~/utils/personalBests'
 
 export type StatsRange = '1m' | '3m' | 'all'
 
@@ -72,7 +73,12 @@ export function useStats() {
     return requestFetch<GrowthResponse>('/api/stats/growth', { query: { range } })
   }
 
-  return { fetchVolume, fetchExerciseHistory, fetchGrowth }
+  // 自己ベスト更新の履歴（Issue #370）。期間に関係なく全期間・新しい順
+  async function fetchPersonalBests(exerciseId: string) {
+    return requestFetch<PersonalBestRecord[]>(`/api/stats/exercises/${exerciseId}/personal-bests`)
+  }
+
+  return { fetchVolume, fetchExerciseHistory, fetchGrowth, fetchPersonalBests }
 }
 
 export type { VolumePoint, ExerciseHistoryPoint, CardioHistoryPoint, GrowthResponse }

@@ -16,6 +16,7 @@ import type {
   GrowthResponse,
   StatsRange,
 } from '~/composables/useStats'
+import type { PersonalBestRecord } from '~/utils/personalBests'
 import { formatPaceTick, type LineChartData } from '~/utils/statsChart'
 
 definePageMeta({ middleware: 'auth', layout: 'tabbar' })
@@ -37,7 +38,7 @@ const RANGES: { value: StatsRange; label: string }[] = [
   { value: 'all', label: '全期間' },
 ]
 
-const { fetchVolume, fetchExerciseHistory, fetchGrowth } = useStats()
+const { fetchVolume, fetchExerciseHistory, fetchGrowth, fetchPersonalBests } = useStats()
 const { exercises, fetchExercises } = useExercises()
 if (!exercises.value) {
   await fetchExercises()
@@ -188,6 +189,23 @@ async function loadHistory() {
   }
 }
 
+// 自己ベスト履歴（Issue #370）。期間タブとは無関係に全期間なので、種目が変わったときだけ取り直す。
+// 有酸素は対象外。取得失敗・記録なし（自重だけの種目など）は欄ごと出さない
+const personalBests = ref<PersonalBestRecord[]>([])
+let personalBestRequestSeq = 0
+
+async function loadPersonalBests() {
+  const seq = ++personalBestRequestSeq
+  personalBests.value = []
+  if (!selectedExerciseId.value || isCardioSelected.value) return
+  try {
+    const result = await fetchPersonalBests(selectedExerciseId.value)
+    if (seq === personalBestRequestSeq) personalBests.value = result
+  } catch {
+    // 履歴は補足の表示のため、失敗してもグラフ側の表示は妨げない
+  }
+}
+
 watch(range, () => {
   loadGrowth()
   loadVolume()
@@ -198,9 +216,10 @@ watch(range, () => {
 // ページを開いた直後(=自動選択された種目)はloadHistory()が一度も呼ばれないまま
 // 「この期間の記録がありません」の初期状態で放置されてしまう(Issue #126)
 watch(selectedExerciseId, loadHistory, { immediate: true })
+watch(selectedExerciseId, loadPersonalBests)
 // 待たずに呼ぶとSSRとクライアントで描画時点の状態が食い違いHydration mismatchになるため、
-// loadVolumeと同じく待つ
-await Promise.all([loadGrowth(), loadVolume()])
+// loadVolumeと同じく待つ（自己ベスト履歴も同様。待たないとクライアントだけ先に描画が変わる）
+await Promise.all([loadGrowth(), loadVolume(), loadPersonalBests()])
 
 // Chart.jsはcanvas描画のためTailwindのdark:バリアントが効かず、テーマに応じた色を
 // options・datasetに明示的に渡す必要がある（Issue #241）。useThemeのtheme（'light'|'dark'）を
@@ -443,6 +462,12 @@ const speedChartDataThemed = computed(() => withThemedColor(speedChartData.value
             </div>
           </ClientOnly>
         </template>
+
+        <PersonalBestHistory
+          v-if="selectedExerciseId && !isCardioSelected"
+          :key="selectedExerciseId"
+          :records="personalBests"
+        />
       </div>
     </div>
   </div>

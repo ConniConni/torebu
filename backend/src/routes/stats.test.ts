@@ -460,6 +460,10 @@ function daysAgo(n: number): Date {
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
 }
 
+function toKey(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
 describe('GET /stats/growth（期間比較、Issue #366）', () => {
   async function addSet(
     userId: string,
@@ -646,5 +650,117 @@ describe('GET /stats/growth（期間比較、Issue #366）', () => {
     // 他人・削除済み・カスタム種目を除くと、今期は62kg×10の1日だけ
     expect(res.body.current).toEqual({ volumeKg: 620, trainingDays: 1 })
     expect(res.body.exercises).toHaveLength(1)
+  })
+})
+
+describe('GET /stats/exercises/:exerciseId/personal-bests（自己ベスト履歴、Issue #370）', () => {
+  async function addSet(
+    userId: string,
+    exId: string,
+    performedAt: Date,
+    reps: number,
+    weightKg: number | null,
+    opts: { deletedAt?: Date } = {},
+  ) {
+    const workout = await createWorkout(userId, { performedAt, deletedAt: opts.deletedAt })
+    await prisma.workoutSet.create({
+      data: { workoutId: workout.id, exerciseId: exId, setOrder: 1, reps, weightKg },
+    })
+  }
+
+  it('未ログインなら401を返す', async () => {
+    const res = await request(app).get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.status).toBe(401)
+  })
+
+  it('カスタム種目・存在しない種目は404を返す', async () => {
+    const agent = await loginAsOwner()
+
+    expect((await agent.get(`/stats/exercises/${customExerciseId}/personal-bests`)).status).toBe(
+      404,
+    )
+    expect(
+      (await agent.get('/stats/exercises/00000000-0000-0000-0000-000000000000/personal-bests'))
+        .status,
+    ).toBe(404)
+  })
+
+  it('有酸素は空配列を返す', async () => {
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${runId}/personal-bests`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('記録が無ければ空配列を返す', async () => {
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('上回った日だけを新しい順に返し、初めての記録はpreviousBestKgがnull（期間に関係なく全期間）', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(200), 8, 55)
+    await addSet(ownerId, exerciseId, daysAgo(100), 10, 60)
+    await addSet(ownerId, exerciseId, daysAgo(50), 8, 57.5) // 下回る
+    await addSet(ownerId, exerciseId, daysAgo(20), 8, 60) // 同じ重量は更新に数えない
+    await addSet(ownerId, exerciseId, daysAgo(5), 5, 65)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([
+      { date: toKey(daysAgo(5)), weightKg: 65, reps: 5, previousBestKg: 60 },
+      { date: toKey(daysAgo(100)), weightKg: 60, reps: 10, previousBestKg: 55 },
+      { date: toKey(daysAgo(200)), weightKg: 55, reps: 8, previousBestKg: null },
+    ])
+  })
+
+  it('同じ日に複数セットあれば最大重量の1件にまとめ、同重量なら回数が多いセットを返す', async () => {
+    const day = daysAgo(10)
+    const workout = await createWorkout(ownerId, { performedAt: day })
+    await prisma.workoutSet.createMany({
+      data: [
+        { workoutId: workout.id, exerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+        { workoutId: workout.id, exerciseId, setOrder: 2, reps: 3, weightKg: 62.5 },
+        { workoutId: workout.id, exerciseId, setOrder: 3, reps: 6, weightKg: 62.5 },
+      ],
+    })
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.body).toEqual([{ date: toKey(day), weightKg: 62.5, reps: 6, previousBestKg: null }])
+  })
+
+  it('自重セット・回数0のセットは対象にもベストにも数えない', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(30), 15, null)
+    await addSet(ownerId, exerciseId, daysAgo(20), 0, 100) // 失敗した挑戦
+    await addSet(ownerId, exerciseId, daysAgo(10), 5, 60)
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.body).toEqual([
+      { date: toKey(daysAgo(10)), weightKg: 60, reps: 5, previousBestKg: null },
+    ])
+  })
+
+  it('他人の記録・削除済みの記録・他の種目は混ざらない', async () => {
+    await addSet(ownerId, exerciseId, daysAgo(30), 5, 50)
+    await addSet(otherId, exerciseId, daysAgo(20), 5, 120) // 他人
+    await addSet(ownerId, exerciseId, daysAgo(10), 5, 90, { deletedAt: new Date() }) // 削除済み
+    await addSet(ownerId, customExerciseId, daysAgo(5), 5, 200) // 別の種目
+
+    const agent = await loginAsOwner()
+    const res = await agent.get(`/stats/exercises/${exerciseId}/personal-bests`)
+
+    expect(res.body).toEqual([
+      { date: toKey(daysAgo(30)), weightKg: 50, reps: 5, previousBestKg: null },
+    ])
   })
 })
