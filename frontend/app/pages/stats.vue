@@ -121,7 +121,7 @@ const historyPending = ref(false)
 const historyError = ref(false)
 const estimated1RmChartData = ref(toLineChartData([], '推定1RM(kg)'))
 const maxWeightChartData = ref(toLineChartData([], '最大重量(kg)'))
-const setCountChartData = ref(toLineChartData([], 'セット数'))
+const setCountChartData = ref(toLineChartData([], 'セット数(回)'))
 const historyVolumeChartData = ref(toLineChartData([], '合計負荷重量(kg)'))
 const distanceChartData = ref(toLineChartData([], '距離(km)'))
 const durationChartData = ref(toLineChartData([], '時間(分)'))
@@ -175,7 +175,7 @@ async function loadHistory() {
     )
     setCountChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.setCount })),
-      'セット数',
+      'セット数(回)',
     )
     historyVolumeChartData.value = toLineChartData(
       points.map((p) => ({ date: p.date, value: p.volumeKg })),
