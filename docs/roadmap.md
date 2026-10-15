@@ -185,9 +185,9 @@
         （[Issue #354](https://github.com/ConniConni/torebu/issues/354)）
   - [ ] ②今日の挑戦（ダブルプログレッション）（優先度低・2026-10-14、ユーザー判断）
   - [x] ③統計に推定1RM推移（[Issue #356](https://github.com/ConniConni/torebu/issues/356)）
-  - [ ] ④伸びの記録の拡張
-    - [ ] 期間比較カード（統計画面の上部、[Issue #366](https://github.com/ConniConni/torebu/issues/366)）
-    - [ ] 自己ベスト履歴（種目別推移の末尾。既存の自己ベスト通知と同じ最大重量基準）
+  - [x] ④伸びの記録の拡張
+    - [x] 期間比較カード（統計画面の上部、[Issue #366](https://github.com/ConniConni/torebu/issues/366)）
+    - [x] 自己ベスト履歴（種目別推移の末尾。既存の自己ベスト通知と同じ最大重量基準、[Issue #370](https://github.com/ConniConni/torebu/issues/370)）
 
 ## 並び順の考え方
 
