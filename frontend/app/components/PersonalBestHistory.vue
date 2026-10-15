@@ -23,10 +23,10 @@ const currentYear = new Date().getFullYear()
 </script>
 
 <template>
-  <div v-if="records.length > 0" class="mt-4 border-t border-gray-200 dark:border-line pt-3">
+  <div v-if="records.length > 0" class="mt-4 border-t border-gray-200 dark:border-border-dark pt-3">
     <p class="mb-2 text-xs font-semibold text-gray-500 dark:text-muted">自己ベストの履歴</p>
     <ul
-      class="relative pl-[18px] before:absolute before:bottom-1.5 before:left-[5px] before:top-1.5 before:w-0.5 before:bg-gray-200 dark:before:bg-line before:content-['']"
+      class="relative pl-[18px] before:absolute before:bottom-1.5 before:left-[5px] before:top-1.5 before:w-0.5 before:bg-gray-200 dark:before:bg-border-dark before:content-['']"
     >
       <li
         v-for="(r, i) in split.visible"
