@@ -1,0 +1,76 @@
+# PRと`main`へのpushのたびに、backend・frontendの型チェック・lint・テストを自動で実行する。
+# `main`のブランチ保護で、ここのジョブ（backend / frontend）の通過をマージの必須条件にしている
+# （運用は docs/git-workflow.md「CIとブランチ保護」参照）。
+#
+# docsだけのPRでも必須チェックが「結果待ち」で止まらないよう、paths による絞り込みは使わない。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 同じブランチに続けてpushしたときは、古い方の実行を取り消す
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    # テストは本物のPostgreSQLに対して動く（CLAUDE.md「テスト方針」）。ジョブの間だけ起動し、終われば消える。
+    # バージョンはローカル開発用の backend/docker-compose.yml と揃える
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: torebu
+          POSTGRES_PASSWORD: torebu
+          POSTGRES_DB: torebu_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U torebu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://torebu:torebu@localhost:5432/torebu_test
+      SESSION_SECRET: ci-test-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
