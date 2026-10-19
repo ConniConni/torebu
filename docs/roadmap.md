@@ -189,6 +189,28 @@
     - [x] 期間比較カード（統計画面の上部、[Issue #366](https://github.com/ConniConni/torebu/issues/366)）
     - [x] 自己ベスト履歴（種目別推移の末尾。既存の自己ベスト通知と同じ最大重量基準、[Issue #370](https://github.com/ConniConni/torebu/issues/370)）
 
+- **本番運用の体制整備**（2026-10-17。本番運用の開始を受けてブランチ戦略を再検討した）
+  - ブランチ戦略はGitHub Flow（作業ブランチ → PR → `main`＝本番）を維持する。`develop`・`staging`
+    ブランチは作らない（マージの手間と、並行セッション同士の衝突箇所が増えるため）。急ぎの修正も
+    通常の`fix/`ブランチで出す。代わりに「本番に入る前の関門」を以下の2 Issueで整える（順不同・A→Bの順で着手）
+  - [ ] A. CIの導入と`main`のブランチ保護、マイグレーションの順番のルール化
+        （[Issue #377](https://github.com/ConniConni/torebu/issues/377)）。ブランチ保護は管理者にも
+        適用する（ユーザー判断）
+  - [ ] B. Preview環境のDBを本番から切り離す（[backlog.md](./backlog.md)「判断保留」の
+        「PreviewデプロイがProductionと同じNeonデータベースを見ている」）。着手時に以下を前提にする
+    - **ステップ0（変更せず確認だけ）**：Vercelの2プロジェクトそれぞれの、Preview用の
+      `BACKEND_ORIGIN`・`DATABASE_URL`の値、backendのPreviewにアクセス制限（Deployment Protection）が
+      かかっているか、Neonの現在のブランチ数。frontendは`/api/**`を`BACKEND_ORIGIN`へ転送している
+      （`frontend/nuxt.config.ts`）ため、DBを分けてもfrontendのPreviewが本番backendを向いていれば
+      本番に書き込まれる
+    - Neonの無料プランはブランチ10個/プロジェクトまで。PRごとにNeonブランチを作る方式は上限に
+      当たりやすいため、**全PR共通のPreview用ブランチを1つ**作る案を推奨
+    - Preview用DBには本番データをコピーしない（テーブル構造だけのブランチ＋テスト用データ。ユーザー判断）
+    - Previewのビルド時にマイグレーションを流す場合は、Previewのときだけ動くよう条件を付ける
+      （付けないと本番でも勝手に走る）。マイグレーションには直接接続（pooledでない）の文字列が必要
+    - **未決定**：frontendのPreviewをどのbackendにつなぐか（①PRごとのbackendのPreview／
+      ②固定のPreview用backendを1つ）。ステップ0の結果を見てから提案する
+
 ## 並び順の考え方
 
 - DBスキーマ（Issue3）を最初に固めないと、以降のAPI実装が土台なしで進められない
