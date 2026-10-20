@@ -196,7 +196,8 @@
   - [x] A. CIの導入と`main`のブランチ保護、マイグレーションの順番のルール化
         （[Issue #377](https://github.com/ConniConni/torebu/issues/377)）。ブランチ保護は管理者にも
         適用する（ユーザー判断）
-  - [ ] B. Preview環境のDBを本番から切り離す（[backlog.md](./backlog.md)「判断保留」の
+  - [ ] B. Preview環境のDBを本番から切り離す（[Issue #380](https://github.com/ConniConni/torebu/issues/380)。
+        コード対応と手順書は済み。ダッシュボード設定〔[git-workflow.md](./git-workflow.md)「Preview環境のDBを本番から切り離す」〕の完了待ち。[backlog.md](./backlog.md)「判断保留」の
         「PreviewデプロイがProductionと同じNeonデータベースを見ている」）。着手時に以下を前提にする
     - **ステップ0（変更せず確認だけ）**：Vercelの2プロジェクトそれぞれの、Preview用の
       `BACKEND_ORIGIN`・`DATABASE_URL`の値、backendのPreviewにアクセス制限（Deployment Protection）が
@@ -208,8 +209,10 @@
     - Preview用DBには本番データをコピーしない（テーブル構造だけのブランチ＋テスト用データ。ユーザー判断）
     - Previewのビルド時にマイグレーションを流す場合は、Previewのときだけ動くよう条件を付ける
       （付けないと本番でも勝手に走る）。マイグレーションには直接接続（pooledでない）の文字列が必要
-    - **未決定**：frontendのPreviewをどのbackendにつなぐか（①PRごとのbackendのPreview／
-      ②固定のPreview用backendを1つ）。ステップ0の結果を見てから提案する
+    - **決定（2026-10-20）**：frontendのPreviewは②固定のPreview用backendにつなぐ（①はVercelが
+      frontendとbackendのPreviewを自動で結ばず、PRごとに手動差し替えになるため）。backendのPreviewは
+      Vercel Authentication（Standard Protection）が有効なので、Protection Bypass for Automation
+      （現プランで利用可）のシークレットを、frontendの転送ヘッダーで渡す
 
 ## 並び順の考え方
 

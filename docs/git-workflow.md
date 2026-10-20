@@ -226,13 +226,43 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
      多い。`Datasource`行のホストが正しければ、数秒おいて同じコマンドを再実行すれば通る
 - PRに新しい環境変数（`SESSION_SECRET`のような秘密情報や設定値）が必要になった場合は、
   マージ前にVercel側（バックエンド・フロントエンドそれぞれ）のダッシュボードで設定しておく
-- 現時点では、PR単位で作られるPreviewデプロイ環境もProductionと**同じNeonデータベース**を
-  見ている（`docs/backlog.md`「判断保留」節に記載）。Preview環境での動作確認は、本番の実データに
-  対して行われる点を認識しておく
+- PreviewデプロイのDBは、下記「Preview環境のDBを本番から切り離す」の設定が済むまでは
+  Productionと**同じNeonデータベース**を見ている（`docs/backlog.md`「判断保留」節に記載）。
+  設定前のPreview環境での動作確認は、本番の実データに対して行われる点を認識しておく
 - **バックエンドのVercel関数は`backend/vercel.json`の`regions`でNeonの実リージョン（Sydney＝`syd1`）
   に明示的に合わせている**（Issue #192）。指定が無いとVercelのデフォルトリージョン（米国）で動き、
   すべてのAPIリクエストが「日本→米国→Sydney→米国→日本」という経路になって数百ms〜1秒近い
   レイテンシが乗る。Neon側のプロジェクトを別リージョンに作り直す場合は、この設定も合わせて変更すること
+
+## Preview環境のDBを本番から切り離す
+
+Issue #380（体制整備B）。**コード側の対応（frontendの転送にバイパスヘッダーを付ける）は済み。
+以下はVercel・Neonのダッシュボードでの設定で、オーナーが行う。設定が済むまでPreviewは本番DBを見る。**
+
+構成：全PR共通の「Preview用Neonブランチ」1つ ＋ 固定の「Preview用backend」1つ。PRのfrontendの
+Previewは、常にそのPreview用backendへ転送する。backendのPreviewはVercel Authenticationで保護されて
+いるため、frontendの転送（サーバー側）には`x-vercel-protection-bypass`ヘッダーで保護を通過させる。
+
+1. **Neonで「Preview用ブランチ」を作る**（Neonコンソール → Branches → Create branch）。
+   本番データをコピーしない（「Schema-only」を選ぶ。選べない場合は作成後に全テーブルのデータを消す）。
+   無料プランはブランチ10個/プロジェクトまでなので、PRごとには作らない
+2. **Preview用ブランチのdirect接続文字列にマイグレーションを流す**（手順は上記
+   「`prisma migrate deploy`を打つときは…」と同じ。接続先をPreview用ブランチにする）。
+   以後、マイグレーションを含むPRは**Preview用ブランチにも`migrate deploy`する**
+   （しないとPreview用backendが古いテーブル構造で動く）
+3. **backendのVercelプロジェクト**：
+   - 環境変数`DATABASE_URL`のPreview側を、Preview用ブランチの**pooled**接続文字列に差し替える
+     （Production側は触らない。1つの変数をPreview・Productionで分けて持つ）
+   - Settings → Deployment Protection → Protection Bypass for Automation で「Add Secret」し、
+     そのシークレット値を控える
+4. **Preview用backendのURLを決める**：backendのPreviewデプロイのうち、固定で使うものを1つ選ぶ
+   （例：`main`以外の専用ブランチ`preview`を作ってbackendのPreviewを出し、そのブランチ固定のURLを使う）。
+   backend側の変更を含むPRは、このPreview用backendに反映してから、PRのfrontendで確認する
+5. **frontendのVercelプロジェクト**（環境はPreviewだけに設定。Productionには設定しない）：
+   - `BACKEND_ORIGIN`のPreview側 ＝ 手順4のURL
+   - `PREVIEW_BACKEND_BYPASS_SECRET`のPreview側 ＝ 手順3のシークレット値（Sensitiveにする）
+6. **確認**：PRのPreviewでログイン・記録の作成ができ、その内容が**本番サイトに出ない**こと
+   （本番では見えず、Preview用ブランチのDBにだけ入っていること）
 
 ## 問題が起きたときの戻し方
 
