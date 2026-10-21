@@ -12,6 +12,7 @@
 
 ## 技術スタック
 
+- Node.js: バージョンは両方の`package.json`の`engines.node`で指定（セキュリティリリース時の対応は`docs/git-workflow.md`）
 - フロントエンド: Nuxt.js + TypeScript
 - バックエンド: Express + PostgreSQL（Prisma推奨）
 - 認証: セッション方式（JWTではない。理由は`docs/schema.md`参照）
