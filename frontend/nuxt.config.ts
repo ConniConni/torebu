@@ -37,7 +37,17 @@ export default defineNuxtConfig({
   // フロントとバックエンドを同一サイト（同一オリジン）に揃えるためのプロキシ設定。
   // CSRF対策をSameSite=Laxのみに絞れる前提を保つための構成（docs/schema.mdの
   // 「セキュリティ実装の優先度」参照）。本番も同一登録可能ドメイン配下に両方置く想定
+  // Preview用backendはVercel Authenticationで保護されているため、frontendのPreviewだけに
+  // PREVIEW_BACKEND_BYPASS_SECRETを設定し、転送時にバイパスヘッダーを付ける（Issue #380）。
+  // 未設定の環境（本番・ローカル）ではヘッダーを付けない
   routeRules: {
-    '/api/**': { proxy: `${process.env.BACKEND_ORIGIN ?? 'http://localhost:3001'}/**` },
+    '/api/**': {
+      proxy: {
+        to: `${process.env.BACKEND_ORIGIN ?? 'http://localhost:3001'}/**`,
+        ...(process.env.PREVIEW_BACKEND_BYPASS_SECRET && {
+          headers: { 'x-vercel-protection-bypass': process.env.PREVIEW_BACKEND_BYPASS_SECRET },
+        }),
+      },
+    },
   },
 })

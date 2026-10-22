@@ -226,13 +226,67 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
      多い。`Datasource`行のホストが正しければ、数秒おいて同じコマンドを再実行すれば通る
 - PRに新しい環境変数（`SESSION_SECRET`のような秘密情報や設定値）が必要になった場合は、
   マージ前にVercel側（バックエンド・フロントエンドそれぞれ）のダッシュボードで設定しておく
-- 現時点では、PR単位で作られるPreviewデプロイ環境もProductionと**同じNeonデータベース**を
-  見ている（`docs/backlog.md`「判断保留」節に記載）。Preview環境での動作確認は、本番の実データに
-  対して行われる点を認識しておく
+- PreviewデプロイのDBは、下記「Preview環境のDBを本番から切り離す」の設定が済むまでは
+  Productionと**同じNeonデータベース**を見ている（`docs/backlog.md`「判断保留」節に記載）。
+  設定前のPreview環境での動作確認は、本番の実データに対して行われる点を認識しておく
 - **バックエンドのVercel関数は`backend/vercel.json`の`regions`でNeonの実リージョン（Sydney＝`syd1`）
   に明示的に合わせている**（Issue #192）。指定が無いとVercelのデフォルトリージョン（米国）で動き、
   すべてのAPIリクエストが「日本→米国→Sydney→米国→日本」という経路になって数百ms〜1秒近い
   レイテンシが乗る。Neon側のプロジェクトを別リージョンに作り直す場合は、この設定も合わせて変更すること
+
+## Preview環境のDBを本番から切り離す
+
+Issue #380（体制整備B）。**コード側の対応（frontendの転送にバイパスヘッダーを付ける）は済み。
+以下はVercel・Neonのダッシュボードでの設定で、オーナーが行う。設定が済むまでPreviewは本番DBを見る。**
+
+構成：全PR共通の「Preview用Neonブランチ」1つ ＋ 固定の「Preview用backend」1つ。PRのfrontendの
+Previewは、常にそのPreview用backendへ転送する。backendのPreviewはVercel Authenticationで保護されて
+いるため、frontendの転送（サーバー側）には`x-vercel-protection-bypass`ヘッダーで保護を通過させる。
+
+1. **Neonで「Preview用ブランチ」を作る**（Neonコンソール → Branches → Create branch）。
+   本番データをコピーしない（「Schema-only」を選ぶ。選べない場合は作成後に全テーブルのデータを消す）。
+   無料プランはブランチ10個/プロジェクトまでなので、PRごとには作らない
+2. **Preview用ブランチのdirect接続文字列にマイグレーションを流す**（手順は上記
+   「`prisma migrate deploy`を打つときは…」と同じ。接続先をPreview用ブランチにする）。
+   以後、マイグレーションを含むPRは**Preview用ブランチにも`migrate deploy`する**
+   （しないとPreview用backendが古いテーブル構造で動く）
+3. **backendのVercelプロジェクト**：
+   - Settings → Deployment Protection → Protection Bypass for Automation →「Add Secret」
+     （値の欄は空のまま。Vercelが32文字の値を生成する）で、シークレットを作って控える
+   - 環境変数`DATABASE_URL`を、**Preview専用**（値＝Preview用ブランチのpooled接続文字列）と
+     **Production専用**（値＝本番ブランチのpooled接続文字列）の2行に分ける。やり方は下記「共有の環境変数を
+     ProductionとPreviewに分けるとき」
+4. **Preview用backendのURLを決める**：`main`と別に`preview`ブランチを用意し、そのブランチのbackendの
+   Previewデプロイのブランチ固定URL（`torebu-git-preview-<チーム>.vercel.app`）を使う。
+   `main`と同じコミットだとVercelがデプロイを作らないので、空コミットを積んで作る。
+   backendの変更を含むPRをPreviewで試すときは、そのブランチを`git push -f origin <PRのブランチ>:preview`
+   で`preview`に反映する（frontendだけのPRでは不要）
+5. **frontendのVercelプロジェクト**：
+   - `BACKEND_ORIGIN`を、**Preview専用**（値＝手順4のURL。末尾に`/`を付けない）と
+     **Production専用**（値＝本番backendのURL）の2行に分ける（下記の手順で）
+   - `PREVIEW_BACKEND_BYPASS_SECRET`をPreviewだけに新規追加（値＝手順3のシークレット、Secret）
+6. **確認**：PRのPreviewでログイン・記録の作成ができ、その内容が**本番サイトに出ない**こと
+   （本番では見えず、Preview用ブランチのDBにだけ入っていること）
+
+### 共有の環境変数をProductionとPreviewに分けるとき
+
+`DATABASE_URL`・`BACKEND_ORIGIN`のように、ProductionとPreviewで1行を共有しているSecret（値が後から
+見えない）を分ける手順（2026-10-22、Issue #380で実施。以下で詰まった）：
+
+- **Vercelは、Secretの環境だけを変えて保存することも、同名の変数を同じ環境に重ねて追加することもできない。**
+  値の欄を空のまま保存すると本番の値が消える恐れがあり、`preview`ブランチ指定で同名を追加しようとしても
+  「already exists」で拒否される
+- **Production画面（Settings → Environments → Production）から編集すると、Productionを外せない。**
+  **Preview画面から**編集すれば、Previewだけに絞れる
+- 手順：①Preview画面で既存の行を開き、値をPreview用に入れ直して、環境を**Previewだけ**にして保存する
+  （「removed from Production」の警告は想定どおり）→ ②続けて、同名の変数をProductionだけに新規追加する
+  （値は本番の値。Neonの本番ブランチ、または本番backendのURLから取り直す）→ ③本番をRedeployして、
+  本番サイトでログインできることを確認する（失敗したら前のデプロイをPromote to Productionで戻す）
+- ①の保存後に出る「Redeploy」のダイアログは**Dismiss**する（①と②の間は本番の値が無い状態のため）。
+  ①〜②の間は`main`へのマージや再デプロイをしない。動いている本番のデプロイは、環境変数を作成時に固定して
+  使うので影響を受けない
+- 環境変数の変更は**新しいデプロイにだけ反映される**。変更後は、該当のデプロイをRedeployするか、新しいコミットを
+  pushする
 
 ## Node.jsのバージョンとセキュリティリリース
 
