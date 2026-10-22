@@ -288,6 +288,32 @@ Previewは、常にそのPreview用backendへ転送する。backendのPreviewは
 - 環境変数の変更は**新しいデプロイにだけ反映される**。変更後は、該当のデプロイをRedeployするか、新しいコミットを
   pushする
 
+## Node.jsのバージョンとセキュリティリリース
+
+Issue #382（2026-10-22）で、使うNodeのバージョンをリポジトリに明示した。
+
+- **Node 24.x に揃えている**。`backend/package.json`・`frontend/package.json`の`engines.node`（`"24.x"`）が
+  指定元で、次の3か所がここを見る：
+  - **本番・Preview（Vercel）**：`engines.node`はダッシュボードの「Node.js Version」設定より優先される。
+    メジャー版だけを指定する仕組みで、パッチ版（24.x.y）はVercelが自動で最新に上げる
+    （[Vercel公式](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions)）
+  - **CI**：`.github/workflows/ci.yml`の`setup-node`が`node-version-file`で各`package.json`を読む
+    （`check-latest: true`で、ランナーに入っている版ではなく最新のパッチ版を使う）
+  - **ローカル**：範囲外のNodeで`npm install`すると`EBADENGINE`の警告が出る（警告だけで止まりはしない）。
+    nvmを使う場合は`frontend/`・`backend/`の`.nvmrc`（`24`）で`nvm use`する
+- メジャー版を上げるときは、両方の`package.json`（と`package-lock.json`の先頭の`engines`）・両方の`.nvmrc`・
+  README.mdの「前提」を書き換える
+- **Nodeのセキュリティリリースが出たとき**（[公式の脆弱性ブログ](https://nodejs.org/en/blog/vulnerability)）：
+  1. Advisoryで、24.x の修正版の番号と、トレ部に関係する脆弱性があるかを確認する
+     （例：2026-10-21の版は、Brotli展開の脆弱性がExpress 5のリクエストボディ展開に直接関係した）
+  2. ローカルのNodeを修正版に上げる（`node -v`で確認）。CIは`check-latest: true`で毎回その時点の最新の24.xを取りに行くため、対応は不要
+  3. 本番のパッチ版はVercelが自動で上げるが、いつ反映されたかは外からは分からない。そこで、
+     Vercelのバックエンドのプロジェクトの「Logs」で`[runtime] Node.js v24.x.y`の行を探して確認する
+     （`backend/api/index.ts`が関数の起動ごとに1回出す）。古い版のままなら、Deploymentsから
+     最新の本番デプロイを「Redeploy」して、もう一度確認する
+  4. フロントエンド（Nuxt）はリクエストボディを展開しないため影響は小さいことが多いが、同じ手順で
+     再デプロイしておくと確実
+
 ## 問題が起きたときの戻し方
 
 マージした変更で本番に不具合が出たときは、次のどちらかで戻す。

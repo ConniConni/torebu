@@ -2,6 +2,8 @@
 # `main`のブランチ保護で、ここのジョブ（backend / frontend）の通過をマージの必須条件にしている
 # （運用は docs/git-workflow.md「CIとブランチ保護」参照）。
 #
+# Nodeのバージョンは各 package.json の engines.node に揃える（本番のVercelも同じ値を使う）。
+#
 # docsだけのPRでも必須チェックが「結果待ち」で止まらないよう、paths による絞り込みは使わない。
 name: CI
 
@@ -48,7 +50,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # package.json の engines.node（24.x）を読む。uses の行には working-directory が効かないため、リポジトリ直下からのパスで書く
+          node-version-file: backend/package.json
+          # ランナーに入っている古い24.xではなく、毎回その時点の最新パッチを取りに行く（セキュリティリリースを即反映するため）
+          check-latest: true
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
@@ -67,7 +72,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # package.json の engines.node（24.x）を読む。uses の行には working-directory が効かないため、リポジトリ直下からのパスで書く
+          node-version-file: frontend/package.json
+          # ランナーに入っている古い24.xではなく、毎回その時点の最新パッチを取りに行く（セキュリティリリースを即反映するため）
+          check-latest: true
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci

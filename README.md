@@ -10,7 +10,7 @@
 
 ### 前提
 
-- Node.js 22系（LTS）。`frontend/`に`.nvmrc`があるので`nvm use`で切り替え可能
+- Node.js 24系（LTS）。`frontend/`・`backend/`に`.nvmrc`があるので`nvm use`で切り替え可能（バージョンの指定元は`package.json`の`engines.node`。運用は[docs/git-workflow.md](docs/git-workflow.md)「Node.jsのバージョンとセキュリティリリース」）
 
 ### frontend（Nuxt.js）
 
