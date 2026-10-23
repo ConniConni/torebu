@@ -133,9 +133,8 @@ DB側は別の生SQLで手動パッチする、という2系統をバラバラ�
 - **急ぎの修正（hotfix）も通常の`fix/`ブランチ → PRで出す**。`main`がそのまま本番なので、専用の
   hotfixブランチは作らない。CIも通常どおり通す
 - 「本番に出す前に確かめる」役割は、ブランチではなく**CI（自動チェック）**と**Preview環境**
-  （PRごとにVercelが作るお試し版のサイト）が担う。Preview環境のDBはまだ本番と共有している
-  （下記「本番環境（Vercel）への反映について」参照。切り離しは[roadmap.md](./roadmap.md)の
-  「本番運用の体制整備」B）
+  （PRごとにVercelが作るお試し版のサイト）が担う。Preview環境のDBは本番から切り離してある
+  （下記「Preview環境のDBを本番から切り離す」参照）
 
 ## CIとブランチ保護
 
@@ -226,9 +225,8 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
      多い。`Datasource`行のホストが正しければ、数秒おいて同じコマンドを再実行すれば通る
 - PRに新しい環境変数（`SESSION_SECRET`のような秘密情報や設定値）が必要になった場合は、
   マージ前にVercel側（バックエンド・フロントエンドそれぞれ）のダッシュボードで設定しておく
-- PreviewデプロイのDBは、下記「Preview環境のDBを本番から切り離す」の設定が済むまでは
-  Productionと**同じNeonデータベース**を見ている（`docs/backlog.md`「判断保留」節に記載）。
-  設定前のPreview環境での動作確認は、本番の実データに対して行われる点を認識しておく
+- PreviewデプロイのDBは、本番とは別のNeonブランチ（Preview用）を見ている（2026-10-22、Issue #380）。
+  Preview環境での動作確認は本番の実データに影響しない。詳細は下記「Preview環境のDBを本番から切り離す」
 - **バックエンドのVercel関数は`backend/vercel.json`の`regions`でNeonの実リージョン（Sydney＝`syd1`）
   に明示的に合わせている**（Issue #192）。指定が無いとVercelのデフォルトリージョン（米国）で動き、
   すべてのAPIリクエストが「日本→米国→Sydney→米国→日本」という経路になって数百ms〜1秒近い
@@ -236,8 +234,9 @@ Issue #181（2026-09-15）でVercelへの本番デプロイに対応して以降
 
 ## Preview環境のDBを本番から切り離す
 
-Issue #380（体制整備B）。**コード側の対応（frontendの転送にバイパスヘッダーを付ける）は済み。
-以下はVercel・Neonのダッシュボードでの設定で、オーナーが行う。設定が済むまでPreviewは本番DBを見る。**
+Issue #380（体制整備B）で2026-10-22に実施済み。以下は、そのときの設定内容と手順（作り直すときの参照用）。
+コード側は、frontendの転送にバイパスヘッダーを付けるだけ（`frontend/nuxt.config.ts`）。残りはVercel・Neonの
+ダッシュボードでの設定で、オーナーが行う。
 
 構成：全PR共通の「Preview用Neonブランチ」1つ ＋ 固定の「Preview用backend」1つ。PRのfrontendの
 Previewは、常にそのPreview用backendへ転送する。backendのPreviewはVercel Authenticationで保護されて
@@ -249,7 +248,13 @@ Previewは、常にそのPreview用backendへ転送する。backendのPreviewは
 2. **Preview用ブランチのdirect接続文字列にマイグレーションを流す**（手順は上記
    「`prisma migrate deploy`を打つときは…」と同じ。接続先をPreview用ブランチにする）。
    以後、マイグレーションを含むPRは**Preview用ブランチにも`migrate deploy`する**
-   （しないとPreview用backendが古いテーブル構造で動く）
+   （しないとPreview用backendが古いテーブル構造で動く）。
+   Schema-onlyのブランチは、データだけでなく**適用履歴（`_prisma_migrations`）も空**で、テーブルは既にある。
+   そのため`migrate deploy`ではなく、`prisma migrate resolve --applied <名前>`を全マイグレーションに対して
+   実行して、適用済みとして記録した（`migrate status`が「up to date」になればよい）。
+   続けて、公式種目を入れる：`npm run prisma:seed`（Preview用ブランチの接続文字列で。ユーザー・記録には触れない。
+   入れないと、Previewで記録を付けるときに種目が1件も出ない）。
+   接続先が本番でないことは、必ず`migrate status`の`Datasource`行のホストで確認してから実行する
 3. **backendのVercelプロジェクト**：
    - Settings → Deployment Protection → Protection Bypass for Automation →「Add Secret」
      （値の欄は空のまま。Vercelが32文字の値を生成する）で、シークレットを作って控える
