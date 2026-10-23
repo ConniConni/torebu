@@ -196,9 +196,10 @@
   - [x] A. CIの導入と`main`のブランチ保護、マイグレーションの順番のルール化
         （[Issue #377](https://github.com/ConniConni/torebu/issues/377)）。ブランチ保護は管理者にも
         適用する（ユーザー判断）
-  - [ ] B. Preview環境のDBを本番から切り離す（[Issue #380](https://github.com/ConniConni/torebu/issues/380)。
-        コード対応と手順書は済み。ダッシュボード設定〔[git-workflow.md](./git-workflow.md)「Preview環境のDBを本番から切り離す」〕の完了待ち。[backlog.md](./backlog.md)「判断保留」の
-        「PreviewデプロイがProductionと同じNeonデータベースを見ている」）。着手時に以下を前提にする
+  - [x] B. Preview環境のDBを本番から切り離す（[Issue #380](https://github.com/ConniConni/torebu/issues/380)、
+        2026-10-22完了。設定内容は[git-workflow.md](./git-workflow.md)「Preview環境のDBを本番から切り離す」。
+        [backlog.md](./backlog.md)「判断保留」の
+        「PreviewデプロイがProductionと同じNeonデータベースを見ている」）。以下は着手時の前提（経緯の記録）
     - **ステップ0（変更せず確認だけ）**：Vercelの2プロジェクトそれぞれの、Preview用の
       `BACKEND_ORIGIN`・`DATABASE_URL`の値、backendのPreviewにアクセス制限（Deployment Protection）が
       かかっているか、Neonの現在のブランチ数。frontendは`/api/**`を`BACKEND_ORIGIN`へ転送している
