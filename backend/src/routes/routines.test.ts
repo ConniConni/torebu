@@ -64,9 +64,9 @@ async function loginAsOther() {
   return agent
 }
 
-async function createRoutine(userId: string, overrides: { name?: string } = {}) {
+async function createRoutine(userId: string, overrides: { name?: string; createdAt?: Date } = {}) {
   return prisma.routine.create({
-    data: { userId, name: overrides.name ?? '胸の日' },
+    data: { userId, name: overrides.name ?? '胸の日', createdAt: overrides.createdAt },
   })
 }
 
@@ -100,11 +100,17 @@ describe('POST /routines', () => {
 
 describe('GET /routines', () => {
   it('自分の、種目が1件以上あるroutineのみ、作成日の新しい順に返る', async () => {
-    const older = await createRoutine(ownerId, { name: '胸の日' })
+    const older = await createRoutine(ownerId, {
+      name: '胸の日',
+      createdAt: new Date('2026-09-01T10:00:00Z'),
+    })
     await prisma.routineExercise.create({
       data: { routineId: older.id, exerciseId, sortOrder: 1 },
     })
-    const newer = await createRoutine(ownerId, { name: '脚の日' })
+    const newer = await createRoutine(ownerId, {
+      name: '脚の日',
+      createdAt: new Date('2026-09-01T11:00:00Z'),
+    })
     await prisma.routineExercise.create({
       data: { routineId: newer.id, exerciseId, sortOrder: 1 },
     })
@@ -363,7 +369,10 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
 
   it('自分の別routineに属するroutineExerciseIdを指定すると404を返す', async () => {
     const routine = await createRoutine(ownerId, { name: '胸の日' })
-    const otherOwnRoutine = await createRoutine(ownerId, { name: '脚の日' })
+    const otherOwnRoutine = await createRoutine(ownerId, {
+      name: '脚の日',
+      createdAt: new Date('2026-09-01T11:00:00Z'),
+    })
     // otherOwnRoutine(自分の別routine)に属するroutineExerciseIdを、routine(URL上のid)に対して指定する
     const routineExercise = await prisma.routineExercise.create({
       data: { routineId: otherOwnRoutine.id, exerciseId, sortOrder: 1 },
@@ -453,7 +462,10 @@ describe('DELETE /routines/:id/exercises/:routineExerciseId', () => {
 
   it('自分の別routineに属するroutineExerciseIdを指定すると404を返す', async () => {
     const routine = await createRoutine(ownerId, { name: '胸の日' })
-    const otherOwnRoutine = await createRoutine(ownerId, { name: '脚の日' })
+    const otherOwnRoutine = await createRoutine(ownerId, {
+      name: '脚の日',
+      createdAt: new Date('2026-09-01T11:00:00Z'),
+    })
     const routineExercise = await prisma.routineExercise.create({
       data: { routineId: otherOwnRoutine.id, exerciseId, sortOrder: 1 },
     })
