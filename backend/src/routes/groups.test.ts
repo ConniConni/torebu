@@ -410,12 +410,23 @@ describe('GET /groups/:id/workouts', () => {
     const ownerWorkout = await prisma.workout.create({
       data: { userId: ownerId, performedAt: new Date('2026-01-10') },
     })
-    // memberが先にいいねし、その後ownerがいいねする(表示順が作成順であることを確認する)
+    // memberが先にいいねし、その後ownerがいいねする(表示順が作成順であることを確認する)。
+    // 続けて作るとcreatedAt(ミリ秒精度)が同値になり順序が不定になるため、時刻を明示する
     await prisma.reaction.create({
-      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: memberId },
+      data: {
+        targetType: 'workout',
+        targetId: ownerWorkout.id,
+        userId: memberId,
+        createdAt: new Date('2026-01-10T10:00:00Z'),
+      },
     })
     await prisma.reaction.create({
-      data: { targetType: 'workout', targetId: ownerWorkout.id, userId: ownerId },
+      data: {
+        targetType: 'workout',
+        targetId: ownerWorkout.id,
+        userId: ownerId,
+        createdAt: new Date('2026-01-10T10:01:00Z'),
+      },
     })
 
     const agent = await loginAs(memberEmail)
