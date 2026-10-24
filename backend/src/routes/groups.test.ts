@@ -411,7 +411,7 @@ describe('GET /groups/:id/workouts', () => {
       data: { userId: ownerId, performedAt: new Date('2026-01-10') },
     })
     // memberが先にいいねし、その後ownerがいいねする(表示順が作成順であることを確認する)。
-    // 続けて作るとcreatedAt(ミリ秒精度)が同値になり順序が不定になるため、時刻を明示する
+    // createdAtはミリ秒精度のため、連続createだと同値になり順序が不定になる。明示的にずらす
     await prisma.reaction.create({
       data: {
         targetType: 'workout',
@@ -425,7 +425,7 @@ describe('GET /groups/:id/workouts', () => {
         targetType: 'workout',
         targetId: ownerWorkout.id,
         userId: ownerId,
-        createdAt: new Date('2026-01-10T10:01:00Z'),
+        createdAt: new Date('2026-01-10T11:00:00Z'),
       },
     })
 
