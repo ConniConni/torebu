@@ -1,0 +1,61 @@
+# 依存パッケージの脆弱性をDependabotで検知し、修正PRを自動で出す（Issue #389）。
+# アラート・PRが来たときの対応は docs/git-workflow.md「Dependabotのアラート・PRが来たとき」参照。
+#
+# 方針：通常のバージョン更新PRは出さず、セキュリティ更新だけを受け取る。
+# - open-pull-requests-limit: 0 でバージョン更新PRを止める。セキュリティ更新PRはこの値に関係なく
+#   GitHub側の別枠（最大10件）で出る
+# - groups の applies-to: security-updates で、ディレクトリごとのセキュリティ更新を1つのPRにまとめる
+# - schedule はバージョン更新の確認間隔にだけ効く（必須項目なので書いている）。セキュリティ更新PRは
+#   曜日に関係なく、脆弱性情報が公開され次第出る
+# - この設定とセキュリティ更新PRを動かすには、リポジトリ設定（Settings → Code security）で
+#   「Dependabot alerts」「Dependabot security updates」が有効になっている必要がある
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 0
+    groups:
+      backend-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 0
+    groups:
+      frontend-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # CIで使っているActions（actions/checkout・actions/setup-node）。CIの中でリポジトリのコードと一緒に動くため対象にする
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 0
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope

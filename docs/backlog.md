@@ -731,7 +731,8 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   - frontend：`nuxt`配下の`listhen`→`node-forge`（high）。`listhen`は`nuxt dev`の開発サーバー用。
     `npm audit`が示す修正案は`nuxt@4.1.3`への**ダウングレード**で、採用しない
   - **再検討のタイミング**：`vitest@5`へ上げる作業をするとき／Nuxtのアップデートで`listhen`側が直ったとき
-    （`npm audit`で定期的に状況確認）
+    （Issue #389以降はDependabotのアラートで状況が分かる。見送る間の扱いは
+    [git-workflow.md](./git-workflow.md)「Dependabotのアラート・PRが来たとき」参照）
 - **backendのテストの一部が、手元の開発用DB（`torebu_dev`）に対して実行すると落ちる**（2026-10-24、Issue #387で確認）。
   `cardio.test.ts`「有酸素のセットでは自己ベスト判定が発生せず、通知も作られない」と
   `personal-best.test.ts`「他人の記録のセットは編集できない(404)」の2件が、`personal_best`通知の件数を
