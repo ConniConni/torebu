@@ -319,6 +319,52 @@ Issue #382（2026-10-22）で、使うNodeのバージョンをリポジトリ�
   4. フロントエンド（Nuxt）はリクエストボディを展開しないため影響は小さいことが多いが、同じ手順で
      再デプロイしておくと確実
 
+## Dependabotのアラート・PRが来たとき
+
+Issue #389（2026-10-24）で導入した。それまでは気づいたときに手で`npm audit`するしかなく、
+本番依存の脆弱性（backend 10件・frontend 19件、#387で解消）が溜まっていた。
+
+- **仕組み**：GitHubのDependabotが、依存パッケージ（`backend/`・`frontend/`のnpm、CIで使うGitHub Actions）を
+  脆弱性データベースと照合し続ける。設定は[`.github/dependabot.yml`](../.github/dependabot.yml)
+  - **アラート**：該当する脆弱性が見つかると、リポジトリの「Security」タブ → 「Dependabot」に一覧が出て、
+    オーナーにGitHubの通知（メール等）が届く
+  - **セキュリティ更新PR**：修正版があれば、Dependabotが`dependabot/...`ブランチからPRを自動で出す。
+    ディレクトリごと（backend／frontend／Actions）に1つのPRへまとめる設定にしている
+  - **通常のバージョン更新PRは出さない**（`open-pull-requests-limit: 0`）。脆弱性と関係のない更新PRが
+    毎週来ると、セキュリティ更新PRが埋もれるため
+  - PRは曜日に関係なく、脆弱性情報が公開され次第来る（`schedule`の「毎週月曜」はバージョン更新にだけ効く）
+  - 前提として、リポジトリ設定（Settings → Code security）の「Dependabot alerts」「Dependabot security
+    updates」を有効にしてある。`dependabot.yml`の書き間違いは`main`にマージされてから検出されるため、
+    設定を変えたときはマージ後に「Insights」→「Dependency graph」→「Dependabot」でエラーが出ていないか見る
+- **PRが来たときの流れ**：
+  1. PRに書かれたAdvisory（脆弱性の説明）で、**深刻度**と**どの依存が対象か**を確認する
+  2. その依存が**本番で動くか**（`dependencies`か、本番のコードから使われるか）を判断する。
+     `npm ls <パッケージ名>`（各ディレクトリで実行）で、どの依存経由で入っているかが分かる
+  3. CIが通っていればマージする（マージはユーザーが行う）。CIはDependabotのPRでも通常どおり走る
+     （`ci.yml`はsecretsを使っていないため、Dependabotの読み取り専用の権限でも動く）。
+     CIが落ちる場合は、通常のIssue → ブランチ → PRの流れで手作業の更新に切り替える
+  4. 本番に反映されるのは、ほかのPRと同じくマージ後のVercelのデプロイ時
+- **Dependabotのは通常フローの例外**：Issue起票・ブランチ名の規則・`docs/spec.md`の更新は不要
+  （依存の更新だけで仕様は変わらないため）。ただし、更新で挙動が変わって手直しが要る場合は、
+  通常のフローで別のPRにする
+- **見送る・dismissするときの判断基準**：
+  - **開発時にしか動かない依存**（テスト・開発サーバー・ビルド時のツール。例：`vitest`、
+    `nuxt dev`の開発サーバーが使う`listhen`→`node-forge`）は、本番の利用者に届かないため実害が低い。
+    修正にメジャーアップデートやダウングレードが必要で手間がかかる場合は、見送ってよい
+    - 見送るときは、アラートの画面で「Dismiss」→「Risk is tolerable to this project」（または
+      「Vulnerable code is not actually used」）を選び、理由を一言書く。同時に
+      [backlog.md](./backlog.md)「`npm audit fix`で解消できない脆弱性」に記録して、再検討のタイミングを残す
+    - Dependabotが開いたPRは、閉じるとその版への更新は再提案されなくなる（より新しい修正版が出れば
+      改めてPRが来る）
+  - **本番で動く依存**は、深刻度が低くても見送らず対応する（`express`・`prisma`・`nuxt`本体など）
+  - `dependabot.yml`の`ignore`では除外しない。`ignore`はその依存の**今後のセキュリティ更新も**
+    止めてしまうため。個別のアラートを画面でdismissする方を使う
+- **2026-10-24時点で来ると分かっているもの**：backlog.mdに記録済みの2件
+  - backend：`vitest`（`vitest@5`へのメジャー更新が要る）。PRが来てもCIが落ちる可能性が高い。
+    `vitest@5`へ上げる作業を別Issueでやるまでは、上の基準で見送ってよい
+  - frontend：`nuxt`配下の`listhen`→`node-forge`。修正案が`nuxt`のダウングレードのため、
+    PRが来ない／来ても採用しない。アラートはdismissしてよい
+
 ## 問題が起きたときの戻し方
 
 マージした変更で本番に不具合が出たときは、次のどちらかで戻す。
