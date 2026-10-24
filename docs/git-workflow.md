@@ -333,8 +333,9 @@ Issue #389（2026-10-24）で導入した。それまでは気づいたときに
   - **通常のバージョン更新PRは出さない**（`open-pull-requests-limit: 0`）。脆弱性と関係のない更新PRが
     毎週来ると、セキュリティ更新PRが埋もれるため
   - PRは曜日に関係なく、脆弱性情報が公開され次第来る（`schedule`の「毎週月曜」はバージョン更新にだけ効く）
-  - 前提として、リポジトリ設定（Settings → Code security）の「Dependabot alerts」「Dependabot security
-    updates」を有効にしてある。`dependabot.yml`の書き間違いは`main`にマージされてから検出されるため、
+  - 前提として、リポジトリ設定（Settings → 左サイドバーの「Security and quality」→「Advanced Security」）の
+    「Dependabot alerts」「Dependabot security updates」を有効にしてある（2026-10-24に有効化。
+    上部タブの「Security and quality」はアラートの一覧で、設定画面ではない）。`dependabot.yml`の書き間違いは`main`にマージされてから検出されるため、
     設定を変えたときはマージ後に「Insights」→「Dependency graph」→「Dependabot」でエラーが出ていないか見る
 - **PRが来たときの流れ**：
   1. PRに書かれたAdvisory（脆弱性の説明）で、**深刻度**と**どの依存が対象か**を確認する

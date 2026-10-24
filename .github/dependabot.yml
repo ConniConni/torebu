@@ -7,7 +7,7 @@
 # - groups の applies-to: security-updates で、ディレクトリごとのセキュリティ更新を1つのPRにまとめる
 # - schedule はバージョン更新の確認間隔にだけ効く（必須項目なので書いている）。セキュリティ更新PRは
 #   曜日に関係なく、脆弱性情報が公開され次第出る
-# - この設定とセキュリティ更新PRを動かすには、リポジトリ設定（Settings → Code security）で
+# - この設定とセキュリティ更新PRを動かすには、リポジトリ設定（Settings → 左サイドバーの「Security and quality」→「Advanced Security」）で
 #   「Dependabot alerts」「Dependabot security updates」が有効になっている必要がある
 version: 2
 updates:
