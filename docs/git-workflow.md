@@ -361,8 +361,8 @@ Issue #389（2026-10-24）で導入した。それまでは気づいたときに
   - `dependabot.yml`の`ignore`では除外しない。`ignore`はその依存の**今後のセキュリティ更新も**
     止めてしまうため。個別のアラートを画面でdismissする方を使う
 - **2026-10-24時点で来ると分かっているもの**：backlog.mdに記録済みの2件
-  - backend：`vitest`（`vitest@5`へのメジャー更新が要る）。PRが来てもCIが落ちる可能性が高い。
-    `vitest@5`へ上げる作業を別Issueでやるまでは、上の基準で見送ってよい
+  - ~~backend：`vitest`（`vitest@5`へのメジャー更新が要る）~~ → DependabotのPR #392がCIで落ちたため、
+    [Issue #393](https://github.com/ConniConni/torebu/issues/393)の手作業のPRで`vitest@5`へ上げて解消済み（2026-10-27）
   - frontend：`nuxt`配下の`listhen`→`node-forge`。修正案が`nuxt`のダウングレードのため、
     PRが来ない／来ても採用しない。アラートはdismissしてよい
 
