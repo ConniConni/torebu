@@ -175,7 +175,7 @@ MVP完成後の棚卸しで見つかった、**ドキュメントと実装のズ
 | `/`（未ログイン） | - | トップ画面。イラストを画面いっぱいに表示し、下部に①ログイン・新規登録への導線を置く（Issue #151）。ヒーロー（`h-dvh`の1画面）の下に、特設ページとして説明セクション6つ（何のアプリか／画面イメージ／使い方3ステップ／安心ポイント／FAQ／最後のCTAとフッター）をスクロールで続ける（Issue #332、下記参照）。下部バーの「↓ 詳しく見る」で先頭セクションへスクロールする。`useTheme`（Issue #239）でテーマがdarkのときは配色・イラスト（`top_image_dark.jpeg`）を切り替える（ユーザー向けの切替UIはまだ無い。ログイン後の全画面はIssue #241でダーク対応済み、backlog.md参照） | - | なし（ページ内で分岐、下記参照） |
 | `/`（ログイン中） | ② | ホーム（カレンダー・期間別サマリー（直近7日/直近28日/通算）・記録カードの本体削除・記録の画像カードシェア・グループ未所属時の案内・通知バッジ。シェアと案内は[Issue #314](https://github.com/ConniConni/torebu/issues/314)、下記参照） | `GET /workouts`, `GET /workouts/:id`, `DELETE /workouts/:id`, `GET /stats/volume`, `GET /groups`, `GET /notifications/unread-count`, `POST /auth/logout` | なし（ページ内で分岐、下記参照） |
 | `/workouts/new`<br>（`?date=YYYY-MM-DD`任意） | ③ | （有酸素の記録は下記「有酸素運動の画面の実装メモ」参照）記録作成・記録の見返し（本体画面。今日の新規記録も過去日の記録の見返し・編集も1画面で担う。上部にその日の合計負荷重量・セット数を表示する（Issue #320、§3-2参照）。記録本体の削除は②へ移設済み、下記参照） | `POST /workouts`, `PATCH /workouts/:id`, `POST /workouts/:id/sets`, `PATCH/DELETE /workouts/:id/sets/:setId`, `GET /exercises`, `GET /routines`, `GET /routines/:id` | `auth` |
-| `/workouts/exercises` | ④ | （有酸素の記録は下記「有酸素運動の画面の実装メモ」参照）種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない。各部位セクションの「＋種目を追加」は、押すと「準備中／有料オプションで追加予定です。」の案内ダイアログ（`PaidOptionNotice.vue`）を開くだけで、遷移も作成もしない（Issue #330） | `GET /exercises` | `auth` |
+| `/workouts/exercises` | ④ | （有酸素の記録は下記「有酸素運動の画面の実装メモ」参照）種目選択。各行の「ⓘ」ボタンで部位ハイライトの全画面シートを開ける（Phase2、下記参照）。筋トレ種目の各行（公式・カスタムとも。有酸素は除く）の「▶」アイコンで、「種目名 やり方」のYouTube検索結果を新しいタブで開ける（[Issue #405](https://github.com/ConniConni/torebu/issues/405)、下記「種目のやり方（YouTube検索リンク）の実装メモ」参照）。器具4分類（バーベル／ダンベル／自重／その他・マシン）のタグチップで複数選択(OR)の絞り込みができる（Issue #167）。equipment未設定（＝カスタム種目）は絞り込み中は表示しない。各部位セクションの「＋種目を追加」は、押すと「準備中／有料オプションで追加予定です。」の案内ダイアログ（`PaidOptionNotice.vue`）を開くだけで、遷移も作成もしない（Issue #330） | `GET /exercises` | `auth` |
 | `/workouts/exercises-new` | ⑦ | 種目追加（**作成フォームは無く、「準備中／有料オプションで追加予定です。」の案内と④へ戻るリンクのみ**。④の「＋種目を追加」は遷移せず案内ダイアログを開くため、直リンクでのみ到達する。Issue #330） | なし | `auth` |
 | `/routines` | ⑤ | ルーティン一覧 | `GET /routines`, `POST /routines`, `DELETE /routines/:id` | `auth` |
 | `/routines/[id]` | ⑤ | ルーティン編集 | `GET/PATCH/DELETE /routines/:id`, `POST/PATCH/DELETE /routines/:id/exercises` | `auth` |
@@ -539,6 +539,16 @@ Issueの影響範囲を洗い出す段階で、以下を実ファイルと突き
   距離なしで時間だけ記録した日が丸ごと対象外になり「記録がありません」と出ていた不具合の修正、Issue #364）。ペースの軸は反転し、目盛り・ツールチップは「分:秒」表示。
   種目を素早く切り替えたとき古い応答で上書きしないよう、`stats.vue`の`loadHistory`は連番で判定している。
   合計負荷重量の推移（全種目合算）は従来どおり有酸素を含まない
+
+**種目のやり方（YouTube検索リンク、[Issue #405](https://github.com/ConniConni/torebu/issues/405)）の実装メモ**
+- ④の筋トレ種目の行の「▶」（[PlayCircleIcon.vue](../frontend/app/components/PlayCircleIcon.vue)、Heroicons由来・MIT）は
+  `<a target="_blank" rel="noopener noreferrer">`で、URLは[youtubeSearch.ts](../frontend/app/utils/youtubeSearch.ts)の
+  `youtubeHowToSearchUrl`（`https://www.youtube.com/results?search_query=`＋「種目名 やり方」）。動画の選定・埋め込みはしない
+  （ライセンス・リンク切れ・プライバシーポリシーの管理を持たないため。見送った案は`backlog.md`「種目のやり方表示」）
+- 有酸素はⓘと同じく出さない。カスタム種目は種目名で検索するので出す
+- ⓘシートの中ではなく行に直接置いた：需要を測る施策なので、シートの中だと使われなかったときに
+  「需要が無い」のか「気づかれていない」のか区別できないため。押し間違いを減らすため、ⓘと同じ灰色・同じ大きさにし、
+  ⓘとの間を少し空けている
 
 **部位ハイライト（Phase2、[muscle-highlight.md](./muscle-highlight.md)参照）の実装メモ**
 - コンポーネント：[MuscleHighlightSheet.vue](../frontend/app/components/MuscleHighlightSheet.vue)
