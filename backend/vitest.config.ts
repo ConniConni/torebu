@@ -3,6 +3,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
+    // v4で既定のexcludeがnode_modules・.gitだけになり、`npm run build`後の`dist/`内のテストまで拾うため、
+    // テストを探す場所を`src/`に限定する
+    dir: 'src',
     // テストファイルを並列実行すると、各ファイルが個別に生成するPrismaClient/セッション用pg.Poolや
     // express-sessionの`session`テーブル(createTableIfMissing)への初期化が同じ実DBに対して競合し、
     // ログイン直後のセッションが読めず401になるなどのflakyな失敗につながる(2026-09-12発見、docs/backlog.md参照)。
