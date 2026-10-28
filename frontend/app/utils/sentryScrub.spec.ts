@@ -36,6 +36,9 @@ describe('scrubEvent', () => {
       type: undefined,
       message: 'user@example.com で失敗',
       user: { id: '1', email: 'user@example.com', ip_address: '203.0.113.1' },
+      contexts: {
+        vue: { componentName: '<CommentList>', propsData: { body: 'secret-comment' } },
+      },
       request: {
         url: 'https://torebu.com/password-reset/secret-token?x=1',
         headers: {
@@ -69,6 +72,7 @@ describe('scrubEvent', () => {
       'secret-code',
       'secret-session',
       'secret-password',
+      'secret-comment',
       'user@example.com',
       '203.0.113.1',
     ]) {
@@ -79,6 +83,7 @@ describe('scrubEvent', () => {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     })
     expect(event.user).toBeUndefined()
+    expect(event.contexts?.vue).toEqual({ componentName: '<CommentList>' })
     expect(event.breadcrumbs).toHaveLength(2)
   })
 })

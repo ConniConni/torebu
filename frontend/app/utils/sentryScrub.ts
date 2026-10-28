@@ -27,6 +27,9 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
     }
   }
   delete event.user
+  // Vueのエラーハンドラが添付するコンポーネントのprops（plugins/sentry.client.tsのattachProps: falseで
+  // 止めているが、念のため）。コンポーネント名・階層は残す
+  if (event.contexts?.vue) delete event.contexts.vue.propsData
   if (event.transaction) event.transaction = maskUrl(event.transaction)
   if (event.message) event.message = maskText(event.message)
   for (const exception of event.exception?.values ?? []) {

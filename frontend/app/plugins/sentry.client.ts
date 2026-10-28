@@ -22,6 +22,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       urlQueryParams: false,
       stackFrameVariables: false,
     },
+    // Vueの描画中のエラーには、既定でコンポーネントのprops（表示名・コメント・記録の中身などが入る）が
+    // 添付されるため送らない。どのコンポーネントで起きたか（名前・階層）は残る
+    attachProps: false,
     // 性能計測（トレース）・セッションリプレイは入れない。エラーだけを送る
     beforeSend: scrubEvent,
     beforeBreadcrumb: scrubBreadcrumb,
