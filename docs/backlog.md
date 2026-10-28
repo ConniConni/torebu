@@ -725,12 +725,14 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
     （新しい依存パッケージ等）にあると疑う具体的な材料が出てきた場合
 - **`npm audit fix`で解消できない脆弱性が残っている**（2026-10-24、Issue #387で`npm audit fix`を実行した後の状態）。
   以前ここに記録していた`prisma`→`deepmerge-ts`の脆弱性は、Prisma 7.10.1で解消した。残っているものは
-  どちらも**開発時にしか動かない部品**のため、実害は低いと判断して対応を保留している：
-  - backend：`vitest`（critical。`tinypool`・`@vitest/mocker`経由）。テスト実行時だけ使う。修正には
-    `vitest@5`へのメジャーアップデートが必要
+  **開発時にしか動かない部品**のため、実害は低いと判断して対応を保留している：
+  - ~~backend：`vitest`（critical。`tinypool`・`@vitest/mocker`経由）~~ →
+    [Issue #393](https://github.com/ConniConni/torebu/issues/393)で`vitest@5`へ上げて解消済み（2026-10-27）。
+    v4で`poolOptions`が削除されたため、`vitest.config.ts`のシリアル実行の指定を`fileParallelism: false`に
+    置き換えた（Dependabotの#392はこの置き換えが無くCIの`typecheck`で落ちていたため、手作業のPRに切り替えた）
   - frontend：`nuxt`配下の`listhen`→`node-forge`（high）。`listhen`は`nuxt dev`の開発サーバー用。
     `npm audit`が示す修正案は`nuxt@4.1.3`への**ダウングレード**で、採用しない
-  - **再検討のタイミング**：`vitest@5`へ上げる作業をするとき／Nuxtのアップデートで`listhen`側が直ったとき
+  - **再検討のタイミング**：Nuxtのアップデートで`listhen`側が直ったとき
     （Issue #389以降はDependabotのアラートで状況が分かる。見送る間の扱いは
     [git-workflow.md](./git-workflow.md)「Dependabotのアラート・PRが来たとき」参照）
 - **backendのテストの一部が、手元の開発用DB（`torebu_dev`）に対して実行すると落ちる**（2026-10-24、Issue #387で確認）。
@@ -771,6 +773,8 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
   - **対応**：`vitest.config.ts`に`pool: 'forks'`・`poolOptions.forks.singleFork: true`を設定し、
     テストファイルをシリアル実行に変更。この設定で`npm test`を5回連続実行し、全204件成功する
     ことを確認した（並列実行では毎回1件前後failしていた）
+    → `vitest@5`へ上げたとき（Issue #393、2026-10-27）、`poolOptions`がv4で削除されたため
+    `fileParallelism: false`に置き換えた（シリアル実行という意図は同じ）
   - **トレードオフ**：シリアル実行になった分、テスト全体の実行時間は伸びる（並列実行の約47秒に対し
     シリアル実行は約120秒）。テストDB分離（ファイルごとに別スキーマ/DBを使う等）を導入すれば
     並列実行を維持しつつ競合を避けられる可能性があるが、実装コストが高いため、CI導入
