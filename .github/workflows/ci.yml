@@ -1,4 +1,4 @@
-# PRと`main`へのpushのたびに、backend・frontendの型チェック・lint・テストを自動で実行する。
+# PRと`main`へのpushのたびに、backend・frontendの型チェック・lint・書式チェック・テストを自動で実行する。
 # `main`のブランチ保護で、ここのジョブ（backend / frontend）の通過をマージの必須条件にしている
 # （運用は docs/git-workflow.md「CIとブランチ保護」参照）。
 #
@@ -60,6 +60,7 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
 
   frontend:
@@ -81,4 +82,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
