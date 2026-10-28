@@ -56,7 +56,7 @@ async function onCreate() {
           :disabled="!newName.trim() || submitting"
           class="shrink-0 whitespace-nowrap rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
         >
-          作成
+          {{ submitting ? '作成中...' : '作成' }}
         </button>
       </form>
       <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
