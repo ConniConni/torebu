@@ -205,6 +205,19 @@ async function onDeleteExercise(id: string) {
                   >
                     {{ exercise.name }}
                   </button>
+                  <!-- やり方の動画はYouTubeの検索結果を外部で開くだけ(Issue #405)。需要を測る施策のため、
+                       ⓘシートの中ではなく行に直接置いて見つけやすくする。押し間違いを減らすため、
+                       ⓘと同じ控えめな色にし、ⓘとの間を少し空ける -->
+                  <a
+                    v-if="exercise.muscleGroup !== 'cardio'"
+                    :href="youtubeHowToSearchUrl(exercise.name)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mr-1 shrink-0 rounded-full p-1.5 text-gray-400 dark:text-muted hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-600 dark:hover:text-muted"
+                    aria-label="この種目のやり方をYouTubeで探す（外部サイト）"
+                  >
+                    <PlayCircleIcon class="h-4 w-4" />
+                  </a>
                   <button
                     v-if="exercise.muscleGroup !== 'cardio'"
                     type="button"
