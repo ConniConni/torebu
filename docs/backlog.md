@@ -694,14 +694,13 @@ MVP完成後の棚卸しで見つかった、「決めたはずなのに入っ�
 
 ## 技術的負債
 
-- **Prettierの書式チェック（`format:check`）が通らないファイルが残っている**（2026-10-18、
+- ~~**Prettierの書式チェック（`format:check`）が通らないファイルが残っている**~~（2026-10-18、
   [Issue #377](https://github.com/ConniConni/torebu/issues/377)のCI導入時に発覚）：backend 5ファイル・
-  frontend 15ファイルがPrettierの書式と食い違っている。CIには`typecheck`・`lint`・`test`だけを入れ、
-  `format:check`は入れていない。書式を揃える一括修正は差分が大きく、並行セッションのPRと衝突しやすいため
-  別対応にした
-  - **対応候補**：並行して作業中のPRが無いタイミングで`npm run format`を一括実行してコミットし、
-    CIに`format:check`を追加する
-  - **再検討のタイミング**：並行セッションが落ち着いたとき
+  frontend 15ファイルがPrettierの書式と食い違っていたため、CIには`typecheck`・`lint`・`test`だけを入れていた
+  → [Issue #396](https://github.com/ConniConni/torebu/issues/396)で解消済み（2026-10-28）。開いているPRが
+  無いタイミングで`npm run format`を一括実行し、CIに`format:check`を追加した。外部からコピーした
+  筋肉図の座標データ（`frontend/app/assets/data/muscle-body-svg*.json`、1行に圧縮された2ファイル）は、
+  整形しても読みやすくならず差分が大きいだけのため`frontend/.prettierignore`で対象外にした
 
 - **コンソールに`Uncaught TypeError: Cannot read properties of undefined (reading 'startTime')`
   （`at et.reportAllChanges`）が出る**（2026-09-08〜09、Issue #138の作業中にユーザー報告・調査）。
