@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@nuxt/eslint": "^1.17.0",
+    "@sentry/vue": "^11.9.0",
     "chart.js": "^4.5.1",
     "eslint": "^10.9.1",
     "nuxt": "^4.5.2",
