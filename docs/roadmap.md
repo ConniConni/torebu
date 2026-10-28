@@ -163,7 +163,7 @@
   - **前提の見直し**（2026-10-03。Xと特設ページで不特定多数に知ってもらい、パーソナルトレーナー個人にも
     勧めてもらう。詳細は[backlog.md](./backlog.md)「ユーザー獲得：前提の見直し」節、
     [Issue #324](https://github.com/ConniConni/torebu/issues/324)）
-  - [ ] 独自ドメイン（`torebu.com`）への切り替え（2026-10-03取得済み。[Issue #326](https://github.com/ConniConni/torebu/issues/326)。QRコード配布・Xでの発信より前に）
+  - [x] 独自ドメイン（`torebu.com`）への切り替え（2026-10-03取得済み。[Issue #326](https://github.com/ConniConni/torebu/issues/326)。QRコード配布・Xでの発信より前に）
   - [x] 特設ページ第1弾（未ログイン時のトップの強化、[Issue #332](https://github.com/ConniConni/torebu/issues/332)）
   - [ ] ~~特設ページ第2弾（フィードカードの部品化→「応援が届く」画面の描画）~~ — 凍結（2026-10-04。再開条件は[backlog.md](./backlog.md)「公開ページの候補」参照）
   - [ ] og-image 1200×630版の要否確認（Xで上下が切れる可能性。X運用の開始前に実際の見え方を確認して判断）

@@ -408,7 +408,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
               <button
                 v-else
                 type="button"
-                class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors"
+                class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors disabled:opacity-50"
                 :class="
                   workout.reactedByMe
                     ? 'bg-brand-50 dark:bg-accent/10 text-brand-700 dark:text-accent'
@@ -578,7 +578,7 @@ if (highlightWorkoutId && workouts.value?.some((w) => w.id === highlightWorkoutI
                   "
                   @click="onPostComment(workout)"
                 >
-                  送信
+                  {{ commentPosting.has(workout.id) ? '送信中...' : '送信' }}
                 </button>
               </div>
             </div>

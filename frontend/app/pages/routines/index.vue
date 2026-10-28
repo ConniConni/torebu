@@ -69,7 +69,7 @@ async function onDeleteRoutine(id: string) {
           :disabled="!newName.trim() || submitting"
           class="shrink-0 whitespace-nowrap rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-accent dark:text-surface"
         >
-          追加
+          {{ submitting ? '追加中...' : '追加' }}
         </button>
       </form>
       <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
