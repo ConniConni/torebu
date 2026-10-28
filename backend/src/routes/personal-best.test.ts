@@ -291,7 +291,12 @@ describe('personal_best通知の作成', () => {
       .send({ weightKg: 200, reps: 8 })
 
     expect(res.status).toBe(404)
-    expect(await prisma.notification.count({ where: { type: 'personal_best' } })).toBe(0)
+    // 手元のDBにはテスト外の通知（サンプルデータ等）があるため、このテストのユーザー宛てに絞る
+    expect(
+      await prisma.notification.count({
+        where: { type: 'personal_best', recipientId: { in: [lifterId, mateId, outsiderId] } },
+      }),
+    ).toBe(0)
   })
 })
 

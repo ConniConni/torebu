@@ -652,7 +652,12 @@ describe('自己ベスト・記録日数', () => {
 
     expect(created.body.personalBest).toBeNull()
     expect(patched.body.personalBest).toBeNull()
-    expect(await prisma.notification.count({ where: { type: 'personal_best' } })).toBe(0)
+    // 手元のDBにはテスト外の通知（サンプルデータ等）があるため、このテストのユーザー宛てに絞る
+    expect(
+      await prisma.notification.count({
+        where: { type: 'personal_best', recipientId: { in: [meId, mateId] } },
+      }),
+    ).toBe(0)
   })
 
   it('有酸素だけの日も通算日数に数えられ、節目（10日目）の通知が発火する', async () => {
