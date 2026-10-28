@@ -8,6 +8,7 @@ import { routinesRouter } from './routes/routines.js'
 import { statsRouter } from './routes/stats.js'
 import { groupsRouter } from './routes/groups.js'
 import { notificationsRouter } from './routes/notifications.js'
+import { adminRouter } from './routes/admin.js'
 
 export const app = express()
 
@@ -29,6 +30,7 @@ app.use('/routines', routinesRouter)
 app.use('/stats', statsRouter)
 app.use('/groups', groupsRouter)
 app.use('/notifications', notificationsRouter)
+app.use('/admin', adminRouter)
 
 const port = process.env.PORT ?? 3001
 
