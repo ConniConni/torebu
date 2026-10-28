@@ -6,5 +6,6 @@ Disallow: /routines
 Disallow: /notifications
 Disallow: /mypage
 Disallow: /invite
+Disallow: /admin
 
 Sitemap: https://torebu.com/sitemap.xml
