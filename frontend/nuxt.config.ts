@@ -43,6 +43,15 @@ export default defineNuxtConfig({
   // Preview用backendはVercel Authenticationで保護されているため、frontendのPreviewだけに
   // PREVIEW_BACKEND_BYPASS_SECRETを設定し、転送時にバイパスヘッダーを付ける（Issue #380）。
   // 未設定の環境（本番・ローカル）ではヘッダーを付けない
+  // エラー監視（Sentry、Issue #403）。DSNはブラウザに配る前提の公開値（送信しかできない）で、
+  // Vercelの環境変数NUXT_PUBLIC_SENTRY_DSNで上書きする。未設定（ローカル・CI）なら送らない。
+  // 環境名はビルド時にVercelが設定するVERCEL_ENV（production / preview）を使う
+  runtimeConfig: {
+    public: {
+      sentryDsn: '',
+      sentryEnvironment: process.env.VERCEL_ENV ?? 'development',
+    },
+  },
   routeRules: {
     '/api/**': {
       proxy: {
