@@ -176,9 +176,7 @@ describe('セット保存時の自己ベスト判定(本人への応答)', () =>
     const workoutId = await startWorkout(agent)
     const failed = await addSet(agent, workoutId, 100, 0)
 
-    const res = await agent
-      .patch(`/workouts/${workoutId}/sets/${failed.body.id}`)
-      .send({ reps: 1 })
+    const res = await agent.patch(`/workouts/${workoutId}/sets/${failed.body.id}`).send({ reps: 1 })
 
     expect(res.body.personalBest).toEqual({ exerciseId, weightKg: 100, previousBestKg: 90 })
   })

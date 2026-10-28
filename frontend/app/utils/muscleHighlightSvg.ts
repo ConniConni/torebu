@@ -109,7 +109,15 @@ const MAIN_BACK_ONLY_ZONE: Partial<Record<string, MuscleZone>> = { deltoids: 'ba
 const MAIN_ONLY_BACK_SLUGS = new Set(['trapezius', 'triceps'])
 
 // ラベルを図の上/右どちらに出すか。胴体に近い正中寄りの筋肉は上、手足など左右に離れる筋肉は右
-const LABEL_ABOVE = new Set(['chest', 'trapezius', 'upper-back', 'lower-back', 'gluteal', 'abs', 'obliques'])
+const LABEL_ABOVE = new Set([
+  'chest',
+  'trapezius',
+  'upper-back',
+  'lower-back',
+  'gluteal',
+  'abs',
+  'obliques',
+])
 
 function glowStyle(i: number) {
   // 白背景ではぼかしを強く出すと汚れて見えるため、ドロップシャドウは軽く抑え、塗りの彩度・不透明度で表現する
@@ -314,7 +322,11 @@ export function buildSvg(
   let gid = 0
 
   for (const part of parts) {
-    const allPaths = [...(part.path.common ?? []), ...(part.path.left ?? []), ...(part.path.right ?? [])]
+    const allPaths = [
+      ...(part.path.common ?? []),
+      ...(part.path.left ?? []),
+      ...(part.path.right ?? []),
+    ]
 
     if (part.slug === 'hair' || part.slug === 'head') {
       const g = document.createElementNS(SVG_NS, 'g')
@@ -346,7 +358,13 @@ export function buildSvg(
         if (!sidePaths) continue
         const sorted = sortPathsByBBoxY(svgEl, sidePaths)
         sorted.forEach((d, idx) => {
-          paintGlowPath(svgEl, defs, d, `${svgEl.id}-g${gid++}`, highlightIdx.has(idx) ? selIntensity : restIntensity)
+          paintGlowPath(
+            svgEl,
+            defs,
+            d,
+            `${svgEl.id}-g${gid++}`,
+            highlightIdx.has(idx) ? selIntensity : restIntensity,
+          )
         })
       }
       for (const d of part.path.common ?? []) {
@@ -413,7 +431,8 @@ export function computeHighlightMaps(
   }
 
   const zoneSpecs: ZoneSpec[] = []
-  if (ex.mainSlug && ex.mainZone) zoneSpecs.push({ slug: ex.mainSlug, zone: ex.mainZone, isMain: true })
+  if (ex.mainSlug && ex.mainZone)
+    zoneSpecs.push({ slug: ex.mainSlug, zone: ex.mainZone, isMain: true })
   for (const r of related) {
     if (r.zone && (ZONE_GRADIENT[r.zone] || ZONE_SUBPATH_GROUPS[r.slug]?.[r.zone])) {
       zoneSpecs.push({ slug: r.slug, zone: r.zone, isMain: false })
@@ -454,7 +473,12 @@ export function computeHighlightMaps(
   const backActive = Object.keys(backIntensityMap).some((s) => backSlugs.has(s))
 
   return {
-    front: { intensityMap: frontIntensityMap, zoneSpecs, labelMap: frontLabelMap, active: frontActive },
+    front: {
+      intensityMap: frontIntensityMap,
+      zoneSpecs,
+      labelMap: frontLabelMap,
+      active: frontActive,
+    },
     back: { intensityMap: backIntensityMap, zoneSpecs, labelMap: backLabelMap, active: backActive },
   }
 }

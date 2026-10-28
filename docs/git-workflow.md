@@ -142,13 +142,15 @@ Issue #377（2026-10-18）で導入した。
 
 - **CI**：PRを作ったとき・PRのブランチにpushしたとき・`main`にpushされたときに、GitHub Actions
   （[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)）がbackend・frontendそれぞれで
-  `typecheck`・`lint`・`test`を実行する。結果はPRの画面に✅／❌で表示される
+  `typecheck`・`lint`・`format:check`・`test`を実行する。結果はPRの画面に✅／❌で表示される
   - backendのテストは、ジョブの間だけ起動する使い捨てのPostgreSQLに`prisma migrate deploy`してから
     実行する（本番のNeon・ローカルのDBには一切つながらない）。backendのジョブは4〜5分ほどかかる
   - docsだけのPRでもCIは全部走る（変更したファイルで絞り込むと、必須チェックが「結果待ち」のまま
     止まってマージできなくなるため、あえて絞り込んでいない）
-  - `format:check`（Prettierの書式チェック）は既存ファイルに未修正の差分があるため、まだ入れていない
-    （[backlog.md](./backlog.md)「技術的負債」参照）
+  - `format:check`（Prettierの書式チェック）は[Issue #396](https://github.com/ConniConni/torebu/issues/396)
+    （2026-10-28）で追加した。落ちたときは、そのパッケージ（`backend`／`frontend`）で`npm run format`を
+    実行してコミットし直す。外部からコピーした筋肉図の座標データ（`frontend/app/assets/data/muscle-body-svg*.json`）
+    は`frontend/.prettierignore`で対象外にしている
 - **ブランチ保護**（GitHubの`main`ブランチの設定）：
   - CI（`backend`・`frontend`の2ジョブ）が通っていないPRはマージできない
   - `main`への直接pushは禁止。必ずPRを経由する（`main`の強制push・削除も禁止）

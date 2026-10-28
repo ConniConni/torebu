@@ -4,7 +4,12 @@
   (react-native-body-highlighter由来、MIT。assets/data/muscle-body-svg.LICENSE.md参照)。
 -->
 <script setup lang="ts">
-import { buildSvg, type IntensityMap, type LabelMap, type ZoneSpec } from '~/utils/muscleHighlightSvg'
+import {
+  buildSvg,
+  type IntensityMap,
+  type LabelMap,
+  type ZoneSpec,
+} from '~/utils/muscleHighlightSvg'
 
 interface SvgPart {
   slug: string
@@ -41,7 +46,14 @@ function render() {
 
 onMounted(render)
 watch(
-  () => [props.parts, props.outlineD, props.intensityMap, props.zoneSpecs, props.labelMap, theme.value],
+  () => [
+    props.parts,
+    props.outlineD,
+    props.intensityMap,
+    props.zoneSpecs,
+    props.labelMap,
+    theme.value,
+  ],
   render,
   { deep: true },
 )
@@ -69,10 +81,7 @@ watch(
   stroke-linejoin: round;
 }
 .muscle-body-svg :deep(.muscle-label) {
-  font-family:
-    'Hiragino Sans',
-    'Noto Sans JP',
-    sans-serif;
+  font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   font-size: 26px;
   font-weight: 500;
   fill: rgb(55 65 81 / 0.9);

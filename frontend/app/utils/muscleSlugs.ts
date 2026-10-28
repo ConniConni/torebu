@@ -6,14 +6,7 @@
 // 区別は main_zone（lat/upper_back）側で行う。
 
 export type MuscleZone =
-  | 'upper'
-  | 'mid'
-  | 'lower'
-  | 'front'
-  | 'lateral'
-  | 'back'
-  | 'lat'
-  | 'upper_back'
+  'upper' | 'mid' | 'lower' | 'front' | 'lateral' | 'back' | 'lat' | 'upper_back'
 
 // main_muscle（15語彙）→ スラッグ
 const MAIN_MUSCLE_TO_SLUG: Record<string, string> = {

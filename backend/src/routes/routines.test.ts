@@ -34,7 +34,12 @@ beforeEach(async () => {
   })
   othersExerciseId = othersExercise.id
   const deletedExercise = await prisma.exercise.create({
-    data: { name: '削除済み自作種目', muscleGroup: 'arms', createdBy: ownerId, deletedAt: new Date() },
+    data: {
+      name: '削除済み自作種目',
+      muscleGroup: 'arms',
+      createdBy: ownerId,
+      deletedAt: new Date(),
+    },
   })
   deletedExerciseId = deletedExercise.id
 })
@@ -386,7 +391,6 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
     expect(res.status).toBe(404)
   })
 
-
   it('sortOrderを変更できる(並び替え)', async () => {
     const routine = await createRoutine(ownerId)
     const routineExercise = await prisma.routineExercise.create({
@@ -420,7 +424,12 @@ describe('PATCH /routines/:id/exercises/:routineExerciseId', () => {
   it('targetSetsを空配列にすると目安セットをクリアできる', async () => {
     const routine = await createRoutine(ownerId)
     const routineExercise = await prisma.routineExercise.create({
-      data: { routineId: routine.id, exerciseId, sortOrder: 1, targetSets: [{ weightKg: 40, reps: 12 }] },
+      data: {
+        routineId: routine.id,
+        exerciseId,
+        sortOrder: 1,
+        targetSets: [{ weightKg: 40, reps: 12 }],
+      },
     })
 
     const agent = await loginAsOwner()
