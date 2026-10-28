@@ -43,12 +43,14 @@ async function loginAs(email: string) {
   return agent
 }
 
-async function createGroup(overrides: {
-  createdBy?: string
-  memberLimit?: number
-  inviteCode?: string
-  inviteExpiresAt?: Date | null
-} = {}) {
+async function createGroup(
+  overrides: {
+    createdBy?: string
+    memberLimit?: number
+    inviteCode?: string
+    inviteExpiresAt?: Date | null
+  } = {},
+) {
   const createdBy = overrides.createdBy ?? ownerId
   const group = await prisma.group.create({
     data: {
@@ -65,7 +67,11 @@ async function createGroup(overrides: {
   return group
 }
 
-async function addMember(groupId: string, userId: string, overrides: { role?: 'owner' | 'member'; leftAt?: Date | null } = {}) {
+async function addMember(
+  groupId: string,
+  userId: string,
+  overrides: { role?: 'owner' | 'member'; leftAt?: Date | null } = {},
+) {
   return prisma.groupMember.create({
     data: { groupId, userId, role: overrides.role ?? 'member', leftAt: overrides.leftAt ?? null },
   })
@@ -171,7 +177,11 @@ describe('GET /groups/:id', () => {
     await addMember(group.id, memberId)
     const leftUserPasswordHash = await bcrypt.hash(testPassword, 12)
     const leftUser = await prisma.user.create({
-      data: { email: 'groups-left-test@example.com', passwordHash: leftUserPasswordHash, displayName: '退会済みユーザー' },
+      data: {
+        email: 'groups-left-test@example.com',
+        passwordHash: leftUserPasswordHash,
+        displayName: '退会済みユーザー',
+      },
     })
     await addMember(group.id, leftUser.id, { leftAt: new Date() })
 
@@ -181,8 +191,18 @@ describe('GET /groups/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.role).toBe('member')
     expect(res.body.members).toEqual([
-      { userId: ownerId, displayName: 'グループテストオーナー', role: 'owner', joinedAt: expect.any(String) },
-      { userId: memberId, displayName: 'グループテストメンバー', role: 'member', joinedAt: expect.any(String) },
+      {
+        userId: ownerId,
+        displayName: 'グループテストオーナー',
+        role: 'owner',
+        joinedAt: expect.any(String),
+      },
+      {
+        userId: memberId,
+        displayName: 'グループテストメンバー',
+        role: 'member',
+        joinedAt: expect.any(String),
+      },
     ])
 
     await prisma.user.delete({ where: { id: leftUser.id } })
@@ -452,9 +472,7 @@ describe('GET /groups/:id/workouts', () => {
     const res = await agent.get(`/groups/${group.id}/workouts`)
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual([
-      expect.objectContaining({ id: ownerWorkout.id, reactorNames: [] }),
-    ])
+    expect(res.body).toEqual([expect.objectContaining({ id: ownerWorkout.id, reactorNames: [] })])
   })
 
   it('コメントの件数を含める', async () => {
@@ -863,7 +881,9 @@ describe('GET /groups/:id/ranking', () => {
 
   afterEach(async () => {
     await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
-    await prisma.exercise.deleteMany({ where: { id: { in: [officialExerciseId, customExerciseId] } } })
+    await prisma.exercise.deleteMany({
+      where: { id: { in: [officialExerciseId, customExerciseId] } },
+    })
   })
 
   it('未所属者には404を返す(IDOR対策)', async () => {
@@ -930,22 +950,50 @@ describe('GET /groups/:id/ranking', () => {
     await addMember(group.id, memberId)
 
     const today = new Date()
-    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: today },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     // 自重セット(weightKg null)は0kg扱いで加算される(合計には影響しない)
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 2, reps: 20, weightKg: null },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 2,
+        reps: 20,
+        weightKg: null,
+      },
     })
 
-    const memberWorkout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
+    const memberWorkout = await prisma.workout.create({
+      data: { userId: memberId, performedAt: today },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: memberWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 80 },
+      data: {
+        workoutId: memberWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 80,
+      },
     })
     // カスタム種目は集計対象外
     await prisma.workoutSet.create({
-      data: { workoutId: memberWorkout.id, exerciseId: customExerciseId, setOrder: 2, reps: 10, weightKg: 999 },
+      data: {
+        workoutId: memberWorkout.id,
+        exerciseId: customExerciseId,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 999,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1002,13 +1050,29 @@ describe('GET /groups/:id/ranking', () => {
     await addMember(group.id, thirdUser.id)
 
     const today = new Date()
-    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
-    await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: today },
     })
-    const memberWorkout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: memberWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
+    })
+    const memberWorkout = await prisma.workout.create({
+      data: { userId: memberId, performedAt: today },
+    })
+    await prisma.workoutSet.create({
+      data: {
+        workoutId: memberWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     // thirdUserは記録なし(0kg)
 
@@ -1030,13 +1094,27 @@ describe('GET /groups/:id/ranking', () => {
     })
 
     const today = new Date()
-    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: today },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     // 別の公式種目の記録は、指定した種目のランキングには影響しない
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: otherOfficialExercise.id, setOrder: 2, reps: 10, weightKg: 999 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: otherOfficialExercise.id,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 999,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1092,7 +1170,9 @@ describe('GET /groups/:id/ranking', () => {
     const group = await createGroup()
 
     const agent = await loginAs(ownerEmail)
-    const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all', exerciseId: 'not-a-uuid' })
+    const res = await agent
+      .get(`/groups/${group.id}/ranking`)
+      .query({ period: 'all', exerciseId: 'not-a-uuid' })
 
     expect(res.status).toBe(400)
   })
@@ -1107,7 +1187,13 @@ describe('GET /groups/:id/ranking', () => {
       performedAt.setDate(performedAt.getDate() - daysAgo)
       const workout = await prisma.workout.create({ data: { userId, performedAt } })
       await prisma.workoutSet.create({
-        data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 1, weightKg: 1 },
+        data: {
+          workoutId: workout.id,
+          exerciseId: officialExerciseId,
+          setOrder: 1,
+          reps: 1,
+          weightKg: 1,
+        },
       })
     }
     for (let i = 0; i < 6; i++) await createWorkoutWithSet(ownerId, i)
@@ -1128,23 +1214,35 @@ describe('GET /groups/:id/ranking', () => {
   it('メモのみでセットが無いworkoutはattendanceStampのカウントに含めない', async () => {
     const group = await createGroup()
 
-    await prisma.workout.create({ data: { userId: ownerId, performedAt: new Date(), memo: 'メモだけ' } })
+    await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date(), memo: 'メモだけ' },
+    })
 
     const agent = await loginAs(ownerEmail)
     const res = await agent.get(`/groups/${group.id}/ranking`).query({ period: 'all' })
 
     expect(res.status).toBe(200)
     expect(res.body.ranking).toEqual(
-      expect.arrayContaining([expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' }),
+      ]),
     )
   })
 
   it('ソフトデリート済みworkoutはattendanceStampのカウントに含めない', async () => {
     const group = await createGroup()
 
-    const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: new Date() } })
+    const workout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: new Date() },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     await prisma.workout.update({ where: { id: workout.id }, data: { deletedAt: new Date() } })
 
@@ -1153,7 +1251,9 @@ describe('GET /groups/:id/ranking', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.ranking).toEqual(
-      expect.arrayContaining([expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ownerId, daysTrained: 0, attendanceStamp: 'none' }),
+      ]),
     )
   })
 
@@ -1175,7 +1275,13 @@ describe('GET /groups/:id/ranking', () => {
       performedAt.setDate(performedAt.getDate() - daysAgo)
       const workout = await prisma.workout.create({ data: { userId, performedAt } })
       await prisma.workoutSet.create({
-        data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 1, weightKg: 1 },
+        data: {
+          workoutId: workout.id,
+          exerciseId: officialExerciseId,
+          setOrder: 1,
+          reps: 1,
+          weightKg: 1,
+        },
       })
     }
     for (let i = 0; i < 7; i++) await createWorkoutWithSet(ownerId, i)
@@ -1208,7 +1314,13 @@ describe('GET /groups/:id/ranking', () => {
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: customExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: customExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1220,7 +1332,12 @@ describe('GET /groups/:id/ranking', () => {
     expect(res.status).toBe(200)
     expect(res.body.ranking).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ userId: ownerId, totalVolumeKg: 0, daysTrained: 1, attendanceStamp: 'bronze' }),
+        expect.objectContaining({
+          userId: ownerId,
+          totalVolumeKg: 0,
+          daysTrained: 1,
+          attendanceStamp: 'bronze',
+        }),
       ]),
     )
 
@@ -1246,7 +1363,9 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
 
   afterEach(async () => {
     await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
-    await prisma.exercise.deleteMany({ where: { id: { in: [officialExerciseId, otherOfficialExerciseId] } } })
+    await prisma.exercise.deleteMany({
+      where: { id: { in: [officialExerciseId, otherOfficialExerciseId] } },
+    })
   })
 
   it('未所属者には404を返す(IDOR対策)', async () => {
@@ -1265,13 +1384,31 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: otherOfficialExerciseId, setOrder: 3, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: otherOfficialExerciseId,
+        setOrder: 3,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1289,7 +1426,13 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     old.setDate(old.getDate() - 40)
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: old } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1302,16 +1445,34 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
   it('セット数が同数のタイは、defaultSortOrderが小さい方を優先する(名前順より優先)', async () => {
     const group = await createGroup()
     // 名前だけならofficialExerciseId(「ベンチプレス」)が先に来る並びだが、sortOrderで逆転させる
-    await prisma.exercise.update({ where: { id: officialExerciseId }, data: { defaultSortOrder: null } })
-    await prisma.exercise.update({ where: { id: otherOfficialExerciseId }, data: { defaultSortOrder: 1 } })
+    await prisma.exercise.update({
+      where: { id: officialExerciseId },
+      data: { defaultSortOrder: null },
+    })
+    await prisma.exercise.update({
+      where: { id: otherOfficialExerciseId },
+      data: { defaultSortOrder: 1 },
+    })
 
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: otherOfficialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: otherOfficialExerciseId,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1327,10 +1488,22 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: otherOfficialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: otherOfficialExerciseId,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1350,7 +1523,13 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: ownerId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: customExercise.id, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: customExercise.id,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1370,7 +1549,13 @@ describe('GET /groups/:id/ranking/default-exercise', () => {
     const today = new Date()
     const workout = await prisma.workout.create({ data: { userId: memberId, performedAt: today } })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1398,7 +1583,9 @@ describe('GET /groups/:id/ranking/exercises', () => {
 
   afterEach(async () => {
     await prisma.workout.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } })
-    await prisma.exercise.deleteMany({ where: { id: { in: [officialExerciseId, otherOfficialExerciseId] } } })
+    await prisma.exercise.deleteMany({
+      where: { id: { in: [officialExerciseId, otherOfficialExerciseId] } },
+    })
   })
 
   it('未所属者には404を返す(IDOR対策)', async () => {
@@ -1429,21 +1616,49 @@ describe('GET /groups/:id/ranking/exercises', () => {
 
     const old = new Date()
     old.setDate(old.getDate() - 100) // default-exerciseの直近28日より前でも対象に含める
-    const ownerWorkout = await prisma.workout.create({ data: { userId: ownerId, performedAt: old } })
+    const ownerWorkout = await prisma.workout.create({
+      data: { userId: ownerId, performedAt: old },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
     // カスタム種目は候補から除外
     await prisma.workoutSet.create({
-      data: { workoutId: ownerWorkout.id, exerciseId: customExercise.id, setOrder: 2, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: ownerWorkout.id,
+        exerciseId: customExercise.id,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
-    const memberWorkout = await prisma.workout.create({ data: { userId: memberId, performedAt: new Date() } })
-    await prisma.workoutSet.create({
-      data: { workoutId: memberWorkout.id, exerciseId: otherOfficialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+    const memberWorkout = await prisma.workout.create({
+      data: { userId: memberId, performedAt: new Date() },
     })
     await prisma.workoutSet.create({
-      data: { workoutId: memberWorkout.id, exerciseId: otherOfficialExerciseId, setOrder: 2, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: memberWorkout.id,
+        exerciseId: otherOfficialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
+    })
+    await prisma.workoutSet.create({
+      data: {
+        workoutId: memberWorkout.id,
+        exerciseId: otherOfficialExerciseId,
+        setOrder: 2,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)
@@ -1466,9 +1681,17 @@ describe('GET /groups/:id/ranking/exercises', () => {
     const group = await createGroup()
     await addMember(group.id, memberId, { leftAt: new Date() })
 
-    const workout = await prisma.workout.create({ data: { userId: memberId, performedAt: new Date() } })
+    const workout = await prisma.workout.create({
+      data: { userId: memberId, performedAt: new Date() },
+    })
     await prisma.workoutSet.create({
-      data: { workoutId: workout.id, exerciseId: officialExerciseId, setOrder: 1, reps: 10, weightKg: 50 },
+      data: {
+        workoutId: workout.id,
+        exerciseId: officialExerciseId,
+        setOrder: 1,
+        reps: 10,
+        weightKg: 50,
+      },
     })
 
     const agent = await loginAs(ownerEmail)

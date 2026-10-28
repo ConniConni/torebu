@@ -4,7 +4,11 @@ import { prisma } from '../prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { weightKgSchema, repsSchema } from './workouts.js'
 import { isCardio } from '../lib/exercise.js'
-import type { RoutineModel, RoutineExerciseModel, ExerciseModel } from '../generated/prisma/models.js'
+import type {
+  RoutineModel,
+  RoutineExerciseModel,
+  ExerciseModel,
+} from '../generated/prisma/models.js'
 
 export const routinesRouter = Router()
 
@@ -214,10 +218,16 @@ const updateRoutineExerciseSchema = z
     message: 'sortOrder・targetSetsのいずれかを指定してください',
   })
 
-async function findOwnRoutineExercise(userId: string, routineId: string, routineExerciseId: string) {
+async function findOwnRoutineExercise(
+  userId: string,
+  routineId: string,
+  routineExerciseId: string,
+) {
   const routine = await findOwnRoutine(userId, routineId)
   if (!routine) return null
-  return prisma.routineExercise.findFirst({ where: { id: routineExerciseId, routineId: routine.id } })
+  return prisma.routineExercise.findFirst({
+    where: { id: routineExerciseId, routineId: routine.id },
+  })
 }
 
 routinesRouter.patch('/:id/exercises/:routineExerciseId', requireAuth, async (req, res) => {

@@ -13,9 +13,7 @@ describe('extractInviteCode', () => {
   })
 
   it('招待リンクを丸ごと貼り付けた場合はコード部分を取り出す', () => {
-    expect(extractInviteCode('https://torebu.com/invite/abc_DEF-123')).toBe(
-      'abc_DEF-123',
-    )
+    expect(extractInviteCode('https://torebu.com/invite/abc_DEF-123')).toBe('abc_DEF-123')
   })
 
   it('共有時の本文ごと貼り付けた場合もコード部分を取り出す', () => {

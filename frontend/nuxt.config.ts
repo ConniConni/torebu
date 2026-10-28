@@ -19,7 +19,10 @@ export default defineNuxtConfig({
         // Google Search Consoleの所有権確認用（Issue #208）。確認コードはプロパティごとに別の値で、
         // 独自ドメイン（torebu.com）への切り替えに伴い新プロパティ用に差し替えた（旧URLはリダイレクト
         // のみでHTMLを返さないため、旧コードは不要）。消すと所有権が外れることがあるので残す
-        { name: 'google-site-verification', content: 'QPps-MKh7_Asa5ZPRVBoD_MNy5Kmbrmcbn3UDjyYP44' },
+        {
+          name: 'google-site-verification',
+          content: 'QPps-MKh7_Asa5ZPRVBoD_MNy5Kmbrmcbn3UDjyYP44',
+        },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
